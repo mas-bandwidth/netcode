@@ -1,2 +1,5 @@
 
-SPEEDNET SPEEDNET SPEEDNET
+Getting started:
+
+	https://matt.sh/howto-c
+

@@ -1,15 +1,13 @@
 
-libyojimbo_version = "0.4.0-Preview1"
-
 if os.is "windows" then
-    debug_libs = { "sodium-debug", "mbedtls-debug", "mbedx509-debug", "mbedcrypto-debug" }
-    release_libs = { "sodium-release", "mbedtls-release", "mbedx509-release", "mbedcrypto-release" }
+    debug_libs = { "sodium-debug" }
+    release_libs = { "sodium-release" }
 else
-    debug_libs = { "sodium", "mbedtls", "mbedx509", "mbedcrypto" }
+    debug_libs = { "sodium" }
     release_libs = debug_libs
 end
 
-solution "Yojimbo"
+solution "speednet"
     kind "ConsoleApp"
     language "C++"
     platforms { "x64" }
@@ -36,45 +34,21 @@ solution "Yojimbo"
         defines { "YOJIMBO_SECURE_MODE=1", "NDEBUG" }
         links { release_libs }
         
-project "test"
-    files { "tests/test.cpp" }
-    links { "yojimbo" }
-
-project "info"
-    files { "tests/info.cpp" }
-    links { "yojimbo" }
-
-project "yojimbo"
+project "speednet"
     kind "StaticLib"
-    files { "yojimbo.h", "yojimbo.cpp", "yojimbo_*.h", "yojimbo_*.cpp" }
+    files { "speednet.h", "speednet.c", "speednet_*.h", "speednet_*.c" }
+
+project "test"
+    files { "test.c" }
+    links { "speednet" }
 
 project "client"
-    files { "tests/client.cpp", "tests/shared.h" }
-    links { "yojimbo" }
+    files { "client.c" }
+    links { "speednet" }
 
 project "server"
-    files { "tests/server.cpp", "tests/shared.h" }
-    links { "yojimbo" }
-
-project "secure_client"
-    files { "tests/secure_client.cpp", "tests/shared.h" }
-    links { "yojimbo" }
-
-project "secure_server"
-    files { "tests/secure_server.cpp", "tests/shared.h" }
-    links { "yojimbo" }
-
-project "client_server"
-    files { "tests/client_server.cpp", "tests/shared.h" }
-    links { "yojimbo" }
-
-project "soak"
-    files { "tests/soak.cpp", "tests/shared.h" }
-    links { "yojimbo" }
-
-project "profile"
-    files { "tests/profile.cpp", "tests/shared.h" }
-    links { "yojimbo" }
+    files { "server.c" }
+    links { "speednet" }
 
 if not os.is "windows" then
 
