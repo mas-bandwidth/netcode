@@ -1,0 +1,12 @@
+TODO
+
+	Port across token functions and libsodium usage (as required by client). 
+
+	This requires parsing JSON. What to use for this? RapidJSON is unfortunately C++. We're going C here.
+
+	Alternatively, the library interface could be C, the implementation could be C++. 
+
+	But I'd prefer C, for easy porting to other languages.
+
+	Hmmmmm.
+

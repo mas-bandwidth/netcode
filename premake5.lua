@@ -89,7 +89,6 @@ newaction
             "Release",
             "release",
             "cov-int",
-            "docker/libyojimbo",
             "docs",
             "xml"
         }
