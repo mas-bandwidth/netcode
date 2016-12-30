@@ -10,3 +10,8 @@ TODO
 
 	Hmmmmm.
 
+	Is there a small parser for JSON in C? Probably best to use that. Policy free. Include it. The parsing required is minimal. Absolutely minimal.
+
+	Need a way to represent addresses to connect to. speednet_address_t?
+
+	Goal: Up to 256 players per-server. Remove the 64 player max limit to support games like agar.io
