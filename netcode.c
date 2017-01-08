@@ -35,6 +35,8 @@
 #define NETCODE_CONNECT_TOKEN_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 
+// ----------------------------------------------------------------
+
 #define NETCODE_CONNECTION_REQUEST_PACKET           0
 #define NETCODE_CONNECTION_DENIED_PACKET            1
 #define NETCODE_CONNECTION_CHALLENGE_PACKET         2
@@ -46,27 +48,53 @@
 
 struct netcode_connection_request_packet_t
 {
+    uint8_t packet_type;
     uint64_t connect_token_expire_timestamp;
     uint8_t connect_token_nonce[NETCODE_NONCE_BYTES];
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
 };
 
+struct netcode_connection_denied_packet_t
+{
+    uint8_t packet_type;
+};
+
 struct netcode_connection_challenge_packet_t
 {
+    uint8_t packet_type;
     uint8_t challenge_token_nonce[NETCODE_NONCE_BYTES];
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
 struct netcode_connection_response_packet_t
 {
+    uint8_t packet_type;
     uint8_t challenge_token_nonce[NETCODE_NONCE_BYTES];
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
 struct netcode_connection_confirm_packet_t
 {
-    int client_index;
+    uint8_t packet_type;
+    uint32_t client_index;
 };
+
+struct netcode_connection_keep_alive_packet_t
+{
+    uint8_t packet_type;    
+};
+
+struct netcode_connection_payload_packet_t
+{
+    uint8_t packet_type;
+};
+
+struct netcode_connection_disconnect_packet_t
+{
+    uint8_t packet_type;
+};
+
+// ----------------------------------------------------------------
 
 struct netcode_t
 {
@@ -94,6 +122,8 @@ void netcode_term()
 
     netcode.initialized = 0;
 }
+
+// ----------------------------------------------------------------
 
 struct netcode_client_t
 {
@@ -191,6 +221,8 @@ void netcode_client_destroy( struct netcode_client_t * client )
 
 	free( client );
 }
+
+// ----------------------------------------------------------------
 
 struct netcode_server_t
 {

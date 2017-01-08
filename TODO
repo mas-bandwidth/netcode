@@ -1,17 +1,22 @@
+DONE
+
+    Sketched out packets.
+
 TODO
 
-	Port across token functions and libsodium usage (as required by client). 
+    Bring across code to read/write bytes. Don't do bitpacker.
 
-	This requires parsing JSON. What to use for this? RapidJSON is unfortunately C++. We're going C here.
+    Network order is little endian, so need converter functions.
 
-	Alternatively, the library interface could be C, the implementation could be C++. 
+    Implement functions to read and write packets in wire format, try to do it all (encryption included), in one pass.
 
-	But I'd prefer C, for easy porting to other languages.
+    So functions for all encrypted packets will need the key and nonce passed in (sequence).
 
-	Hmmmmm.
+    Connection request packet should have prefix byte of 0? Known prefix.
 
-	Is there a small parser for JSON in C? Probably best to use that. Policy free. Include it. The parsing required is minimal. Absolutely minimal.
+    Prefix byte should be redesigned around # of digits of sequence, rather than so there are bits in the prefix byte available for expansion.
 
-	Need a way to represent addresses to connect to. speednet_address_t?
+    In the end should have function to read packets, and a function to write each packet type.
 
-	Goal: Up to 256 players per-server. Remove the 64 player max limit to support games like agar.io
+    This would be convenient on read as well, so packets can uniformly be put in a buffer w. type and have type determined later (recv queue).
+    
