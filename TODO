@@ -2,11 +2,19 @@ DONE
 
     Sketched out packets.
 
+    Sketched out basic interface for reading and writing packets.
+
+    This is going to work out pretty well.
+
 TODO
 
-    Bring across code to read/write bytes. Don't do bitpacker.
+    Extend code to take pointer to pointer for write bytes, so pointer can be advanced as writing is done.
 
     Network order is little endian, so need converter functions.
+
+    Implement helper functions to write uint8, uint16, uint32, uint64.
+
+    -----------------
 
     Implement functions to read and write packets in wire format, try to do it all (encryption included), in one pass.
 
@@ -19,4 +27,3 @@ TODO
     In the end should have function to read packets, and a function to write each packet type.
 
     This would be convenient on read as well, so packets can uniformly be put in a buffer w. type and have type determined later (recv queue).
-    
