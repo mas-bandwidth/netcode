@@ -1,5 +1,6 @@
 #include <netcode.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -30,32 +31,90 @@
 #define NETCODE_MAX_SERVERS_PER_CONNECT 8
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
+#define NETCODE_NONCE_BYTES 8
+#define NETCODE_CONNECT_TOKEN_BYTES 1024
+#define NETCODE_CHALLENGE_TOKEN_BYTES 256
 
-struct netcode_address_t
+struct netcode_connection_request_packet_t
 {
-	// todo
-	int dummy;
+    uint64_t connect_token_expire_timestamp;
+    uint8_t connect_token_nonce[NETCODE_NONCE_BYTES];
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
 };
 
-struct netcode_connect_token_t
+#define NETCODE_CONNECTION_DENIED_SERVER_IS_FULL 0
+
+struct netcode_connection_denied_packet_t
 {
-    uint64_t protocol_id;
-    uint64_t client_id;
-    uint64_t expire_timestamp;
-    int num_server_addresses;
-    struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
-    uint8_t clientToServerKey[NETCODE_KEY_BYTES];
-    uint8_t serverToClientKey[NETCODE_KEY_BYTES];
+    int reason;
 };
+
+struct netcode_connection_challenge_packet_t
+{
+    uint8_t challenge_token_nonce[NETCODE_NONCE_BYTES];
+    uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
+};
+
+struct netcode_connection_response_packet_t
+{
+    uint8_t challenge_token_nonce[NETCODE_NONCE_BYTES];
+    uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
+};
+
+struct netcode_connection_confirm_packet_t
+{
+    int client_index;
+};
+
+struct netcode_connection_keep_alive_packet_t
+{
+    // ...
+};
+
+struct netcode_connection_payload_packet_t
+{
+    // ...
+};
+
+struct netcode_disconnect_packet_t
+{
+    int reason;
+};
+
+#define NETCODE_CONNECTION_REQUEST_PACKET           0
+#define NETCODE_CONNECTION_DENIED_PACKET            1
+#define NETCODE_CONNECTION_CHALLENGE_PACKET         2
+#define NETCODE_CONNECTION_RESPONSE_PACKET          3
+#define NETCODE_CONNECTION_CONFIRM_PACKET           4
+#define NETCODE_CONNECTION_KEEP_ALIVE_PACKET        5
+#define NETCODE_CONNECTION_PAYLOAD_PACKET           6
+#define NETCODE_CONNECTION_DISCONNECT_PACKET        7
+
+struct netcode_t
+{
+    int initialized;
+};
+
+static struct netcode_t netcode;
 
 int netcode_init()
 {
+    assert( !netcode.initialized );
+
+    // ...
+
+    netcode.initialized = 1;
+
 	return 0;
 }
 
 void netcode_term()
 {
-	// ...
+	assert( netcode.initialized );
+
+    // ...
+
+    netcode.initialized = 0;
 }
 
 struct netcode_client_t
@@ -65,7 +124,12 @@ struct netcode_client_t
 
 struct netcode_client_t * netcode_client_create()
 {
+    assert( netcode.initialized );
+
 	struct netcode_client_t * client = (struct netcode_client_t*) malloc( sizeof( struct netcode_client_t ) );
+
+    if ( !client )
+        return NULL;
 
 	// ...
 
@@ -74,6 +138,8 @@ struct netcode_client_t * netcode_client_create()
 
 void netcode_client_update( struct netcode_client_t * client, double time )
 {
+    assert( client );
+
 	(void) client;
 	(void) time;
 	
@@ -82,6 +148,8 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
 int netcode_client_get_client_index( struct netcode_client_t * client )
 {
+    assert( client );
+
 	(void) client;
 
 	// ...
@@ -91,6 +159,9 @@ int netcode_client_get_client_index( struct netcode_client_t * client )
 
 void netcode_client_connect( struct netcode_client_t * client, const char * token )
 {
+    assert( client );
+    assert( token );
+
 	(void) client;
 	(void) token;
 
@@ -99,6 +170,10 @@ void netcode_client_connect( struct netcode_client_t * client, const char * toke
 
 void netcode_client_send_packet_to_server( struct netcode_client_t * client, const uint8_t * packet_data, int packet_size )
 {
+    assert( client );
+    assert( packet_data );
+    assert( packet_size );
+
 	(void) client;
 	(void) packet_data;
 	(void) packet_size;
@@ -108,6 +183,10 @@ void netcode_client_send_packet_to_server( struct netcode_client_t * client, con
 
 int netcode_client_receive_packet_from_server( struct netcode_client_t * client, uint8_t * buffer, int buffer_length )
 {
+    assert( client );
+    assert( buffer );
+    assert( buffer_length > 0 );
+
 	(void) client;
 	(void) buffer;
 	(void) buffer_length;
@@ -119,6 +198,8 @@ int netcode_client_receive_packet_from_server( struct netcode_client_t * client,
 
 void netcode_client_disconnect( struct netcode_client_t * client )
 {
+    assert( client );
+
 	(void) client;
 
 	// ...
@@ -126,9 +207,11 @@ void netcode_client_disconnect( struct netcode_client_t * client )
 
 void netcode_client_destroy( struct netcode_client_t * client )
 {
-	(void) client;
+    assert( client );
 
-	// todo: destroy it
+    // ...
+
+	free( client );
 }
 
 struct netcode_server_t
@@ -140,9 +223,16 @@ struct netcode_server_t * netcode_server_create( uint16_t port )
 {
 	(void) port;
 
-	// todo
+    assert( netcode.initialized );
 
-	return NULL;
+    struct netcode_server_t * server = (struct netcode_server_t*) malloc( sizeof( struct netcode_server_t ) );
+
+    if ( !server )
+        return NULL;
+
+    // ...
+
+    return server;
 }
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients )
@@ -217,7 +307,11 @@ void netcode_server_stop( struct netcode_server_t * server )
 
 void netcode_server_destroy( struct netcode_server_t * server )
 {
+    assert( server );
+
 	(void) server;
 
-	// todo: destroy
+	// ...
+
+    free( server );
 }
