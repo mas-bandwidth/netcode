@@ -14,11 +14,41 @@ DONE
 
     Implement packet read function for connection request packet.
 
-TODO
-
     Write a test that verifies that we can write a connection request packet and then read it back in.
 
-    Note that on read, the connection request packet should be decrypted w. private key. This allows quick reject for invalid and expired connection reject packets.
+TODO
+
+    Bring across code to encrypt/decrypt connect tokens.
+
+    This is going to require a C library for generating and parsing JSON.
+
+    What library should I use?
+
+    -----------------
+
+    Convert across code to generate a connect token, encrypt a connect token, decrypt a connect token.
+
+    Add tests for generate, encrypt and decrypt connect tokens.
+
+    -----------------
+
+    Extend connection request packet read so that it decrypts the connect token.
+
+    This allows for quick reject of connection packets before performaing allocation.
+
+    Extend the connection request packet test so that it creates an actual connect token, encrypts it, verifies it is decrypted properly on read.
+
+    -----------------
+
+    Add tests for all the cases that should return NULL on connection request packet
+
+    1. packet too small
+
+    2. timestamp expired
+
+    3. invalid connect token data
+
+    4. timestamp modified from original (eg. AEAD signature early out)
 
     -----------------
 
