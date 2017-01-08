@@ -35,18 +35,20 @@
 #define NETCODE_CONNECT_TOKEN_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 
+#define NETCODE_CONNECTION_REQUEST_PACKET           0
+#define NETCODE_CONNECTION_DENIED_PACKET            1
+#define NETCODE_CONNECTION_CHALLENGE_PACKET         2
+#define NETCODE_CONNECTION_RESPONSE_PACKET          3
+#define NETCODE_CONNECTION_CONFIRM_PACKET           4
+#define NETCODE_CONNECTION_KEEP_ALIVE_PACKET        5
+#define NETCODE_CONNECTION_PAYLOAD_PACKET           6
+#define NETCODE_CONNECTION_DISCONNECT_PACKET        7
+
 struct netcode_connection_request_packet_t
 {
     uint64_t connect_token_expire_timestamp;
     uint8_t connect_token_nonce[NETCODE_NONCE_BYTES];
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
-};
-
-#define NETCODE_CONNECTION_DENIED_SERVER_IS_FULL 0
-
-struct netcode_connection_denied_packet_t
-{
-    int reason;
 };
 
 struct netcode_connection_challenge_packet_t
@@ -65,30 +67,6 @@ struct netcode_connection_confirm_packet_t
 {
     int client_index;
 };
-
-struct netcode_connection_keep_alive_packet_t
-{
-    // ...
-};
-
-struct netcode_connection_payload_packet_t
-{
-    // ...
-};
-
-struct netcode_disconnect_packet_t
-{
-    int reason;
-};
-
-#define NETCODE_CONNECTION_REQUEST_PACKET           0
-#define NETCODE_CONNECTION_DENIED_PACKET            1
-#define NETCODE_CONNECTION_CHALLENGE_PACKET         2
-#define NETCODE_CONNECTION_RESPONSE_PACKET          3
-#define NETCODE_CONNECTION_CONFIRM_PACKET           4
-#define NETCODE_CONNECTION_KEEP_ALIVE_PACKET        5
-#define NETCODE_CONNECTION_PAYLOAD_PACKET           6
-#define NETCODE_CONNECTION_DISCONNECT_PACKET        7
 
 struct netcode_t
 {
