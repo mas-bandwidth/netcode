@@ -81,7 +81,7 @@ struct netcode_connection_confirm_packet_t
 
 struct netcode_connection_keep_alive_packet_t
 {
-    uint8_t packet_type;    
+    uint8_t packet_type;
 };
 
 struct netcode_connection_payload_packet_t
@@ -93,6 +93,73 @@ struct netcode_connection_disconnect_packet_t
 {
     uint8_t packet_type;
 };
+
+void netcode_write_uint8( uint8_t * p, uint8_t value )
+{
+    (void) p;
+    (void) value;
+
+    // ...
+}
+
+void netcode_write_uint16( uint8_t * p, uint16_t value )
+{
+    (void) p;
+    (void) value;
+
+    // ...
+}
+
+void netcode_write_uint32( uint8_t * p, uint32_t value )
+{
+    (void) p;
+    (void) value;
+
+    // ...
+}
+
+void netcode_write_uint64( uint8_t * p, uint64_t value )
+{
+    (void) p;
+    (void) value;
+
+    // ...
+}
+
+void netcode_write_bytes( uint8_t * p, const uint8_t * byte_array, int num_bytes )
+{
+    (void) p;
+    (void) byte_array;
+    (void) num_bytes;
+
+    // ...
+}
+
+int netcode_write_packet( void * packet_data, uint8_t * buffer, int buffer_length )
+{
+    uint8_t packet_type = ((uint8_t*)packet_data)[0];
+
+    if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
+    {
+        // non-encrypted packets (connection request packet only)
+
+        assert( buffer_length >= 1 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
+
+        struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) NULL;
+
+        netcode_write_uint8( buffer, NETCODE_CONNECTION_REQUEST_PACKET );
+        netcode_write_uint64( buffer + 1, packet->connect_token_expire_timestamp );
+        netcode_write_bytes( buffer + 1 + 8, packet->connect_token_nonce, NETCODE_NONCE_BYTES );
+
+        return 1 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES;
+    }
+    else
+    {
+        // encrypted packets
+    }
+
+    return 0;
+}
 
 // ----------------------------------------------------------------
 
