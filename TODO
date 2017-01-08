@@ -6,24 +6,28 @@ DONE
 
     This is going to work out pretty well.
 
-TODO
-
     Extend code to take pointer to pointer for write bytes, so pointer can be advanced as writing is done.
 
-    Network order is little endian, so need converter functions.
+    Implement helper functions to write uint8, uint16, uint32, uint64, bytes.
 
-    Implement helper functions to write uint8, uint16, uint32, uint64.
+TODO
+
+    Implement helper functions to read uint8, uint16 etc.
+
+    Implement packet read function for connection request packet.
+
+    Write a test that verifies that we can write a connection request packet and then read it back in.
+
+    Note that on read, the connection request packet should be decrypted w. private key. This allows quick reject for invalid and expired connection reject packets.
 
     -----------------
 
-    Implement functions to read and write packets in wire format, try to do it all (encryption included), in one pass.
+    Implement read write for one of the other packet types.
 
-    So functions for all encrypted packets will need the key and nonce passed in (sequence).
+    This involves designing the prefix byte, sequence # compression and encrypted data.
 
-    Connection request packet should have prefix byte of 0? Known prefix.
+    The reader should perform decryption in place, so no allocation is made for a packet that doesn't pass the test. Quick reject is key.
 
-    Prefix byte should be redesigned around # of digits of sequence, rather than so there are bits in the prefix byte available for expansion.
+    Once one encrypted packet type is tested working, implement the rest, adding tests for each packet type to make sure they are read/written correctly.
 
-    In the end should have function to read packets, and a function to write each packet type.
-
-    This would be convenient on read as well, so packets can uniformly be put in a buffer w. type and have type determined later (recv queue).
+    -----------------
