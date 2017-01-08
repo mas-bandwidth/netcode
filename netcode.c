@@ -135,9 +135,9 @@ void netcode_write_bytes( uint8_t * p, const uint8_t * byte_array, int num_bytes
     // ...
 }
 
-int netcode_write_packet( void * packet_data, uint8_t * buffer, int buffer_length )
+int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length )
 {
-    uint8_t packet_type = ((uint8_t*)packet_data)[0];
+    uint8_t packet_type = ((uint8_t*)packet)[0];
 
     if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
     {
@@ -145,13 +145,18 @@ int netcode_write_packet( void * packet_data, uint8_t * buffer, int buffer_lengt
 
         assert( buffer_length >= 1 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
-        struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) NULL;
+        struct netcode_connection_request_packet_t * p = (struct netcode_connection_request_packet_t*) NULL;
+
+        uint8_t * start = buffer;
 
         netcode_write_uint8( buffer, NETCODE_CONNECTION_REQUEST_PACKET );
-        netcode_write_uint64( buffer + 1, packet->connect_token_expire_timestamp );
-        netcode_write_bytes( buffer + 1 + 8, packet->connect_token_nonce, NETCODE_NONCE_BYTES );
+        netcode_write_uint64( buffer, p->connect_token_expire_timestamp );
+        netcode_write_bytes( buffer, p->connect_token_nonce, NETCODE_NONCE_BYTES );
+        netcode_write_bytes( buffer, p->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-        return 1 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES;
+        assert( buffer - start == 1 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
+
+        return buffer - start;
     }
     else
     {
@@ -159,6 +164,14 @@ int netcode_write_packet( void * packet_data, uint8_t * buffer, int buffer_lengt
     }
 
     return 0;
+}
+
+void * netcode_read_packet( uint8_t * packet, int buffer_length )
+{
+    (void) packet;
+    (void) buffer_length;
+
+    return NULL;
 }
 
 // ----------------------------------------------------------------
