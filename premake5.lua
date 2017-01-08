@@ -7,7 +7,7 @@ else
     release_libs = debug_libs
 end
 
-solution "speednet"
+solution "netcode"
     kind "ConsoleApp"
     language "C++"
     platforms { "x64" }
@@ -31,11 +31,11 @@ solution "speednet"
         
 project "test"
     files { "test.c" }
-    links { "speednet" }
+    links { "netcode" }
 
-project "speednet"
+project "netcode"
     kind "StaticLib"
-    files { "speednet.h", "speednet.c" }
+    files { "netcode.h", "netcode.c" }
 
 if os.is "windows" then
 
@@ -44,10 +44,26 @@ if os.is "windows" then
     newaction
     {
         trigger     = "solution",
-        description = "Create and open the SPEEDNET solution",
+        description = "Create and open the netcode.io solution",
         execute = function ()
             os.execute "premake5 vs2015"
-            os.execute "start speednet.sln"
+            os.execute "start netcode.sln"
+        end
+    }
+
+else
+
+    -- MacOSX and Linux.
+    
+    newaction
+    {
+        trigger     = "test",
+        description = "Build and run all unit tests",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 test" == 0 then
+                os.execute "./bin/test"
+            end
         end
     }
 
