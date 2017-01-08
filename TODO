@@ -10,11 +10,11 @@ DONE
 
     Implement helper functions to write uint8, uint16, uint32, uint64, bytes.
 
-TODO
-
     Implement helper functions to read uint8, uint16 etc.
 
     Implement packet read function for connection request packet.
+
+TODO
 
     Write a test that verifies that we can write a connection request packet and then read it back in.
 
