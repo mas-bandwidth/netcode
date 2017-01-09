@@ -16,13 +16,13 @@ DONE
 
     Write a test that verifies that we can write a connection request packet and then read it back in.
 
+    Alternatively, skip JSON and make the connect token a binary format.
+
+    It's not a huge problem to generate this binary from web languages, and it's much more efficient.
+
+    I like this idea. Fuck JSON.
+
 TODO
-
-    Bring across code to encrypt/decrypt connect tokens.
-
-    This is going to require a C library for generating and parsing JSON.
-
-    What library should I use?
 
     -----------------
 

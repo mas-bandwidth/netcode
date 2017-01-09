@@ -37,6 +37,51 @@
 
 // ----------------------------------------------------------------
 
+struct netcode_address_t
+{
+    // ...
+};
+
+struct netcode_connect_token_t
+{
+    uint64_t client_id;
+    int num_server_addresses;
+    struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
+    uint8_t client_to_server_key[NETCODE_KEY_BYTES];
+    uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+};
+
+struct netcode_challenge_token_t
+{
+    uint64_t client_id;
+    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
+    uint8_t client_to_server_key[NETCODE_KEY_BYTES];
+    uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+
+    ChallengeToken()
+    {
+        clientId = 0;
+        memset( connectTokenMac, 0, MacBytes );
+        memset( clientToServerKey, 0, KeyBytes );
+        memset( serverToClientKey, 0, KeyBytes );
+    }
+
+    template <typename Stream> bool Serialize( Stream & stream )
+    {
+        serialize_uint64( stream, clientId );
+
+        serialize_bytes( stream, connectTokenMac, MacBytes );
+
+        serialize_bytes( stream, clientToServerKey, KeyBytes );
+
+        serialize_bytes( stream, serverToClientKey, KeyBytes );
+
+        return true;
+    }
+};
+
+// ----------------------------------------------------------------
+
 #define NETCODE_CONNECTION_REQUEST_PACKET           0
 #define NETCODE_CONNECTION_DENIED_PACKET            1
 #define NETCODE_CONNECTION_CHALLENGE_PACKET         2
@@ -49,7 +94,7 @@
 struct netcode_connection_request_packet_t
 {
     uint8_t packet_type;
-    uint64_t protocol_id;
+    uint64_t protocol_id;                                               // todo: use both as additional data and convert to little endian before using as additional data
     uint64_t connect_token_expire_timestamp;
     uint8_t connect_token_nonce[NETCODE_NONCE_BYTES];
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
