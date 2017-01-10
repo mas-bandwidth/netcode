@@ -5,6 +5,8 @@
 
 #define SERVER_PORT 40000
 
+extern void netcode_run_tests();
+
 int main( int argc, char ** argv )
 {
 	(void) argc;
@@ -12,7 +14,7 @@ int main( int argc, char ** argv )
 
 	netcode_init();
 
-    netcode_run_tests();	
+    netcode_run_tests();
 
     netcode_term();
 	

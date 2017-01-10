@@ -39,7 +39,7 @@
 
 struct netcode_address_t
 {
-    // ...
+    int dummy;
 };
 
 struct netcode_connect_token_t
@@ -57,27 +57,6 @@ struct netcode_challenge_token_t
     uint8_t connect_token_mac[NETCODE_MAC_BYTES];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
-
-    ChallengeToken()
-    {
-        clientId = 0;
-        memset( connectTokenMac, 0, MacBytes );
-        memset( clientToServerKey, 0, KeyBytes );
-        memset( serverToClientKey, 0, KeyBytes );
-    }
-
-    template <typename Stream> bool Serialize( Stream & stream )
-    {
-        serialize_uint64( stream, clientId );
-
-        serialize_bytes( stream, connectTokenMac, MacBytes );
-
-        serialize_bytes( stream, clientToServerKey, KeyBytes );
-
-        serialize_bytes( stream, serverToClientKey, KeyBytes );
-
-        return true;
-    }
 };
 
 // ----------------------------------------------------------------
@@ -201,7 +180,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
 
         assert( buffer_length >= 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
-        struct netcode_connection_request_packet_t * p = (struct netcode_connection_request_packet_t*) NULL;
+        struct netcode_connection_request_packet_t * p = (struct netcode_connection_request_packet_t*) packet;
 
         uint8_t * start = buffer;
 
@@ -213,7 +192,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
 
         assert( buffer - start == 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
-        return buffer - start;
+        return (int) ( buffer - start );
     }
     else
     {
@@ -288,6 +267,8 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
         if ( buffer_length != 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES )
             return NULL;
 
+		buffer++;
+
         const uint8_t * start = buffer;
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
@@ -309,11 +290,11 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
 
         packet->packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
         packet->protocol_id = packet_protocol_id;
-        packet->connect_token_expire_timestamp = netcode_read_uint64( &buffer );
+        packet->connect_token_expire_timestamp = packet_connect_token_expire_timestamp;
         netcode_read_bytes( &buffer, packet->connect_token_nonce, NETCODE_NONCE_BYTES );
         netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-        assert( buffer - start == 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer - start == 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
         return packet;
     }
@@ -619,12 +600,14 @@ void test_endian()
 #endif // #if NETCODE_LITTLE_ENDIAN
 }
 
+#define TEST_PROTOCOL_ID 0x1122334455667788LL
+
 void test_connection_request_packet()
 {
     struct netcode_connection_request_packet_t input_packet;
 
     input_packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
-    input_packet.protocol_id = 0x1122334455667788;
+    input_packet.protocol_id = TEST_PROTOCOL_ID;
     input_packet.connect_token_expire_timestamp = (uint64_t) time( NULL );
     memset( input_packet.connect_token_nonce, 0, NETCODE_NONCE_BYTES );
     memset( input_packet.connect_token_data, 0, NETCODE_CONNECT_TOKEN_BYTES );
@@ -633,6 +616,7 @@ void test_connection_request_packet()
 
     struct netcode_packet_context_t context;
     memset( &context, 0, sizeof( context ) );
+	context.protocol_id = TEST_PROTOCOL_ID;
 
     int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), &context );
 
@@ -643,8 +627,8 @@ void test_connection_request_packet()
     check( output_packet );
 
     check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
-    check( output_packet->protocol_id = input_packet.protocol_id );
-    check( output_packet->connect_token_expire_timestamp = input_packet.connect_token_expire_timestamp );
+    check( output_packet->protocol_id == input_packet.protocol_id );
+    check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
     check( memcmp( output_packet->connect_token_nonce, input_packet.connect_token_nonce, NETCODE_NONCE_BYTES ) == 0 );
     check( memcmp( output_packet->connect_token_data, input_packet.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
 
