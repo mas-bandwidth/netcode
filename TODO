@@ -22,7 +22,11 @@ DONE
 
     I like this idea. Fuck JSON.
 
+    Fixed code that reads and writes the connection request packet. It was incorrect. Not sure how it was passing tests on MacOSX?
+
 TODO
+
+    Sketching out utility functions related to connect token, challenge token.
 
     -----------------
 

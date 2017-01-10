@@ -37,10 +37,23 @@
 
 // ----------------------------------------------------------------
 
+#define NETCODE_ADDRESS_IPV4 0
+#define NETCODE_ADDRESS_IPV6 1
+
 struct netcode_address_t
 {
-    int dummy;
+    uint8_t type;
+    union
+    {
+        uint32_t ipv4;
+        uint16_t ipv6[8];
+    } address;
+    uint16_t port;
 };
+
+// ...
+
+// ----------------------------------------------------------------
 
 struct netcode_connect_token_t
 {
@@ -58,6 +71,167 @@ struct netcode_challenge_token_t
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
 };
+
+void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint64_t expiry_timestamp )
+{
+    assert( connect_token );
+    assert( num_server_addresses > 0 );
+    assert( server_addresses );
+
+    (void) connect_token;
+    (void) client_id;
+    (void) num_server_addresses;
+    (void) server_addresses;
+    (void) expiry_timestamp;
+
+    // ...
+}
+
+int netcode_write_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
+{
+	assert( connect_token );
+	assert( buffer );
+
+	(void) connect_token;
+	(void) buffer;
+	(void) buffer_length;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
+{
+	assert( buffer );
+	assert( connect_token );
+
+	(void) buffer;
+	(void) buffer_length;
+	(void) connect_token;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_encrypt_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
+{
+    assert( connect_token );
+    assert( buffer );
+    assert( key );
+
+    // todo: check buffer length is sufficient
+
+    (void) connect_token;
+	(void) buffer;
+	(void) buffer_length;
+	(void) protocol_id;
+	(void) sequence;
+	(void) key;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_decrypt_connect_token( const uint8_t * encrypted, int encrypted_length, struct netcode_connect_token_t * decrypted_connect_token, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
+{
+	assert( encrypted );
+	assert( decrypted_connect_token );
+
+	// todo: assert encrypted length is expected length
+
+	(void) encrypted;
+	(void) encrypted_length;
+	(void) decrypted_connect_token;
+	(void) protocol_id;
+	(void) sequence;
+	(void) key;
+
+	// ...
+	
+	return 0;
+}
+
+int netcode_generate_challenge_token( const struct netcode_connect_token_t * connect_token, const uint8_t * connect_token_mac, struct netcode_challenge_token_t * challenge_token )
+{
+	assert( connect_token );
+	assert( connect_token_mac );
+	assert( challenge_token );
+
+	(void) connect_token;
+	(void) connect_token_mac;
+	(void) challenge_token;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_write_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
+{
+	assert( challenge_token );
+	assert( buffer );
+
+	(void) challenge_token;
+	(void) buffer;
+	(void) buffer_length;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
+{
+	assert( buffer );
+	assert( challenge_token );
+
+	(void) buffer;
+	(void) buffer_length;
+	(void) challenge_token;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_encrypt_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * encrypted, int encrypted_length, uint64_t sequence, const uint8_t * key )
+{
+	assert( challenge_token );
+	assert( encrypted );
+	assert( key );
+
+	// todo: check encrypted length is what is expected.
+
+	(void) challenge_token;
+	(void) encrypted;
+	(void) encrypted_length;
+	(void) sequence;
+	(void) key;
+
+	// ...
+
+	return 0;
+}
+
+int netcode_decrypt_challenge_token( const uint8_t * encrypted, int encrypted_length, struct netcode_challenge_token_t * decrypted_challenge_token, uint64_t sequence, const uint8_t * key )
+{
+	assert( encrypted );
+	assert( decrypted_challenge_token );
+	assert( key );
+	
+	(void) encrypted;
+	(void) encrypted_length;
+	(void) decrypted_challenge_token;
+	(void) sequence;
+	(void) key;
+
+	// ...
+
+	return 0;
+}
 
 // ----------------------------------------------------------------
 
@@ -258,7 +432,9 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
 {
     assert( context );
 
-    uint8_t packet_type = buffer[0];
+    const uint8_t * start = buffer;
+
+    uint8_t packet_type = netcode_read_uint8( &buffer );
 
     if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
     {
@@ -266,10 +442,6 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
 
         if ( buffer_length != 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES )
             return NULL;
-
-		buffer++;
-
-        const uint8_t * start = buffer;
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
 
@@ -294,7 +466,7 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
         netcode_read_bytes( &buffer, packet->connect_token_nonce, NETCODE_NONCE_BYTES );
         netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-        assert( buffer - start == 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer - start == 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
         return packet;
     }
