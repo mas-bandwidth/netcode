@@ -26,13 +26,29 @@ DONE
 
     Sketching out utility functions related to connect token, challenge token.
 
-TODO
+    Helper function to generate connect token added.
 
-    Need to bring across implementations for connect token, challenge token functions.
+    Brought across code to write/read connect tokens.
+
+    Adjusted IPv4 so it's easier to setup the address. It's now an array of bytes, not a uint32_t.
+
+TODO
 
     -----------------
 
-    Connection request packets should probably be prefixed with an identifier uint64_t that is unique to netcode.io
+    Add a unit test to generate connect token, write it to a buffer, read it back.
+    
+    -----------------
+
+    Need to implement encrypt/decrypt connect token function.
+
+    -----------------
+
+    Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
+
+    -----------------
+
+    Bring across implementations for challenge token functions.
 
     -----------------
 

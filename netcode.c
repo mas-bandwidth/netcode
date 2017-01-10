@@ -47,7 +47,7 @@ struct netcode_address_t
     uint8_t type;
     union
     {
-        uint32_t ipv4;
+        uint8_t ipv4[4];
         uint16_t ipv6[8];
     } address;
     uint16_t port;
@@ -207,7 +207,10 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
-            netcode_write_uint32( &buffer, connect_token->server_addresses[i].address.ipv4 );
+            for ( int j = 0; j < 4; ++j )
+            {
+                netcode_write_uint8( &buffer, connect_token->server_addresses[i].address.ipv4[j] );
+            }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
         else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
@@ -258,7 +261,10 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
 
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
-            connect_token->server_addresses[i].address.ipv4 = netcode_read_uint32( &buffer );
+            for ( int j = 0; j < 4; ++j )
+            {
+                connect_token->server_addresses[i].address.ipv4[j] = netcode_read_uint8( &buffer );
+            }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
         else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
@@ -283,10 +289,6 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
 
 	return 1;
 }
-
-// todo: maybe pass in type so we can pick AES256 vs. chachapoly, and encode this type as part of the additional data!
-
-// note: are the mac sizes different between each AEAD implementation, or the same? can this be assumed, even if they are?
 
 int netcode_encrypt_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
 {
@@ -794,10 +796,9 @@ void netcode_server_destroy( struct netcode_server_t * server )
 
 // ---------------------------------------------------------------
 
-// temporary: 
-#define NETCODE_TESTS 1
+#define NETCODE_TEST 1
 
-#if NETCODE_TESTS
+#if NETCODE_TEST
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -829,7 +830,7 @@ do                                                                             \
     }                                                                          \
 } while(0)
 
-void test_endian()
+static void test_endian()
 {
     uint32_t value = 0x11223344;
 
@@ -854,7 +855,12 @@ void test_endian()
 
 #define TEST_PROTOCOL_ID 0x1122334455667788LL
 
-void test_connection_request_packet()
+static void test_connect_token()
+{
+    // ...
+}
+
+static void test_connection_request_packet()
 {
     struct netcode_connection_request_packet_t input_packet;
 
@@ -897,10 +903,11 @@ void test_connection_request_packet()
     }                                                                       \
     while (0)
 
-void netcode_run_tests()
+void netcode_test()
 {
     RUN_TEST( test_endian );
+    RUN_TEST( test_connect_token );
     RUN_TEST( test_connection_request_packet );
 }
 
-#endif // #if NETCODE_TESTS
+#endif // #if NETCODE_TEST
