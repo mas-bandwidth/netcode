@@ -24,9 +24,19 @@ DONE
 
     Fixed code that reads and writes the connection request packet. It was incorrect. Not sure how it was passing tests on MacOSX?
 
+    Sketching out utility functions related to connect token, challenge token.
+
 TODO
 
-    Sketching out utility functions related to connect token, challenge token.
+    Need to bring across implementations for connect token, challenge token functions.
+
+    These are binary not JSON, so hopefully I can avoid bringing in a JSON parser for the reference code.
+
+    However, the connect token and challenge token should probably have a "type" in the value written to memory (spec), so different AEAD implementations can be used. Default AEAD_LIBSODIUM_CHACHAPOLY1234134 whatever it is.
+
+    This will affect the packets sent. Connection request, challenge and response packets should be encoded to support the concept of "type", which will allow future expansion to different AEAD constructions.
+
+    Thinking of this, it's probably appropriate (necessary) to support variable length tokens. Have a maximum length. Set it at 1400 below conservative MTU, but let it be less, depending on type. Still want to pad up the type to the 1400.
 
     -----------------
 
@@ -38,7 +48,7 @@ TODO
 
     Extend connection request packet read so that it decrypts the connect token.
 
-    This allows for quick reject of connection packets before performaing allocation.
+    This allows for quick reject of connection packets before performing allocation.
 
     Extend the connection request packet test so that it creates an actual connect token, encrypts it, verifies it is decrypted properly on read.
 
