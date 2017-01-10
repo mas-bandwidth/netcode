@@ -30,13 +30,9 @@ TODO
 
     Need to bring across implementations for connect token, challenge token functions.
 
-    These are binary not JSON, so hopefully I can avoid bringing in a JSON parser for the reference code.
+    -----------------
 
-    However, the connect token and challenge token should probably have a "type" in the value written to memory (spec), so different AEAD implementations can be used. Default AEAD_LIBSODIUM_CHACHAPOLY1234134 whatever it is.
-
-    This will affect the packets sent. Connection request, challenge and response packets should be encoded to support the concept of "type", which will allow future expansion to different AEAD constructions.
-
-    Thinking of this, it's probably appropriate (necessary) to support variable length tokens. Have a maximum length. Set it at 1400 below conservative MTU, but let it be less, depending on type. Still want to pad up the type to the 1400.
+    Connection request packets should probably be prefixed with an identifier uint64_t that is unique to netcode.io
 
     -----------------
 

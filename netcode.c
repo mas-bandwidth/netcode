@@ -1,6 +1,7 @@
 #include <netcode.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <memory.h>
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -28,7 +29,7 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_MAX_SERVERS_PER_CONNECT 8
+#define NETCODE_MAX_SERVERS_PER_CONNECT 16
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
 #define NETCODE_NONCE_BYTES 8
@@ -55,6 +56,101 @@ struct netcode_address_t
 
 // ----------------------------------------------------------------
 
+void netcode_write_uint8( uint8_t ** p, uint8_t value )
+{
+    **p = value;
+    ++(*p);
+}
+
+void netcode_write_uint16( uint8_t ** p, uint16_t value )
+{
+    (*p)[0] = value >> 8;
+    (*p)[1] = value & 0xFF;
+    *p += 2;
+}
+
+void netcode_write_uint32( uint8_t ** p, uint32_t value )
+{
+    (*p)[0] = value >> 24;
+    (*p)[1] = ( value >> 16 ) & 0xFF;
+    (*p)[2] = ( value >> 8  ) & 0xFF;
+    (*p)[3] = value & 0xFF;
+    *p += 4;
+}
+
+void netcode_write_uint64( uint8_t ** p, uint64_t value )
+{
+    (*p)[0] = value >> 56;
+    (*p)[1] = ( value >> 48 ) & 0xFF;
+    (*p)[2] = ( value >> 40 ) & 0xFF;
+    (*p)[3] = ( value >> 32 ) & 0xFF;
+    (*p)[4] = ( value >> 24 ) & 0xFF;
+    (*p)[5] = ( value >> 16 ) & 0xFF;
+    (*p)[6] = ( value >> 8  ) & 0xFF;
+    (*p)[7] = value & 0xFF;
+    *p += 8;
+}
+
+void netcode_write_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
+{
+    for ( int i = 0; i < num_bytes; ++i )
+    {
+        netcode_write_uint8( p, byte_array[i] );
+    }
+}
+
+uint8_t netcode_read_uint8( const uint8_t ** p )
+{
+    uint8_t value = **p;
+    ++(*p);
+    return value;
+}
+
+uint16_t netcode_read_uint16( const uint8_t ** p )
+{
+    uint16_t value;
+    value  = ( ( (uint16_t)( (*p)[0] ) ) << 8 );
+    value |= (*p)[1];
+    *p += 2;
+    return value;
+}
+
+uint32_t netcode_read_uint32( const uint8_t ** p )
+{
+    uint32_t value;
+    value  = ( ( (uint32_t)( (*p)[0] ) ) << 24 );
+    value |= ( ( (uint32_t)( (*p)[1] ) ) << 16 );
+    value |= ( ( (uint32_t)( (*p)[2] ) ) << 8 );
+    value |= (*p)[3];
+    *p += 4;
+    return value;
+}
+
+uint64_t netcode_read_uint64( const uint8_t ** p )
+{
+    uint64_t value;
+    value  = ( ( (uint64_t)( (*p)[0] ) ) << 56 );
+    value |= ( ( (uint64_t)( (*p)[1] ) ) << 48 );
+    value |= ( ( (uint64_t)( (*p)[2] ) ) << 40 );
+    value |= ( ( (uint64_t)( (*p)[3] ) ) << 32 );
+    value |= ( ( (uint64_t)( (*p)[4] ) ) << 24 );
+    value |= ( ( (uint64_t)( (*p)[5] ) ) << 16 );
+    value |= ( ( (uint64_t)( (*p)[6] ) ) << 8  );
+    value |= (*p)[7];
+    *p += 8;
+    return value;
+}
+
+void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes )
+{
+    for ( int i = 0; i < num_bytes; ++i )
+    {
+        byte_array[i] = netcode_read_uint8( p );
+    }
+}
+
+// ----------------------------------------------------------------
+
 struct netcode_connect_token_t
 {
     uint64_t client_id;
@@ -72,33 +168,65 @@ struct netcode_challenge_token_t
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
 };
 
-void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint64_t expiry_timestamp )
+void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses )
 {
     assert( connect_token );
     assert( num_server_addresses > 0 );
+    assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
     assert( server_addresses );
-
-    (void) connect_token;
-    (void) client_id;
-    (void) num_server_addresses;
-    (void) server_addresses;
-    (void) expiry_timestamp;
-
-    // ...
+    connect_token->client_id = client_id;
+    connect_token->num_server_addresses = num_server_addresses;
+    for ( int i = 0; i < num_server_addresses; ++i )
+    {
+        memcpy( &connect_token->server_addresses[i], &server_addresses[i], sizeof( struct netcode_address_t ) );
+    }
 }
 
-int netcode_write_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
+void netcode_write_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
 {
+    (void) buffer_length;
+
 	assert( connect_token );
+    assert( connect_token->num_server_addresses > 0 );
+    assert( connect_token->num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
 	assert( buffer );
+    assert( buffer_length >= NETCODE_CONNECT_TOKEN_BYTES );
 
-	(void) connect_token;
-	(void) buffer;
-	(void) buffer_length;
+    memset( buffer, 0, NETCODE_CONNECT_TOKEN_BYTES );
 
-	// ...
+    uint8_t * start = buffer;
 
-	return 0;
+    netcode_write_uint64( &buffer, connect_token->client_id );
+    netcode_write_uint32( &buffer, connect_token->num_server_addresses );
+
+    // todo: add offset for start of user data here, since server addresses are variable length
+
+    for ( int i = 0; i < connect_token->num_server_addresses; ++i )
+    {
+        if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
+        {
+            netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
+            netcode_write_uint32( &buffer, connect_token->server_addresses[i].address.ipv4 );
+            netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
+        }
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
+        {
+            netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV6 );
+            for ( int j = 0; j < 8; ++j )
+            {
+                netcode_write_uint16( &buffer, connect_token->server_addresses[i].address.ipv6[j] );
+            }
+            netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
+        }
+        else
+        {
+            assert( 0 );
+        }
+    }
+
+    // todo: fixed size user data, for example 512 bytes.
+
+    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );
 }
 
 int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
@@ -293,49 +421,6 @@ struct netcode_connection_disconnect_packet_t
     uint8_t packet_type;
 };
 
-void netcode_write_uint8( uint8_t ** p, uint8_t value )
-{
-    **p = value;
-    ++(*p);
-}
-
-void netcode_write_uint16( uint8_t ** p, uint16_t value )
-{
-    (*p)[0] = value >> 8;
-    (*p)[1] = value & 0xFF;
-    *p += 2;
-}
-
-void netcode_write_uint32( uint8_t ** p, uint32_t value )
-{
-    (*p)[0] = value >> 24;
-    (*p)[1] = ( value >> 16 ) & 0xFF;
-    (*p)[2] = ( value >> 8  ) & 0xFF;
-    (*p)[3] = value & 0xFF;
-    *p += 4;
-}
-
-void netcode_write_uint64( uint8_t ** p, uint64_t value )
-{
-    (*p)[0] = value >> 56;
-    (*p)[1] = ( value >> 48 ) & 0xFF;
-    (*p)[2] = ( value >> 40 ) & 0xFF;
-    (*p)[3] = ( value >> 32 ) & 0xFF;
-    (*p)[4] = ( value >> 24 ) & 0xFF;
-    (*p)[5] = ( value >> 16 ) & 0xFF;
-    (*p)[6] = ( value >> 8  ) & 0xFF;
-    (*p)[7] = value & 0xFF;
-    *p += 8;
-}
-
-void netcode_write_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
-{
-    for ( int i = 0; i < num_bytes; ++i )
-    {
-        netcode_write_uint8( p, byte_array[i] );
-    }
-}
-
 struct netcode_packet_context_t
 {
     uint64_t protocol_id;
@@ -376,56 +461,6 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
     }
 
     return 0;
-}
-
-uint8_t netcode_read_uint8( const uint8_t ** p )
-{
-    uint8_t value = **p;
-    ++(*p);
-    return value;
-}
-
-uint16_t netcode_read_uint16( const uint8_t ** p )
-{
-    uint16_t value;
-    value  = ( ( (uint16_t)( (*p)[0] ) ) << 8 );
-    value |= (*p)[1];
-    *p += 2;
-    return value;
-}
-
-uint32_t netcode_read_uint32( const uint8_t ** p )
-{
-    uint32_t value;
-    value  = ( ( (uint32_t)( (*p)[0] ) ) << 24 );
-    value |= ( ( (uint32_t)( (*p)[1] ) ) << 16 );
-    value |= ( ( (uint32_t)( (*p)[2] ) ) << 8 );
-    value |= (*p)[3];
-    *p += 4;
-    return value;
-}
-
-uint64_t netcode_read_uint64( const uint8_t ** p )
-{
-    uint64_t value;
-    value  = ( ( (uint64_t)( (*p)[0] ) ) << 56 );
-    value |= ( ( (uint64_t)( (*p)[1] ) ) << 48 );
-    value |= ( ( (uint64_t)( (*p)[2] ) ) << 40 );
-    value |= ( ( (uint64_t)( (*p)[3] ) ) << 32 );
-    value |= ( ( (uint64_t)( (*p)[4] ) ) << 24 );
-    value |= ( ( (uint64_t)( (*p)[5] ) ) << 16 );
-    value |= ( ( (uint64_t)( (*p)[6] ) ) << 8  );
-    value |= (*p)[7];
-    *p += 8;
-    return value;
-}
-
-void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes )
-{
-    for ( int i = 0; i < num_bytes; ++i )
-    {
-        byte_array[i] = netcode_read_uint8( p );
-    }
 }
 
 void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
