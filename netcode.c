@@ -209,6 +209,9 @@ int netcode_encrypt( const uint8_t * message, int message_length,
                      const uint8_t * nonce, 
                      const uint8_t * key )
 {
+    assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
+    assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
+
     assert( message );
     assert( message_length > 0 );
     assert( encrypted_message );
@@ -231,6 +234,9 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
                      const uint8_t * nonce, 
                      const uint8_t * key )
 {
+    assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
+    assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
+
     uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
@@ -250,7 +256,7 @@ int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length,
                           const uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
-    // todo: auth/mac bytes as well
+    assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
     uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
@@ -275,6 +281,7 @@ int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_
                           const uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
+    assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
     uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
