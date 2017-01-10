@@ -204,13 +204,94 @@ void netcode_random_bytes( uint8_t * data, int bytes )
     randombytes_buf( data, bytes );
 }
 
-// todo: bring these across too
-/*
-extern bool Encrypt( const uint8_t * message, int messageLength, uint8_t * encryptedMessage, int & encryptedMessageLength, const uint8_t * nonce, const uint8_t * key );
-extern bool Decrypt( const uint8_t * encryptedMessage, int encryptedMessageLength, uint8_t * decryptedMessage, int & decryptedMessageLength, const uint8_t * nonce, const uint8_t * key );
-extern bool Encrypt_AEAD( const uint8_t * message, uint64_t messageLength, uint8_t * encryptedMessage, uint64_t & encryptedMessageLength, const uint8_t * additional, uint64_t additionalLength, const uint8_t * nonce, const uint8_t * key );
-extern bool Decrypt_AEAD( const uint8_t * encryptedMessage, uint64_t encryptedMessageLength, uint8_t * decryptedMessage, uint64_t & decryptedMessageLength, const uint8_t * additional, uint64_t additionalLength, const uint8_t * nonce, const uint8_t * key );
-*/
+int netcode_encrypt( const uint8_t * message, int message_length, 
+                     uint8_t * encrypted_message, int * encrypted_message_length, 
+                     const uint8_t * nonce, 
+                     const uint8_t * key )
+{
+    assert( message );
+    assert( message_length > 0 );
+    assert( encrypted_message );
+    assert( encrypted_message_length );
+
+    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    if ( crypto_secretbox_easy( encrypted_message, message, message_length, actual_nonce, key ) != 0 )
+        return 0;
+
+    *encrypted_message_length = message_length + NETCODE_MAC_BYTES;
+
+    return 1;
+}
+
+int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_length, 
+                     uint8_t * decrypted_message, int * decrypted_message_length, 
+                     const uint8_t * nonce, 
+                     const uint8_t * key )
+{
+    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, actual_nonce, key ) != 0 )
+        return 0;
+
+    *decrypted_message_length = encrypted_message_length - NETCODE_MAC_BYTES;
+
+    return 1;
+}
+
+int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length, 
+                          uint8_t * encrypted_message, uint64_t * encrypted_message_length,
+                          const uint8_t * additional, uint64_t additional_length,
+                          const uint8_t * nonce,
+                          const uint8_t * key )
+{
+    assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
+    // todo: auth/mac bytes as well
+
+    uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    unsigned long long encrypted_length;
+
+    int result = crypto_aead_chacha20poly1305_encrypt( encrypted_message, &encrypted_length,
+                                                       message, (unsigned long long) message_length,
+                                                       additional, (unsigned long long) additional_length,
+                                                       NULL, actual_nonce, key );
+
+    *encrypted_message_length = (uint64_t) encrypted_length;
+
+    return result == 0;
+}
+
+int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_message_length, 
+                          uint8_t * decrypted_message, uint64_t * decrypted_message_length,
+                          const uint8_t * additional, uint64_t additional_length,
+                          const uint8_t * nonce,
+                          const uint8_t * key )
+{
+    assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
+
+    uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    unsigned long long decrypted_length;
+
+    int result = crypto_aead_chacha20poly1305_decrypt( decrypted_message, &decrypted_length,
+                                                       NULL,
+                                                       encrypted_message, (unsigned long long) encrypted_message_length,
+                                                       additional, (unsigned long long) additional_length,
+                                                       actual_nonce, key );
+
+    *decrypted_message_length = (uint64_t) decrypted_length;
+
+    return result == 0;
+}
 
 // ----------------------------------------------------------------
 
