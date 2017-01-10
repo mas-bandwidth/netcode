@@ -33,8 +33,9 @@
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
 #define NETCODE_NONCE_BYTES 8
-#define NETCODE_CONNECT_TOKEN_BYTES 1024
+#define NETCODE_CONNECT_TOKEN_BYTES 1400
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
+#define NETCODE_USER_DATA_BYTES 512
 
 // ----------------------------------------------------------------
 
@@ -91,7 +92,7 @@ void netcode_write_uint64( uint8_t ** p, uint64_t value )
     *p += 8;
 }
 
-void netcode_write_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
+void netcode_write_bytes( uint8_t ** p, const uint8_t * byte_array, int num_bytes )
 {
     for ( int i = 0; i < num_bytes; ++i )
     {
@@ -158,6 +159,7 @@ struct netcode_connect_token_t
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
 struct netcode_challenge_token_t
@@ -197,9 +199,8 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
     uint8_t * start = buffer;
 
     netcode_write_uint64( &buffer, connect_token->client_id );
-    netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
-    // todo: add offset for start of user data here, since server addresses are variable length
+    netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
     for ( int i = 0; i < connect_token->num_server_addresses; ++i )
     {
@@ -224,9 +225,13 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
         }
     }
 
-    // todo: fixed size user data, for example 512 bytes.
+    netcode_write_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
-    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
+
+    netcode_write_bytes( &buffer, connect_token->user_data, NETCODE_USER_DATA_BYTES );
+
+    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );        // todo: actually we need enough for MAC at end for AEAD...
 }
 
 int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
@@ -234,14 +239,54 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
 	assert( buffer );
 	assert( connect_token );
 
-	(void) buffer;
-	(void) buffer_length;
-	(void) connect_token;
+    if ( buffer_length < NETCODE_CONNECT_TOKEN_BYTES )
+        return 0;
+	
+    connect_token->client_id = netcode_read_uint64( &buffer );
 
-	// ...
+    connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
-	return 0;
+    if ( connect_token->num_server_addresses <= 0 )
+        return 0;
+
+    if ( connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
+        return 0;
+
+    for ( int i = 0; i < connect_token->num_server_addresses; ++i )
+    {
+        connect_token->server_addresses[i].type = netcode_read_uint8( &buffer );
+
+        if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
+        {
+            connect_token->server_addresses[i].address.ipv4 = netcode_read_uint32( &buffer );
+            connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
+        }
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
+        {
+            for ( int j = 0; j < 8; ++j )
+            {
+                connect_token->server_addresses[i].address.ipv6[j] = netcode_read_uint16( &buffer );
+            }
+            connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    netcode_read_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
+
+    netcode_read_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
+
+    netcode_read_bytes( &buffer, connect_token->user_data, NETCODE_USER_DATA_BYTES );
+
+	return 1;
 }
+
+// todo: maybe pass in type so we can pick AES256 vs. chachapoly, and encode this type as part of the additional data!
+
+// note: are the mac sizes different between each AEAD implementation, or the same? can this be assumed, even if they are?
 
 int netcode_encrypt_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
 {
