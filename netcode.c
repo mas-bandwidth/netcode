@@ -53,7 +53,40 @@ struct netcode_address_t
     uint16_t port;
 };
 
-// ...
+int netcode_address_is_equal( const struct netcode_address_t * a, const struct netcode_address_t * b )
+{
+    assert( a );
+    assert( b );
+
+    if ( a->type != b->type )
+        return 0;
+
+    if ( a->port != b->port )
+        return 0;
+
+    if ( a->type == NETCODE_ADDRESS_IPV4 )
+    {
+        for ( int i = 0; i < 4; ++i )
+        {
+            if ( a->address.ipv4[i] != b->address.ipv4[i] )
+                return 0;
+        }
+    }
+    else if ( a->type == NETCODE_ADDRESS_IPV6 )
+    {
+        for ( int i = 0; i < 8; ++i )
+        {
+            if ( a->address.ipv6[i] != b->address.ipv6[i] )
+                return 0;
+        }
+    }
+    else
+    {
+        return 0;
+    }
+
+    return 1;
+}
 
 // ----------------------------------------------------------------
 
@@ -152,6 +185,35 @@ void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes
 
 // ----------------------------------------------------------------
 
+#ifdef _MSC_VER
+#define SODIUM_STATIC
+#endif // #ifdef _MSC_VER
+
+#include <sodium.h>
+
+void netcode_generate_key( uint8_t * key )
+{
+    assert( key );
+    randombytes_buf( key, NETCODE_KEY_BYTES );
+}
+
+void netcode_random_bytes( uint8_t * data, int bytes )
+{
+    assert( data );
+    assert( bytes > 0 );
+    randombytes_buf( data, bytes );
+}
+
+// todo: bring these across too
+/*
+extern bool Encrypt( const uint8_t * message, int messageLength, uint8_t * encryptedMessage, int & encryptedMessageLength, const uint8_t * nonce, const uint8_t * key );
+extern bool Decrypt( const uint8_t * encryptedMessage, int encryptedMessageLength, uint8_t * decryptedMessage, int & decryptedMessageLength, const uint8_t * nonce, const uint8_t * key );
+extern bool Encrypt_AEAD( const uint8_t * message, uint64_t messageLength, uint8_t * encryptedMessage, uint64_t & encryptedMessageLength, const uint8_t * additional, uint64_t additionalLength, const uint8_t * nonce, const uint8_t * key );
+extern bool Decrypt_AEAD( const uint8_t * encryptedMessage, uint64_t encryptedMessageLength, uint8_t * decryptedMessage, uint64_t & decryptedMessageLength, const uint8_t * additional, uint64_t additionalLength, const uint8_t * nonce, const uint8_t * key );
+*/
+
+// ----------------------------------------------------------------
+
 struct netcode_connect_token_t
 {
     uint64_t client_id;
@@ -170,18 +232,27 @@ struct netcode_challenge_token_t
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
 };
 
-void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses )
+void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, const uint8_t * user_data )
 {
     assert( connect_token );
     assert( num_server_addresses > 0 );
     assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
     assert( server_addresses );
+    assert( user_data );
+
     connect_token->client_id = client_id;
+    
     connect_token->num_server_addresses = num_server_addresses;
+    
     for ( int i = 0; i < num_server_addresses; ++i )
     {
         memcpy( &connect_token->server_addresses[i], &server_addresses[i], sizeof( struct netcode_address_t ) );
     }
+
+    netcode_generate_key( connect_token->client_to_server_key );
+    netcode_generate_key( connect_token->server_to_client_key );
+
+    memcpy( connect_token->user_data, user_data, NETCODE_USER_DATA_BYTES );
 }
 
 void netcode_write_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
@@ -853,11 +924,48 @@ static void test_endian()
 #endif // #if NETCODE_LITTLE_ENDIAN
 }
 
-#define TEST_PROTOCOL_ID 0x1122334455667788LL
+#define TEST_PROTOCOL_ID    0x1122334455667788LL
+#define TEST_CLIENT_ID      0x1LL
+#define TEST_SERVER_PORT    40000
 
 static void test_connect_token()
 {
-    // ...
+    struct netcode_address_t server_address;
+    server_address.type = NETCODE_ADDRESS_IPV4;
+    server_address.address.ipv4[0] = 127;
+    server_address.address.ipv4[1] = 0;
+    server_address.address.ipv4[2] = 0;
+    server_address.address.ipv4[3] = 1;
+    server_address.port = TEST_SERVER_PORT;
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    struct netcode_connect_token_t input_token;
+
+    netcode_generate_connect_token( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+
+    check( input_token.client_id == TEST_CLIENT_ID );
+    check( input_token.num_server_addresses == 1 );
+    check( memcmp( input_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
+    check( netcode_address_is_equal( &input_token.server_addresses[0], &server_address ) );
+
+    uint8_t buffer[NETCODE_CONNECT_TOKEN_BYTES];
+
+    netcode_write_connect_token( &input_token, buffer, NETCODE_CONNECT_TOKEN_BYTES );
+
+    struct netcode_connect_token_t output_token;
+
+    int result = netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_token );
+
+    check( result == 1 );
+
+    check( output_token.client_id == input_token.client_id );
+    check( output_token.num_server_addresses == input_token.num_server_addresses );
+    check( netcode_address_is_equal( &output_token.server_addresses[0], &input_token.server_addresses[0] ) );
+    check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_token.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
 }
 
 static void test_connection_request_packet()

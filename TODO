@@ -32,12 +32,18 @@ DONE
 
     Adjusted IPv4 so it's easier to setup the address. It's now an array of bytes, not a uint32_t.
 
-TODO
-
-    -----------------
-
     Add a unit test to generate connect token, write it to a buffer, read it back.
     
+    Bring across random function wrappers from libsodium.
+
+    eg. netcode_random_bytes, netcode_generate_key
+
+    Update code to generate random data and keys where needed, currently memset-ing 0 instead.
+
+TODO
+
+    Bring across encrypt/decrypt functions that wrap libsodium.
+
     -----------------
 
     Need to implement encrypt/decrypt connect token function.
@@ -45,6 +51,10 @@ TODO
     -----------------
 
     Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
+
+    -----------------
+
+    Extend code to read connection request packet to decrypt connect token in place (will need to two-stage decrypt separate from read for this)
 
     -----------------
 
