@@ -443,7 +443,7 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
     {
         uint8_t * p = additional_data;
         netcode_write_uint64( &p, protocol_id );
-        netcode_write_uint64( &p, expire_timestamp );
+        netcode_write_uint64( &p, expire_timestamp );			// todo: version should also be hashed in to the associated data, to avoid attacks w. different version #s
     }
 
     uint8_t nonce[8];
@@ -472,6 +472,8 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
     assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 	
+	memset( buffer + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
+
 	return 1;
 }
 
@@ -675,6 +677,7 @@ struct netcode_packet_context_t
 {
     uint64_t protocol_id;
     uint64_t current_timestamp;
+	uint8_t connect_token_key[NETCODE_KEY_BYTES];
 };
 
 int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
@@ -714,7 +717,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
     return 0;
 }
 
-void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
+void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
 {
     assert( context );
 
@@ -742,7 +745,12 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
         if ( packet_connect_token_expire_timestamp <= context->current_timestamp )
             return NULL;
 
-        // todo: want to perform decryption of connect token here, in-place ideally (or to stack, if required depending on version of libsodium)
+		uint64_t packet_connect_token_sequence = netcode_read_uint64( &buffer );
+
+		assert( buffer - start == 1 + 13 + 8 + 8 + NETCODE_NONCE_BYTES );
+
+		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, context->protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, context->connect_token_key ) )
+			return NULL;
 
         struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) malloc( sizeof( struct netcode_connection_request_packet_t ) );
 
@@ -752,7 +760,7 @@ void * netcode_read_packet( const uint8_t * buffer, int buffer_length, struct ne
         packet->packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
         packet->protocol_id = packet_protocol_id;
         packet->connect_token_expire_timestamp = packet_connect_token_expire_timestamp;
-		packet->connect_token_sequence = netcode_read_uint64( &buffer );
+		packet->connect_token_sequence = packet_connect_token_sequence;
         netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
         assert( buffer - start == 1 + 13 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
@@ -1183,6 +1191,8 @@ static void test_connection_request_packet()
     struct netcode_packet_context_t context;
     memset( &context, 0, sizeof( context ) );
 	context.protocol_id = TEST_PROTOCOL_ID;
+	context.current_timestamp = (uint64_t) time( NULL );
+	memcpy( context.connect_token_key, connect_token_key, NETCODE_KEY_BYTES );
 
     int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), &context );
 
