@@ -217,6 +217,7 @@ int netcode_encrypt( const uint8_t * message, int message_length,
     assert( encrypted_message );
     assert( encrypted_message_length );
 
+    // todo: nope
     uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
@@ -237,6 +238,7 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
 
+    // todo: nope
     uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
@@ -258,6 +260,7 @@ int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length,
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
+    // todo: nope
     uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
@@ -283,6 +286,7 @@ int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
+    // todo: nope
     uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
@@ -393,17 +397,83 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
 
     netcode_write_bytes( &buffer, connect_token->user_data, NETCODE_USER_DATA_BYTES );
 
-    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );        // todo: actually we need enough for MAC at end for AEAD...
+    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
+}
+
+int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+{
+    assert( buffer );
+    assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
+    assert( key );
+
+    uint8_t additional_data[8+8];
+    {
+        uint8_t * p = additional_data;
+        netcode_write_uint64( &p, protocol_id );
+        netcode_write_uint64( &p, expire_timestamp );
+    }
+
+    uint8_t nonce[8];
+    {
+        uint8_t * p = nonce;
+        netcode_write_uint64( &p, sequence );
+    }
+
+    uint64_t encrypted_length;
+
+    // todo: since we are doing this in place, need to have fallback for old libsodium version which doesn't handle encrypt/decrypt in place. 
+
+    // frank dennis says: MAJOR > 7 || (MAJOR == 7 && MINOR >= 3)
+
+    if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+        return 0;
+
+    assert( encrypted_length == NETCODE_CONNECT_TOKEN_BYTES );
+
+    return 1;
+}
+
+int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+{
+	assert( buffer );
+    assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
+	assert( key );
+
+    uint8_t additional_data[8+8];
+    {
+        uint8_t * p = additional_data;
+        netcode_write_uint64( &p, protocol_id );
+        netcode_write_uint64( &p, expire_timestamp );
+    }
+
+    uint8_t nonce[8];
+    {
+        uint8_t * p = nonce;
+        netcode_write_uint64( &p, sequence );
+    }
+
+    uint64_t decrypted_length;
+
+    // todo: since we are doing this in place, need to have fallback for old libsodium version which doesn't handle encrypt/decrypt in place. 
+
+    // frank dennis says: MAJOR > 7 || (MAJOR == 7 && MINOR >= 3)
+
+    if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+        return 0;
+
+    assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
+	
+	return 0;
 }
 
 int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
 {
-	assert( buffer );
-	assert( connect_token );
+    assert( buffer );
+    assert( connect_token );
 
     if ( buffer_length < NETCODE_CONNECT_TOKEN_BYTES )
         return 0;
-	
+    
     connect_token->client_id = netcode_read_uint64( &buffer );
 
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
@@ -446,47 +516,10 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
 
     netcode_read_bytes( &buffer, connect_token->user_data, NETCODE_USER_DATA_BYTES );
 
-	return 1;
+    return 1;
 }
 
-int netcode_encrypt_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
-{
-    assert( connect_token );
-    assert( buffer );
-    assert( key );
-
-    // todo: check buffer length is sufficient
-
-    (void) connect_token;
-	(void) buffer;
-	(void) buffer_length;
-	(void) protocol_id;
-	(void) sequence;
-	(void) key;
-
-	// ...
-
-	return 0;
-}
-
-int netcode_decrypt_connect_token( const uint8_t * encrypted, int encrypted_length, struct netcode_connect_token_t * decrypted_connect_token, uint64_t protocol_id, uint64_t sequence, const uint8_t * key )
-{
-	assert( encrypted );
-	assert( decrypted_connect_token );
-
-	// todo: assert encrypted length is expected length
-
-	(void) encrypted;
-	(void) encrypted_length;
-	(void) decrypted_connect_token;
-	(void) protocol_id;
-	(void) sequence;
-	(void) key;
-
-	// ...
-	
-	return 0;
-}
+// -----------------------------------------------
 
 int netcode_generate_challenge_token( const struct netcode_connect_token_t * connect_token, const uint8_t * connect_token_mac, struct netcode_challenge_token_t * challenge_token )
 {
