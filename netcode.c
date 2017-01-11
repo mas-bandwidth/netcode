@@ -38,7 +38,7 @@
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
 
-#define NETCODE_VERSION_INFO "NETCODE 1.00"
+#define NETCODE_VERSION_INFO ( (const uint8_t*) "NETCODE 1.00" )
 
 // ----------------------------------------------------------------
 
@@ -394,20 +394,21 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
 #define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
 #endif
 
-int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, const uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
 {
     assert( buffer );
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
     assert( key );
 
-    uint8_t additional_data[8+8];
+    uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+8];
     {
         uint8_t * p = additional_data;
+		netcode_write_bytes( &p, version_info, NETCODE_VERSION_INFO_BYTES );
         netcode_write_uint64( &p, protocol_id );
         netcode_write_uint64( &p, expire_timestamp );
     }
 
-    uint8_t nonce[8];
+	uint8_t nonce[8];
     {
         uint8_t * p = nonce;
         netcode_write_uint64( &p, sequence );
@@ -436,17 +437,18 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
     return 1;
 }
 
-int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, const uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
 {
 	assert( buffer );
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
 	assert( key );
 
-    uint8_t additional_data[8+8];
+    uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+8];
     {
         uint8_t * p = additional_data;
+		netcode_write_bytes( &p, version_info, NETCODE_VERSION_INFO_BYTES );
         netcode_write_uint64( &p, protocol_id );
-        netcode_write_uint64( &p, expire_timestamp );			// todo: version should also be hashed in to the associated data, to avoid attacks w. different version #s
+        netcode_write_uint64( &p, expire_timestamp );
     }
 
     uint8_t nonce[8];
@@ -767,7 +769,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_
 
 		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_NONCE_BYTES );
 
-		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, context->protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, context->connect_token_key ) )
+		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, context->protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, context->connect_token_key ) )
 			return NULL;
 
         struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) malloc( sizeof( struct netcode_connection_request_packet_t ) );
@@ -1128,11 +1130,11 @@ static void test_connect_token()
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_encrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
     // decrypt the buffer
 
-    check( netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
     // read the connect token back in
 
@@ -1191,7 +1193,7 @@ static void test_connection_request_packet()
     uint8_t connect_token_key[NETCODE_KEY_BYTES];
     netcode_generate_key( connect_token_key );
 
-    check( netcode_encrypt_connect_token( encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, TEST_PROTOCOL_ID, connect_token_expire_timestamp, connect_token_sequence, connect_token_key ) == 1 );
+    check( netcode_encrypt_connect_token( encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, connect_token_expire_timestamp, connect_token_sequence, connect_token_key ) == 1 );
 
     // setup a connection request packet wrapping the encrypted connect token
 
