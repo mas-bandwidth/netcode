@@ -66,7 +66,8 @@ int netcode_address_is_equal( const struct netcode_address_t * a, const struct n
 
     if ( a->type == NETCODE_ADDRESS_IPV4 )
     {
-        for ( int i = 0; i < 4; ++i )
+        int i;
+        for ( i = 0; i < 4; ++i )
         {
             if ( a->address.ipv4[i] != b->address.ipv4[i] )
                 return 0;
@@ -74,7 +75,8 @@ int netcode_address_is_equal( const struct netcode_address_t * a, const struct n
     }
     else if ( a->type == NETCODE_ADDRESS_IPV6 )
     {
-        for ( int i = 0; i < 8; ++i )
+        int i;
+        for ( i = 0; i < 8; ++i )
         {
             if ( a->address.ipv6[i] != b->address.ipv6[i] )
                 return 0;
@@ -127,7 +129,8 @@ void netcode_write_uint64( uint8_t ** p, uint64_t value )
 
 void netcode_write_bytes( uint8_t ** p, const uint8_t * byte_array, int num_bytes )
 {
-    for ( int i = 0; i < num_bytes; ++i )
+    int i;
+    for ( i = 0; i < num_bytes; ++i )
     {
         netcode_write_uint8( p, byte_array[i] );
     }
@@ -177,7 +180,8 @@ uint64_t netcode_read_uint64( const uint8_t ** p )
 
 void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes )
 {
-    for ( int i = 0; i < num_bytes; ++i )
+    int i;
+    for ( i = 0; i < num_bytes; ++i )
     {
         byte_array[i] = netcode_read_uint8( p );
     }
