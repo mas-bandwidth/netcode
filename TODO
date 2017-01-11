@@ -2,13 +2,19 @@ DONE
 
     Bring across encrypt/decrypt functions that wrap libsodium.
 
+    Implement encrypt/decrypt connect token function.
+
+    Adjusted them so read/write connect token and encrypt/decrypt are separate
+
 TODO
 
-    Implement encrypt/decrypt connect token function.
+    Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
 
     -----------------
 
-    Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
+    Add code to test libsodium version and fallback to non-overlapping buffer in this case.
+
+    Test on debian (old libsodium version).
 
     -----------------
 
