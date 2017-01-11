@@ -388,7 +388,7 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
 }
 
 #if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
-#define SODIUM_ALLOW_OVERLAPPING_BUFFERS 1
+#define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
 #endif
 
 int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
@@ -412,12 +412,12 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
     uint64_t encrypted_length;
 
-    #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
         if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
             return 0;
 
-    #else // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
         uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -426,7 +426,7 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
         memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
 
-    #endif // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
     assert( encrypted_length == NETCODE_CONNECT_TOKEN_BYTES );
 
@@ -454,12 +454,12 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
     uint64_t decrypted_length;
 
-    #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
         if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
             return 0;
 
-    #else // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
         uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -468,7 +468,7 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
         memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
 
-    #endif // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+    #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
     assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 	
