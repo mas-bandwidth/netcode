@@ -8,17 +8,17 @@ DONE
 
     Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
 
-TODO
-
-    -----------------
+    Some minor adjustments to for loops so it works on linux.
 
     Add code to test libsodium version and fallback to non-overlapping buffer in this case.
 
-    Test on debian (old libsodium version).
+    Verified both cases work.
 
-    -----------------
+TODO
 
-    Extend code to read connection request packet to decrypt connect token in place (will need to two-stage decrypt separate from read for this)
+    Extend code to read connection request packet to decrypt connect token in place.
+
+    Will need to extend the connection request to pass in a real connect token and write it to buffer, then encrypt it.
 
     -----------------
 

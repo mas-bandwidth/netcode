@@ -237,11 +237,6 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
 
-    // todo: nope
-    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
     if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, nonce, key ) != 0 )
         return 0;
 
@@ -392,6 +387,10 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
     assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
+#if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
+#define SODIUM_ALLOW_OVERLAPPING_BUFFERS 1
+#endif
+
 int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
 {
     assert( buffer );
@@ -413,12 +412,21 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
     uint64_t encrypted_length;
 
-    // todo: since we are doing this in place, need to have fallback for old libsodium version which doesn't handle encrypt/decrypt in place. 
+    #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
 
-    // frank dennis says: MAJOR > 7 || (MAJOR == 7 && MINOR >= 3)
+        if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+            return 0;
 
-    if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-        return 0;
+    #else // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+
+        uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
+
+        if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, temp, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+            return 0;        
+
+        memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
+
+    #endif // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
 
     assert( encrypted_length == NETCODE_CONNECT_TOKEN_BYTES );
 
@@ -446,14 +454,21 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
 
     uint64_t decrypted_length;
 
-    // todo: since we are doing this in place, need to have fallback for old libsodium version which doesn't handle encrypt/decrypt in place. 
+    #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
 
-    // frank dennis says: MAJOR > 7 || (MAJOR == 7 && MINOR >= 3)
+        if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+            return 0;
 
-    if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-    {
-        return 0;
-    }
+    #else // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
+
+        uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
+
+        if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, temp, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+            return 0;
+
+        memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
+
+    #endif // #if SODIUM_ALLOW_OVERLAPPING_BUFFERS
 
     assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 	
