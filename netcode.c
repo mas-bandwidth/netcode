@@ -35,7 +35,10 @@
 #define NETCODE_NONCE_BYTES 8
 #define NETCODE_CONNECT_TOKEN_BYTES 1400
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
+#define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
+
+#define NETCODE_VERSION_INFO "NETCODE 1.00"
 
 // ----------------------------------------------------------------
 
@@ -627,6 +630,7 @@ int netcode_decrypt_challenge_token( const uint8_t * encrypted, int encrypted_le
 struct netcode_connection_request_packet_t
 {
     uint8_t packet_type;
+    uint8_t version_info[NETCODE_VERSION_INFO_BYTES];
     uint64_t protocol_id;
     uint64_t connect_token_expire_timestamp;
     uint64_t connect_token_sequence;
@@ -697,7 +701,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
         uint8_t * start = buffer;
 
         netcode_write_uint8( &buffer, NETCODE_CONNECTION_REQUEST_PACKET );
-		netcode_write_bytes( &buffer, (const uint8_t*) "NETCODE 1.00", 13 );
+		netcode_write_bytes( &buffer, p->version_info, NETCODE_VERSION_INFO_BYTES );
         netcode_write_uint64( &buffer, p->protocol_id );
         netcode_write_uint64( &buffer, p->connect_token_expire_timestamp );
         netcode_write_uint64( &buffer, p->connect_token_sequence );
@@ -729,13 +733,27 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_
     {
         // connection request packet
 
-        if ( buffer_length != 1 + 13 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES )
+        if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES )
             return NULL;
 
-		uint8_t version[13];
-		netcode_read_bytes( &buffer, version, 13 );
-		if ( version[0] != 'N' || version[1] != 'E' || version[2] != 'T' || version[3] != 'C' || version[4] != 'O' || version[5] != 'D' || version[6] != 'E' || version[7] != ' ' || version[8] != '1' || version[9] != '.' || version[10] != '0' || version[11] != '0' || version[12] != '\0' )
+		uint8_t version_info[NETCODE_VERSION_INFO_BYTES];
+		netcode_read_bytes( &buffer, version_info, NETCODE_VERSION_INFO_BYTES );
+		if ( version_info[0]  != 'N' || 
+			 version_info[1]  != 'E' || 
+			 version_info[2]  != 'T' || 
+			 version_info[3]  != 'C' || 
+			 version_info[4]  != 'O' ||
+			 version_info[5]  != 'D' ||
+			 version_info[6]  != 'E' ||
+			 version_info[7]  != ' ' || 
+			 version_info[8]  != '1' ||
+			 version_info[9]  != '.' ||
+			 version_info[10] != '0' ||
+			 version_info[11] != '0' ||
+			 version_info[12] != '\0' )
+		{
 			return NULL;
+		}
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
         if ( packet_protocol_id != context->protocol_id )
@@ -747,7 +765,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_
 
 		uint64_t packet_connect_token_sequence = netcode_read_uint64( &buffer );
 
-		assert( buffer - start == 1 + 13 + 8 + 8 + NETCODE_NONCE_BYTES );
+		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_NONCE_BYTES );
 
 		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, context->protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, context->connect_token_key ) )
 			return NULL;
@@ -758,12 +776,13 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_
             return NULL;
 
         packet->packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+		memcpy( packet->version_info, version_info, NETCODE_VERSION_INFO_BYTES );
         packet->protocol_id = packet_protocol_id;
         packet->connect_token_expire_timestamp = packet_connect_token_expire_timestamp;
 		packet->connect_token_sequence = packet_connect_token_sequence;
         netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-        assert( buffer - start == 1 + 13 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
         return packet;
     }
@@ -1179,6 +1198,7 @@ static void test_connection_request_packet()
     struct netcode_connection_request_packet_t input_packet;
 
     input_packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+    memcpy( input_packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
     input_packet.protocol_id = TEST_PROTOCOL_ID;
     input_packet.connect_token_expire_timestamp = connect_token_expire_timestamp;
     input_packet.connect_token_sequence = connect_token_sequence;
@@ -1207,6 +1227,7 @@ static void test_connection_request_packet()
 	// make sure the packet data read matches what was written
 	
     check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
+    check( memcmp( output_packet->version_info, input_packet.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
     check( output_packet->protocol_id == input_packet.protocol_id );
     check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
 	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );

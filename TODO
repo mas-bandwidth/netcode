@@ -14,11 +14,15 @@ DONE
 
     Verified both cases work.
 
-TODO
-
     Extend code to read connection request packet to decrypt connect token in place.
 
     Will need to extend the connection request to pass in a real connect token and write it to buffer, then encrypt it.
+
+TODO
+
+    Need to formalize the version information, because this must become part of the additional data.
+
+    Can't let a client lie about the version information to try to crash out a server with invalid data (from a different version).
 
     -----------------
 
@@ -49,6 +53,8 @@ TODO
     3. invalid connect token data
 
     4. timestamp modified from original (eg. AEAD signature early out)
+
+    (there are more conditions now, with the expanded AEAD...)
 
     -----------------
 
