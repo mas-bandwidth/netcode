@@ -1113,6 +1113,8 @@ static void test_connect_token()
 
     check( netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_token ) == 1 );
 
+	// make sure that everything matches the original connect token
+
     check( output_token.client_id == input_token.client_id );
     check( output_token.num_server_addresses == input_token.num_server_addresses );
     check( netcode_address_is_equal( &output_token.server_addresses[0], &input_token.server_addresses[0] ) );
@@ -1174,6 +1176,8 @@ static void test_connection_request_packet()
     input_packet.connect_token_sequence = connect_token_sequence;
     memcpy( input_packet.connect_token_data, encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
+	// write the connection request packet to a buffer
+
     uint8_t buffer[2048];
 
     struct netcode_packet_context_t context;
@@ -1184,19 +1188,19 @@ static void test_connection_request_packet()
 
     check( bytes_written > 0 );
 
+	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+
     struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &context );
 
     check( output_packet );
 
+	// make sure the packet data read matches what was written
+	
     check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
     check( output_packet->protocol_id == input_packet.protocol_id );
     check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
-    /*
-    check( memcmp( output_packet->connect_token_nonce, input_packet.connect_token_nonce, NETCODE_NONCE_BYTES ) == 0 );
-    check( memcmp( output_packet->connect_token_data, input_packet.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
-    */
-
-    // todo: this should be replaced with a test if the connect token decrypted, once the decrypt is done in place on packet read
+	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );
+    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
 
     free( output_packet );
 }
