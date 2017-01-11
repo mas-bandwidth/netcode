@@ -325,7 +325,8 @@ void netcode_generate_connect_token( struct netcode_connect_token_t * connect_to
     
     connect_token->num_server_addresses = num_server_addresses;
     
-    for ( int i = 0; i < num_server_addresses; ++i )
+    int i;
+    for ( i = 0; i < num_server_addresses; ++i )
     {
         memcpy( &connect_token->server_addresses[i], &server_addresses[i], sizeof( struct netcode_address_t ) );
     }
@@ -354,12 +355,14 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
 
     netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
-    for ( int i = 0; i < connect_token->num_server_addresses; ++i )
+    int i,j;
+
+    for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
-            for ( int j = 0; j < 4; ++j )
+            for ( j = 0; j < 4; ++j )
             {
                 netcode_write_uint8( &buffer, connect_token->server_addresses[i].address.ipv4[j] );
             }
@@ -368,7 +371,7 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
         else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV6 );
-            for ( int j = 0; j < 8; ++j )
+            for ( j = 0; j < 8; ++j )
             {
                 netcode_write_uint16( &buffer, connect_token->server_addresses[i].address.ipv6[j] );
             }
@@ -475,13 +478,15 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
     if ( connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
         return 0;
 
-    for ( int i = 0; i < connect_token->num_server_addresses; ++i )
+    int i,j;
+
+    for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
         connect_token->server_addresses[i].type = netcode_read_uint8( &buffer );
 
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
-            for ( int j = 0; j < 4; ++j )
+            for ( j = 0; j < 4; ++j )
             {
                 connect_token->server_addresses[i].address.ipv4[j] = netcode_read_uint8( &buffer );
             }
@@ -489,7 +494,7 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
         }
         else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
         {
-            for ( int j = 0; j < 8; ++j )
+            for ( j = 0; j < 8; ++j )
             {
                 connect_token->server_addresses[i].address.ipv6[j] = netcode_read_uint16( &buffer );
             }
