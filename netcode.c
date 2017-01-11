@@ -217,12 +217,7 @@ int netcode_encrypt( const uint8_t * message, int message_length,
     assert( encrypted_message );
     assert( encrypted_message_length );
 
-    // todo: nope
-    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
-    if ( crypto_secretbox_easy( encrypted_message, message, message_length, actual_nonce, key ) != 0 )
+    if ( crypto_secretbox_easy( encrypted_message, message, message_length, nonce, key ) != 0 )
         return 0;
 
     *encrypted_message_length = message_length + NETCODE_MAC_BYTES;
@@ -243,7 +238,7 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
     memset( actual_nonce, 0, sizeof( actual_nonce ) );
     memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
 
-    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, actual_nonce, key ) != 0 )
+    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, nonce, key ) != 0 )
         return 0;
 
     *decrypted_message_length = encrypted_message_length - NETCODE_MAC_BYTES;
@@ -260,17 +255,12 @@ int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length,
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
-    // todo: nope
-    uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
     unsigned long long encrypted_length;
 
     int result = crypto_aead_chacha20poly1305_encrypt( encrypted_message, &encrypted_length,
                                                        message, (unsigned long long) message_length,
                                                        additional, (unsigned long long) additional_length,
-                                                       NULL, actual_nonce, key );
+                                                       NULL, nonce, key );
 
     *encrypted_message_length = (uint64_t) encrypted_length;
 
@@ -286,18 +276,13 @@ int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
 
-    // todo: nope
-    uint8_t actual_nonce[crypto_aead_chacha20poly1305_NPUBBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
     unsigned long long decrypted_length;
 
     int result = crypto_aead_chacha20poly1305_decrypt( decrypted_message, &decrypted_length,
                                                        NULL,
                                                        encrypted_message, (unsigned long long) encrypted_message_length,
                                                        additional, (unsigned long long) additional_length,
-                                                       actual_nonce, key );
+                                                       nonce, key );
 
     *decrypted_message_length = (uint64_t) decrypted_length;
 
@@ -459,11 +444,13 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint64_t
     // frank dennis says: MAJOR > 7 || (MAJOR == 7 && MINOR >= 3)
 
     if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
+    {
         return 0;
+    }
 
     assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 	
-	return 0;
+	return 1;
 }
 
 int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
@@ -1051,6 +1038,8 @@ static void test_endian()
 
 static void test_connect_token()
 {
+    // generate a connect token
+
     struct netcode_address_t server_address;
     server_address.type = NETCODE_ADDRESS_IPV4;
     server_address.address.ipv4[0] = 127;
@@ -1071,15 +1060,30 @@ static void test_connect_token()
     check( memcmp( input_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
     check( netcode_address_is_equal( &input_token.server_addresses[0], &server_address ) );
 
+    // write it to a buffer
+
     uint8_t buffer[NETCODE_CONNECT_TOKEN_BYTES];
 
     netcode_write_connect_token( &input_token, buffer, NETCODE_CONNECT_TOKEN_BYTES );
 
+    // encrypt the buffer
+
+    uint64_t sequence = 0;
+    uint64_t expire_timestamp = time( NULL ) + 30;
+    uint8_t key[NETCODE_KEY_BYTES];
+    netcode_generate_key( key );    
+
+    check( netcode_encrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+
+    // decrypt the buffer
+
+    check( netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+
+    // read the connect token back in
+
     struct netcode_connect_token_t output_token;
 
-    int result = netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_token );
-
-    check( result == 1 );
+    check( netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_token ) == 1 );
 
     check( output_token.client_id == input_token.client_id );
     check( output_token.num_server_addresses == input_token.num_server_addresses );

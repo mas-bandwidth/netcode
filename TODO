@@ -6,9 +6,9 @@ DONE
 
     Adjusted them so read/write connect token and encrypt/decrypt are separate
 
-TODO
-
     Add a unit test to encrypt and decrypt connect token (extend test_connect_token)
+
+TODO
 
     -----------------
 
