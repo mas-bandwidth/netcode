@@ -1,73 +1,35 @@
 DONE
 
-    Bring across implementations for challenge token functions.
-
-    Unit test challenge tokens.
-
-    Need to write code to encode/decode the sequence into a prefix byte (first bit set, followed by # of sequence bits in low byte).
-
-    This should be pretty easy. All I have to do is scan the sequence from leftmost byte to rightmost byte, and stop when a byte is not zero.
-
-    I've done this, but I screwed up. The packet type needs to be *inside* the encrypted data. Otherwise, it's possible that I will be en
-
-    Tweeted Frank (libsodium) if it's safe to have 1 byte associated data for a 0 byte message. I *think* its safe. The nonce takes care of this.
-
-    But it's important to be sure.
-
-    If it's safe like this, then I can use the _aead primitive to encrypt/decrypt packets, so I can see packet type and the # of sequence bytes in public data, which makes it easier to determine what sort of packet it is vs. having everything encrypted!
-
-    Implement code to aead the packet data for one packet type with no data (connection denied packet).
-
-    Ok. Not only is the prefix byte in the packet associated data, also the protocol id and the version is in there. This should provide safety and versioning for *all* packet types. Nice!
-
-    Now need to implement the read side for the packet.
-
-    Seems to be working fine. Will need to test with a packet with actual data (not just associated) but I expect it will work.
-
-    Simplify the aead function to always work in place. Done. It's much easier to use now.
-
-    Implement code to read/write an example challenge packet.
-
-    Spend some time fixing a bug with the sequence # encoding. Never pass in sequence of 0. It barely tests anything.
-
-    The aead decrypt is not working for the packet. Finding out why is going to take some debugging.
-
-    Clearly it's something that is occuring only once there is actual data to encrypt in the AEAD. So perhaps the same amount of data is not encrypted as is decrypted? Maybe there is a logic error there?
-
-    Found it. Bad pointer for the message to encrypt on write packet.
-
 TODO
 
     Implement the remaining packet types.
 
     -----------------
 
-    Add tests for all the cases that should return NULL on connection request packet
+    Bring across a netcode_socket_t
 
-    1. packet too small
+    Implement just enough to get my shit done.
 
-    2. timestamp expired
-
-    3. invalid connect token data
-
-    4. timestamp modified from original (eg. AEAD signature early out)
-
-    (there are more conditions now, with the expanded AEAD...)
-
-    different protocol id on encrypted packet
-
-    different version string on encrypted packet
-
-    mess with the packet type in transit (first byte)
+    Probably need more address functionality to interface with sockets sendto/recvfrom as well.
 
     -----------------
 
-    Implement read write for one of the other packet types.
+    Implement the client side of the state machine (simpler)
 
-    This involves designing the prefix byte, sequence # compression and encrypted data.
+    -----------------
 
-    The reader should perform decryption in place, so no allocation is made for a packet that doesn't pass the test. Quick reject is key.
+    Implement the server side of the state machine (up to 256 players, for agar.io)
 
-    Once one encrypted packet type is tested working, implement the rest, adding tests for each packet type to make sure they are read/written correctly.
+    -----------------
+
+    Unit test client/server functionality.
+
+    -----------------
+
+    Implement a stress test.
+
+    -----------------
+
+    Write white paper.
 
     -----------------
