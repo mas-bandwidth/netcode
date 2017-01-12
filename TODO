@@ -16,8 +16,6 @@ DONE
 
     Need to add a test for payload packet. Done.
 
-TODO
-
     What's the most important thing to do next?
 
     On one hand I can setup a mocking structure (eg. transport) so I can test the client and server using a mocked socket layer.
@@ -29,6 +27,8 @@ TODO
     So I think this isn't something that I can skip.
 
     But I don't want to expose this concept outside of the internal implementation. It's internal only, and compiles out in release build.
+
+TODO
 
     -----------------
 
@@ -69,14 +69,6 @@ TODO
     Implement client that connects to matcher, gets connect token and connects to server.
 
     Implement stress that connects 256 clients.
-
-    -----------------
-
-    Unit test client/server functionality.
-
-    -----------------
-
-    Implement a stress test.
 
     -----------------
 
