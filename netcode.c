@@ -568,33 +568,42 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 	assert( key );
 
-	// todo: check encrypted length is what is expected.
+	uint8_t nonce[8];
+    {
+        uint8_t * p = nonce;
+        netcode_write_uint64( &p, sequence );
+    }
 
-	(void) buffer;
-	(void) buffer_length;
-	(void) sequence;
-	(void) key;
+	int encrypted_bytes = 0;
 
-	// ...
+	if ( !netcode_encrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_bytes, nonce, key ) )
+		return 0;
 
-	return 0;
+	assert( encrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES );
+
+	return 1;
 }
 
-int netcode_decrypt_challenge_token( const uint8_t * encrypted, int encrypted_length, struct netcode_challenge_token_t * decrypted_challenge_token, uint64_t sequence, const uint8_t * key )
+int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, const uint8_t * key )
 {
-	assert( encrypted );
-	assert( decrypted_challenge_token );
+	assert( buffer );
+	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 	assert( key );
-	
-	(void) encrypted;
-	(void) encrypted_length;
-	(void) decrypted_challenge_token;
-	(void) sequence;
-	(void) key;
 
-	// ...
+	uint8_t nonce[8];
+    {
+        uint8_t * p = nonce;
+        netcode_write_uint64( &p, sequence );
+    }
 
-	return 0;
+	int decrypted_bytes = 0;
+
+	if ( !netcode_decrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, buffer, &decrypted_bytes, nonce, key ) )
+		return 0;
+
+	assert( decrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
+
+	return 1;
 }
 
 int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
