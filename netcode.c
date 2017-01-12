@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
+#include <malloc.h>
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -198,6 +199,12 @@ void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes
 
 #include <sodium.h>
 
+/*
+#if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
+#define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
+#endif
+*/
+
 void netcode_generate_key( uint8_t * key )
 {
     assert( key );
@@ -248,8 +255,7 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
     return 1;
 }
 
-int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length, 
-                          uint8_t * encrypted_message, uint64_t * encrypted_message_length,
+int netcode_encrypt_aead( uint8_t * message, uint64_t message_length, 
                           const uint8_t * additional, uint64_t additional_length,
                           const uint8_t * nonce,
                           const uint8_t * key )
@@ -259,18 +265,38 @@ int netcode_encrypt_aead( const uint8_t * message, uint64_t message_length,
 
     unsigned long long encrypted_length;
 
-    int result = crypto_aead_chacha20poly1305_encrypt( encrypted_message, &encrypted_length,
-                                                       message, (unsigned long long) message_length,
-                                                       additional, (unsigned long long) additional_length,
-                                                       NULL, nonce, key );
+    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
-    *encrypted_message_length = (uint64_t) encrypted_length;
+		int result = crypto_aead_chacha20poly1305_encrypt( message, &encrypted_length,
+														   message, (unsigned long long) message_length,
+														   additional, (unsigned long long) additional_length,
+														   NULL, nonce, key );
+	
+		if ( result != 0 )
+		    return 0;
 
-    return result == 0;
+	#else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+        uint8_t * temp = alloca( message_length + NETCODE_MAC_BYTES );
+
+		int result = crypto_aead_chacha20poly1305_encrypt( temp, &encrypted_length,
+														   message, (unsigned long long) message_length,
+														   additional, (unsigned long long) additional_length,
+														   NULL, nonce, key );
+		
+		if ( result != 0 )
+		    return 0;
+	
+        memcpy( message, temp, message_length + NETCODE_MAC_BYTES );
+
+	#endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+    assert( encrypted_length == message_length + NETCODE_MAC_BYTES );
+
+    return 1;
 }
 
-int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_message_length, 
-                          uint8_t * decrypted_message, uint64_t * decrypted_message_length,
+int netcode_decrypt_aead( uint8_t * message, uint64_t message_length, 
                           const uint8_t * additional, uint64_t additional_length,
                           const uint8_t * nonce,
                           const uint8_t * key )
@@ -280,15 +306,37 @@ int netcode_decrypt_aead( const uint8_t * encrypted_message, uint64_t encrypted_
 
     unsigned long long decrypted_length;
 
-    int result = crypto_aead_chacha20poly1305_decrypt( decrypted_message, &decrypted_length,
-                                                       NULL,
-                                                       encrypted_message, (unsigned long long) encrypted_message_length,
-                                                       additional, (unsigned long long) additional_length,
-                                                       nonce, key );
+    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
-    *decrypted_message_length = (uint64_t) decrypted_length;
+		int result = crypto_aead_chacha20poly1305_decrypt( message, &decrypted_length,
+														   NULL,
+														   message, (unsigned long long) message_length,
+														   additional, (unsigned long long) additional_length,
+														   nonce, key );
 
-    return result == 0;
+		if ( result != 0 )
+			return 0;
+
+	#else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+        uint8_t * temp = alloca( message_length );
+
+		int result = crypto_aead_chacha20poly1305_decrypt( temp, &decrypted_length,
+														   NULL,
+														   message, (unsigned long long) message_length,
+														   additional, (unsigned long long) additional_length,
+														   nonce, key );
+		
+		if ( result != 0 )
+		    return 0;
+	
+        memcpy( message, temp, decrypted_length );
+
+	#endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+    assert( decrypted_length == message_length - NETCODE_MAC_BYTES );
+
+    return 1;
 }
 
 // ----------------------------------------------------------------
@@ -382,10 +430,6 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
     assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-#if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
-#define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
-#endif
-
 int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, const uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
 {
     assert( buffer );
@@ -406,25 +450,8 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, const ui
         netcode_write_uint64( &p, sequence );
     }
 
-    uint64_t encrypted_length;
-
-    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-        if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-            return 0;
-
-    #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-        uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
-
-        if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, temp, &encrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-            return 0;        
-
-        memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
-
-    #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-    assert( encrypted_length == NETCODE_CONNECT_TOKEN_BYTES );
+    if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
+        return 0;
 
     return 1;
 }
@@ -449,26 +476,9 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, const ui
         netcode_write_uint64( &p, sequence );
     }
 
-    uint64_t decrypted_length;
+    if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
+        return 0;
 
-    #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-        if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, buffer, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-            return 0;
-
-    #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-        uint8_t temp[NETCODE_CONNECT_TOKEN_BYTES];
-
-        if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, temp, &decrypted_length, additional_data, sizeof( additional_data ), nonce, key ) )
-            return 0;
-
-        memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
-
-    #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-    assert( decrypted_length == NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
-	
 	memset( buffer + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
 
 	return 1;
@@ -697,8 +707,8 @@ struct netcode_packet_context_t
     uint64_t protocol_id;
     uint64_t current_timestamp;
 	uint8_t connect_token_key[NETCODE_KEY_BYTES];
-	uint8_t packet_write_key[NETCODE_KEY_BYTES];
-	uint8_t packet_read_key[NETCODE_KEY_BYTES];
+	uint8_t write_packet_key[NETCODE_KEY_BYTES];
+	uint8_t read_packet_key[NETCODE_KEY_BYTES];
 };
 
 int netcode_sequence_number_bytes_required( uint64_t sequence )
@@ -722,7 +732,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
     if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
     {
-        // connection request packet
+        // connection request packet: first byte is zero
 
         assert( buffer_length >= 1 + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES );
 
@@ -829,33 +839,14 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 			netcode_write_uint8( &p, prefix_byte );
 		}
 
-        uint8_t nonce[8];
+        uint8_t nonce[NETCODE_NONCE_BYTES];
         {
             uint8_t * p = nonce;
             netcode_write_uint64( &p, sequence );
         }
 
-        uint64_t encrypted_length;
-
-        #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-            if ( !netcode_encrypt_aead( buffer, encrypted_finish - encrypted_start, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, context->packet_write_key ) )
-                return 0;
-
-        #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-            uint8_t * temp = alloca( buffer_length );
-
-            if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, temp, &encrypted_length, &prefix_byte, additional_data, sizeof( additional_data ), nonce, contexts->packet_write_key ) )
-                return 0;        
-
-            memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
-
-        #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
-
-        // ^--- todo: you know, I seem to be doing the overlapping buffer encrypt/decrypt so much, just move it all into the one function? yes.
-
-        assert( encrypted_length == (uint64_t) ( encrypted_finish - encrypted_start + NETCODE_MAC_BYTES ) );
+        if ( !netcode_encrypt_aead( buffer, encrypted_finish - encrypted_start, additional_data, sizeof( additional_data ), nonce, context->write_packet_key ) )
+            return 0;
 
         buffer += NETCODE_MAC_BYTES;
 
@@ -881,7 +872,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
     if ( prefix_byte == NETCODE_CONNECTION_REQUEST_PACKET )
     {
-        // connection request packet
+        // connection request packet: first byte is zero
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_NONCE_BYTES + NETCODE_CONNECT_TOKEN_BYTES )
             return NULL;
@@ -938,7 +929,9 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
     }
     else
     {
-        // encrypted packets
+        // *** encrypted packets ***
+
+        // extract the packet type and number of sequence bytes from the prefix byte
 
         if ( buffer_length < 1 + 1 + NETCODE_MAC_BYTES )
             return NULL;
@@ -953,13 +946,41 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         if ( buffer_length < 1 + sequence_bytes + NETCODE_MAC_BYTES )
             return NULL;
 
+        // read variable length sequence number [1,7]
+
         int i;
         for ( i = 0; i < sequence_bytes; ++i )
         {
-            *sequence |= (uint64_t) netcode_read_uint8( &buffer );
             *sequence <<= 8;
+            *sequence |= (uint64_t) netcode_read_uint8( &buffer );
         }
 
+        // decrypt the per-packet type data
+
+		uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+1];
+		{
+			uint8_t * p = additional_data;
+			netcode_write_bytes( &p, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+			netcode_write_uint64( &p, context->protocol_id );
+			netcode_write_uint8( &p, prefix_byte );
+		}
+
+        uint8_t nonce[NETCODE_NONCE_BYTES];
+        {
+            uint8_t * p = nonce;
+            netcode_write_uint64( &p, *sequence );
+        }
+
+		int encrypted_bytes = (int) ( buffer_length - ( buffer - start ) );
+
+        if ( encrypted_bytes < NETCODE_MAC_BYTES )
+            return NULL;
+
+        if ( !netcode_decrypt_aead( buffer, encrypted_bytes, additional_data, sizeof( additional_data ), nonce, context->read_packet_key ) )
+            return NULL;
+
+        // process the per-packet type data that was just decrypted
+        
         switch ( packet_type )
         {
             case NETCODE_CONNECTION_DENIED_PACKET:
@@ -1350,7 +1371,7 @@ static void test_connect_token()
 
     // encrypt the buffer
 
-    uint64_t sequence = 0;
+    uint64_t sequence = 1000;
     uint64_t expire_timestamp = time( NULL ) + 30;
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
@@ -1396,7 +1417,7 @@ static void test_challenge_token()
 
     // encrypt the buffer
 
-    uint64_t sequence = 0;
+    uint64_t sequence = 1000;
     uint8_t key[NETCODE_KEY_BYTES]; 
 	netcode_generate_key( key );    
 
@@ -1456,7 +1477,7 @@ static void test_connection_request_packet()
 
     memcpy( encrypted_connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-    uint64_t connect_token_sequence = 0;
+    uint64_t connect_token_sequence = 1000;
     uint64_t connect_token_expire_timestamp = time( NULL ) + 30;
     uint8_t connect_token_key[NETCODE_KEY_BYTES];
     netcode_generate_key( connect_token_key );
@@ -1490,7 +1511,7 @@ static void test_connection_request_packet()
 
 	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
 
-	uint64_t sequence = 0;
+	uint64_t sequence = 1000;
 
     struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
 
@@ -1523,8 +1544,8 @@ void test_connection_denied_packet()
     struct netcode_packet_context_t context;
     memset( &context, 0, sizeof( context ) );
 	context.protocol_id = TEST_PROTOCOL_ID;
-	netcode_generate_key( context.packet_write_key );
-	memcpy( context.packet_read_key, context.packet_write_key, NETCODE_KEY_BYTES );
+	netcode_generate_key( context.write_packet_key );
+	memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
     int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 0, &context );
 
@@ -1532,22 +1553,15 @@ void test_connection_denied_packet()
 
 	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
 
-	uint64_t sequence = 0;
+	uint64_t sequence = 1000;
 
-    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
 
     check( output_packet );
 
 	// make sure the packet data read matches what was written
 	
-    check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
-	/*
-    check( memcmp( output_packet->version_info, input_packet.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
-    check( output_packet->protocol_id == input_packet.protocol_id );
-    check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
-	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );
-    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
-	*/
+    check( output_packet->packet_type == NETCODE_CONNECTION_DENIED_PACKET );
 
     free( output_packet );
 }

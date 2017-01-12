@@ -20,23 +20,15 @@ DONE
 
     Ok. Not only is the prefix byte in the packet associated data, also the protocol id and the version is in there. This should provide safety and versioning for *all* packet types. Nice!
 
-TODO
-
     Now need to implement the read side for the packet.
 
-    -----------------
+    Seems to be working fine. Will need to test with a packet with actual data (not just associated) but I expect it will work.
+
+    Simplify the aead function to always work in place. Done. It's much easier to use now.
+
+TODO
 
     Implement code to read/write an example challenge packet.
-
-    Use this to get the encrypted packet format working, with sequence # encoded.
-
-    -----------------
-
-    Extend connection request packet read so that it decrypts the connect token.
-
-    This allows for quick reject of connection packets before performing allocation.
-
-    Extend the connection request packet test so that it creates an actual connect token, encrypts it, verifies it is decrypted properly on read.
 
     -----------------
 
@@ -51,6 +43,12 @@ TODO
     4. timestamp modified from original (eg. AEAD signature early out)
 
     (there are more conditions now, with the expanded AEAD...)
+
+    different protocol id on encrypted packet
+
+    different version string on encrypted packet
+
+    mess with the packet type in transit (first byte)
 
     -----------------
 
