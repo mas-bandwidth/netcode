@@ -699,7 +699,20 @@ struct netcode_packet_context_t
 	uint8_t connect_token_key[NETCODE_KEY_BYTES];
 };
 
-int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
+int netcode_sequence_number_bytes_required( uint64_t sequence )
+{
+    int i;
+    uint64_t mask = 0xFF00000000000000UL;
+    for ( i = 0; i < 7; ++i )
+    {
+        if ( sequence & mask )
+            break;
+        mask >>= 8;
+    }
+    return 8 - i;
+}
+
+int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, uint64_t sequence, struct netcode_packet_context_t * context )
 {
     (void) context;
 
@@ -730,15 +743,78 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, st
     {
         // encrypted packets
 
-        // ...
-    }
+        uint8_t * start = buffer;
 
-    return 0;
+		uint8_t sequence_bytes = (uint8_t) netcode_sequence_number_bytes_required( sequence );
+
+		assert( sequence_bytes >= 1 );
+		assert( sequence_bytes <= 7 );
+
+        assert( packet_type <= 0xF );
+
+        netcode_write_uint8( &buffer, packet_type | ( sequence_bytes << 4 ) );
+
+		int i;
+		for ( i = 0; i < sequence_bytes; ++i )
+		{
+			netcode_write_uint8( &buffer, (uint8_t) ( sequence & 0xFF ) );
+			sequence >>= 8;
+		}
+
+		switch ( packet_type )
+		{
+			case NETCODE_CONNECTION_DENIED_PACKET:
+			{
+				// ...
+			}
+			break;
+
+			case NETCODE_CONNECTION_CHALLENGE_PACKET:
+			{
+			}
+			break;
+
+			case NETCODE_CONNECTION_RESPONSE_PACKET:
+			{
+			}
+			break;
+
+			case NETCODE_CONNECTION_CONFIRM_PACKET:
+			{
+			}
+			break;
+			
+			case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
+			{
+			}
+			break;
+
+			case NETCODE_CONNECTION_PAYLOAD_PACKET:
+			{
+			}
+			break;
+
+			case NETCODE_CONNECTION_DISCONNECT_PACKET:
+			{
+			}
+			break;
+
+			default:
+				assert( 0 );
+		}
+
+		assert( buffer - start <= buffer_length );
+
+        return (int) ( buffer - start );
+    }
 }
 
-void * netcode_read_packet( uint8_t * buffer, int buffer_length, struct netcode_packet_context_t * context )
+void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, struct netcode_packet_context_t * context )
 {
     assert( context );
+	assert( sequence );
+
+	*sequence = 0;
 
     const uint8_t * start = buffer;
 
@@ -1102,6 +1178,19 @@ static void test_endian()
 #endif // #if NETCODE_LITTLE_ENDIAN
 }
 
+static void test_sequence()
+{
+    check( netcode_sequence_number_bytes_required( 0 ) == 1 );
+    check( netcode_sequence_number_bytes_required( 0x11 ) == 1 );
+    check( netcode_sequence_number_bytes_required( 0x1122 ) == 2 );
+    check( netcode_sequence_number_bytes_required( 0x112233 ) == 3 );
+    check( netcode_sequence_number_bytes_required( 0x11223344 ) == 4 );
+    check( netcode_sequence_number_bytes_required( 0x1122334455 ) == 5 );
+    check( netcode_sequence_number_bytes_required( 0x112233445566 ) == 6 );
+    check( netcode_sequence_number_bytes_required( 0x11223344556677 ) == 7 );
+    check( netcode_sequence_number_bytes_required( 0x1122334455667788 ) == 8 );
+}
+
 #define TEST_PROTOCOL_ID    0x1122334455667788LL
 #define TEST_CLIENT_ID      0x1LL
 #define TEST_SERVER_PORT    40000
@@ -1272,13 +1361,15 @@ static void test_connection_request_packet()
 	context.current_timestamp = (uint64_t) time( NULL );
 	memcpy( context.connect_token_key, connect_token_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 0, &context );
 
     check( bytes_written > 0 );
 
 	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
 
-    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &context );
+	uint64_t sequence = 0;
+
+    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
 
     check( output_packet );
 
@@ -1305,6 +1396,7 @@ static void test_connection_request_packet()
 void netcode_test()
 {
     RUN_TEST( test_endian );
+    RUN_TEST( test_sequence );
     RUN_TEST( test_connect_token );
     RUN_TEST( test_challenge_token );
     RUN_TEST( test_connection_request_packet );

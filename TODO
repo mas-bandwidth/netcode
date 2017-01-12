@@ -6,7 +6,9 @@ DONE
 
 TODO
 
-    Need to write code to encode/decode the sequence 
+    Need to write code to encode/decode the sequence into a prefix byte (first bit set, followed by # of sequence bits in low byte).
+
+    This should be pretty easy. All I have to do is scan the sequence from leftmost byte to rightmost byte, and stop when a byte is not zero.
 
     -----------------
 
