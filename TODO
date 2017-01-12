@@ -26,9 +26,19 @@ DONE
 
     Simplify the aead function to always work in place. Done. It's much easier to use now.
 
+    Implement code to read/write an example challenge packet.
+
+    Spend some time fixing a bug with the sequence # encoding. Never pass in sequence of 0. It barely tests anything.
+
+    The aead decrypt is not working for the packet. Finding out why is going to take some debugging.
+
+    Clearly it's something that is occuring only once there is actual data to encrypt in the AEAD. So perhaps the same amount of data is not encrypted as is decrypted? Maybe there is a logic error there?
+
+    Found it. Bad pointer for the message to encrypt on write packet.
+
 TODO
 
-    Implement code to read/write an example challenge packet.
+    Implement the remaining packet types.
 
     -----------------
 

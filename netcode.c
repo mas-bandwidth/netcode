@@ -1,3 +1,27 @@
+/*
+    netcode.io reference implementation
+
+    Copyright © 2016, The Network Protocol Company, Inc.
+
+    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer 
+           in the documentation and/or other materials provided with the distribution.
+
+        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived 
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+    USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <netcode.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -199,11 +223,9 @@ void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes
 
 #include <sodium.h>
 
-/*
 #if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
 #define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
 #endif
-*/
 
 void netcode_generate_key( uint8_t * key )
 {
@@ -670,7 +692,7 @@ struct netcode_connection_denied_packet_t
 struct netcode_connection_challenge_packet_t
 {
     uint8_t packet_type;
-    uint8_t challenge_token_nonce[NETCODE_NONCE_BYTES];
+    uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
@@ -772,11 +794,13 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
 		// write the variable length sequence number [1,7] bytes.
 
+		uint64_t sequence_temp = sequence;
+
 		int i;
 		for ( i = 0; i < sequence_bytes; ++i )
 		{
-			netcode_write_uint8( &buffer, (uint8_t) ( sequence & 0xFF ) );
-			sequence >>= 8;
+			netcode_write_uint8( &buffer, (uint8_t) ( sequence_temp & 0xFF ) );
+			sequence_temp >>= 8;
 		}
 
         // write packet data according to type. this data will be encrypted.
@@ -793,6 +817,9 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
 			case NETCODE_CONNECTION_CHALLENGE_PACKET:
 			{
+				struct netcode_connection_challenge_packet_t * p = (struct netcode_connection_challenge_packet_t*) packet;
+				netcode_write_uint64( &buffer, p->challenge_token_sequence );
+				netcode_write_bytes( &buffer, p->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
 			}
 			break;
 
@@ -845,7 +872,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
             netcode_write_uint64( &p, sequence );
         }
 
-        if ( !netcode_encrypt_aead( buffer, encrypted_finish - encrypted_start, additional_data, sizeof( additional_data ), nonce, context->write_packet_key ) )
+        if ( !netcode_encrypt_aead( encrypted_start, encrypted_finish - encrypted_start, additional_data, sizeof( additional_data ), nonce, context->write_packet_key ) )
             return 0;
 
         buffer += NETCODE_MAC_BYTES;
@@ -951,8 +978,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         int i;
         for ( i = 0; i < sequence_bytes; ++i )
         {
-            *sequence <<= 8;
-            *sequence |= (uint64_t) netcode_read_uint8( &buffer );
+			uint8_t value = netcode_read_uint8( &buffer );
+            (*sequence) |= ( value << ( 8 * i ) );
         }
 
         // decrypt the per-packet type data
@@ -979,23 +1006,44 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         if ( !netcode_decrypt_aead( buffer, encrypted_bytes, additional_data, sizeof( additional_data ), nonce, context->read_packet_key ) )
             return NULL;
 
+		int decrypted_bytes = encrypted_bytes - NETCODE_MAC_BYTES;
+
         // process the per-packet type data that was just decrypted
         
         switch ( packet_type )
         {
             case NETCODE_CONNECTION_DENIED_PACKET:
             {
+				if ( decrypted_bytes != 0 )
+					return NULL;
+
                 struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) malloc( sizeof( struct netcode_connection_denied_packet_t ) );
+
 				if ( !packet )
 					return NULL;
+				
 				packet->packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+				
 				return packet;
             }
             break;
 
             case NETCODE_CONNECTION_CHALLENGE_PACKET:
             {
-            }
+				if ( decrypted_bytes != NETCODE_NONCE_BYTES + NETCODE_CHALLENGE_TOKEN_BYTES )
+					return NULL;
+
+                struct netcode_connection_challenge_packet_t * packet = (struct netcode_connection_challenge_packet_t*) malloc( sizeof( struct netcode_connection_challenge_packet_t ) );
+
+				if ( !packet )
+					return NULL;
+				
+				packet->packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
+				packet->challenge_token_sequence = netcode_read_uint64( &buffer );
+				netcode_read_bytes( &buffer, packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+				
+				return packet;
+			}
             break;
 
             case NETCODE_CONNECTION_RESPONSE_PACKET:
@@ -1505,7 +1553,7 @@ static void test_connection_request_packet()
 	context.current_timestamp = (uint64_t) time( NULL );
 	memcpy( context.connect_token_key, connect_token_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 0, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
 
     check( bytes_written > 0 );
 
@@ -1547,13 +1595,13 @@ void test_connection_denied_packet()
 	netcode_generate_key( context.write_packet_key );
 	memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 0, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
 
     check( bytes_written > 0 );
 
 	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
 
-	uint64_t sequence = 1000;
+	uint64_t sequence;
 
     struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
 
@@ -1562,6 +1610,47 @@ void test_connection_denied_packet()
 	// make sure the packet data read matches what was written
 	
     check( output_packet->packet_type == NETCODE_CONNECTION_DENIED_PACKET );
+
+    free( output_packet );
+}
+
+void test_connection_challenge_packet()
+{
+    // setup a connection challenge packet
+
+    struct netcode_connection_challenge_packet_t input_packet;
+
+	input_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
+	input_packet.challenge_token_sequence = 0;
+	netcode_random_bytes( input_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+	// write the connection challenge packet to a buffer
+
+    uint8_t buffer[2048];
+
+    struct netcode_packet_context_t context;
+    memset( &context, 0, sizeof( context ) );
+	context.protocol_id = TEST_PROTOCOL_ID;
+	netcode_generate_key( context.write_packet_key );
+	memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+
+    check( bytes_written > 0 );
+
+	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+
+	uint64_t sequence;
+
+    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+
+    check( output_packet );
+
+	// make sure the packet data read matches what was written
+	
+    check( output_packet->packet_type == NETCODE_CONNECTION_CHALLENGE_PACKET );
+	check( output_packet->challenge_token_sequence == input_packet.challenge_token_sequence );
+	check( memcmp( output_packet->challenge_token_data, input_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES ) == 0 );
 
     free( output_packet );
 }
@@ -1582,6 +1671,7 @@ void netcode_test()
     RUN_TEST( test_challenge_token );
     RUN_TEST( test_connection_request_packet );
     RUN_TEST( test_connection_denied_packet );
+    RUN_TEST( test_connection_challenge_packet );
 }
 
 #endif // #if NETCODE_TEST
