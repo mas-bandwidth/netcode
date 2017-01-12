@@ -44,17 +44,17 @@ TODO
 
     -----------------
 
+    Bring across matcher in golang and port to binary format connect tokens.
+
+    Integrate mbedtls library.
+
+    -----------------
+
     Bring across a netcode_socket_t
 
     Implement just enough to get my shit done.
 
     Probably need more address functionality to interface with sockets sendto/recvfrom as well.
-
-    -----------------
-
-    Bring across matcher in golang and port to binary format connect tokens.
-
-    Integrate mbedtls library.
 
     -----------------
 
