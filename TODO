@@ -18,6 +18,30 @@ DONE
 
 TODO
 
+    What's the most important thing to do next?
+
+    On one hand I can setup a mocking structure (eg. transport) so I can test the client and server using a mocked socket layer.
+
+    I mean really the thing needed for client/server to be mocked, would be to expose the function to process packets (manually call it instead of pumping from network), and provide a function pointer to call in order to send a packet to an address. This could then be hooked up to a simulator or a simple queue.
+
+    In my experience, it's necessary to test the protocol under worst case conditions (packets out of order, jitter, latency, loss) to make sure a UDP-based protocol is working properly.
+
+    So I think this isn't something that I can skip.
+
+    But I don't want to expose this concept outside of the internal implementation. It's internal only, and compiles out in release build.
+
+    -----------------
+
+    Implement the client side of the state machine (simpler)
+
+    -----------------
+
+    Implement the server side of the state machine (up to 256 players, for agar.io)
+
+    -----------------
+
+    Implement tests to make sure the client/server state machine is working as expected.
+
     -----------------
 
     Bring across a netcode_socket_t
@@ -28,11 +52,23 @@ TODO
 
     -----------------
 
-    Implement the client side of the state machine (simpler)
+    Bring across matcher in golang and port to binary format connect tokens.
+
+    Integrate mbedtls library.
 
     -----------------
 
-    Implement the server side of the state machine (up to 256 players, for agar.io)
+    Implement standalone server on localhost port 40000.
+
+    -----------------
+
+    Port across code for matcher. Keep it blocking. Doesn't matter for now.
+
+    -----------------
+
+    Implement client that connects to matcher, gets connect token and connects to server.
+
+    Implement stress that connects 256 clients.
 
     -----------------
 
