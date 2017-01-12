@@ -303,14 +303,6 @@ struct netcode_connect_token_t
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
-struct netcode_challenge_token_t
-{
-    uint64_t client_id;
-    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
-    uint8_t client_to_server_key[NETCODE_KEY_BYTES];
-    uint8_t server_to_client_key[NETCODE_KEY_BYTES];
-};
-
 void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, const uint8_t * user_data )
 {
     assert( connect_token );
@@ -539,60 +531,47 @@ int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struc
 
 // -----------------------------------------------
 
-int netcode_generate_challenge_token( const struct netcode_connect_token_t * connect_token, const uint8_t * connect_token_mac, struct netcode_challenge_token_t * challenge_token )
+struct netcode_challenge_token_t
 {
-	assert( connect_token );
-	assert( connect_token_mac );
-	assert( challenge_token );
+    uint64_t client_id;
+    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
+    uint8_t client_to_server_key[NETCODE_KEY_BYTES];
+    uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+};
 
-	(void) connect_token;
-	(void) connect_token_mac;
-	(void) challenge_token;
+void netcode_write_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
+{
+    (void) buffer_length;
 
-	// ...
+    assert( challenge_token );
+    assert( buffer );
+    assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 
-	return 0;
+    memset( buffer, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+    uint8_t * start = buffer;
+
+    netcode_write_uint64( &buffer, challenge_token->client_id );
+
+    netcode_write_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
+
+    netcode_write_bytes( &buffer, challenge_token->client_to_server_key, NETCODE_KEY_BYTES );
+
+    netcode_write_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
+
+    assert( buffer - start <= NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_write_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
+int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, const uint8_t * key )
 {
-	assert( challenge_token );
 	assert( buffer );
-
-	(void) challenge_token;
-	(void) buffer;
-	(void) buffer_length;
-
-	// ...
-
-	return 0;
-}
-
-int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
-{
-	assert( buffer );
-	assert( challenge_token );
-
-	(void) buffer;
-	(void) buffer_length;
-	(void) challenge_token;
-
-	// ...
-
-	return 0;
-}
-
-int netcode_encrypt_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * encrypted, int encrypted_length, uint64_t sequence, const uint8_t * key )
-{
-	assert( challenge_token );
-	assert( encrypted );
+	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 	assert( key );
 
 	// todo: check encrypted length is what is expected.
 
-	(void) challenge_token;
-	(void) encrypted;
-	(void) encrypted_length;
+	(void) buffer;
+	(void) buffer_length;
 	(void) sequence;
 	(void) key;
 
@@ -616,6 +595,29 @@ int netcode_decrypt_challenge_token( const uint8_t * encrypted, int encrypted_le
 	// ...
 
 	return 0;
+}
+
+int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
+{
+    assert( buffer );
+    assert( challenge_token );
+
+    if ( buffer_length < NETCODE_CHALLENGE_TOKEN_BYTES )
+        return 0;
+
+	const uint8_t * start = buffer;
+    
+    challenge_token->client_id = netcode_read_uint64( &buffer );
+
+    netcode_read_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
+
+	netcode_read_bytes( &buffer, challenge_token->client_to_server_key, NETCODE_KEY_BYTES );
+
+    netcode_read_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
+
+	assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_KEY_BYTES + NETCODE_KEY_BYTES );
+
+    return 1;
 }
 
 // ----------------------------------------------------------------
@@ -1152,6 +1154,11 @@ static void test_connect_token()
     check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
 }
 
+static void test_challenge_token()
+{
+	// ...
+}
+
 static void test_connection_request_packet()
 {
     // generate a connect token
@@ -1250,6 +1257,7 @@ void netcode_test()
 {
     RUN_TEST( test_endian );
     RUN_TEST( test_connect_token );
+    RUN_TEST( test_challenge_token );
     RUN_TEST( test_connection_request_packet );
 }
 
