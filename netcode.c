@@ -851,6 +851,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
 			case NETCODE_CONNECTION_DISCONNECT_PACKET:
 			{
+				// ...
 			}
 			break;
 
@@ -1089,6 +1090,17 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             
             case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
             {
+				if ( decrypted_bytes != 0 )
+					return NULL;
+
+                struct netcode_connection_keep_alive_packet_t * packet = (struct netcode_connection_keep_alive_packet_t*) malloc( sizeof( struct netcode_connection_keep_alive_packet_t ) );
+
+				if ( !packet )
+					return NULL;
+				
+				packet->packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+				
+				return packet;
             }
             break;
 
@@ -1099,6 +1111,17 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
             case NETCODE_CONNECTION_DISCONNECT_PACKET:
             {
+				if ( decrypted_bytes != 0 )
+					return NULL;
+
+                struct netcode_connection_disconnect_packet_t * packet = (struct netcode_connection_disconnect_packet_t*) malloc( sizeof( struct netcode_connection_disconnect_packet_t ) );
+
+				if ( !packet )
+					return NULL;
+				
+				packet->packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
+				
+				return packet;
             }
             break;
 
@@ -1766,6 +1789,43 @@ void test_connection_confirm_packet()
     free( output_packet );
 }
 
+void test_connection_disconnect_packet()
+{
+    // setup a connection disconnect packet
+
+    struct netcode_connection_disconnect_packet_t input_packet;
+
+    input_packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
+
+    // write the packet to a buffer
+
+    uint8_t buffer[2048];
+
+    struct netcode_packet_context_t context;
+    memset( &context, 0, sizeof( context ) );
+    context.protocol_id = TEST_PROTOCOL_ID;
+    netcode_generate_key( context.write_packet_key );
+    memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+
+    check( bytes_written > 0 );
+
+    // read the packet back in from the buffer
+
+    uint64_t sequence;
+
+    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+
+    check( output_packet );
+
+    // make sure the read packet matches what was written
+    
+    check( output_packet->packet_type == NETCODE_CONNECTION_DISCONNECT_PACKET );
+
+    free( output_packet );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -1785,6 +1845,7 @@ void netcode_test()
     RUN_TEST( test_connection_challenge_packet );
     RUN_TEST( test_connection_response_packet );
     RUN_TEST( test_connection_confirm_packet );
+    RUN_TEST( test_connection_disconnect_packet );
 }
 
 #endif // #if NETCODE_TEST
