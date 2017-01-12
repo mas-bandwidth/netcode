@@ -4,11 +4,25 @@ DONE
 
     Unit test challenge tokens.
 
-TODO
-
     Need to write code to encode/decode the sequence into a prefix byte (first bit set, followed by # of sequence bits in low byte).
 
     This should be pretty easy. All I have to do is scan the sequence from leftmost byte to rightmost byte, and stop when a byte is not zero.
+
+    I've done this, but I screwed up. The packet type needs to be *inside* the encrypted data. Otherwise, it's possible that I will be en
+
+    Tweeted Frank (libsodium) if it's safe to have 1 byte associated data for a 0 byte message. I *think* its safe. The nonce takes care of this.
+
+    But it's important to be sure.
+
+    If it's safe like this, then I can use the _aead primitive to encrypt/decrypt packets, so I can see packet type and the # of sequence bytes in public data, which makes it easier to determine what sort of packet it is vs. having everything encrypted!
+
+    Implement code to aead the packet data for one packet type with no data (connection denied packet).
+
+    Ok. Not only is the prefix byte in the packet associated data, also the protocol id and the version is in there. This should provide safety and versioning for *all* packet types. Nice!
+
+TODO
+
+    Now need to implement the read side for the packet.
 
     -----------------
 

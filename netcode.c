@@ -697,6 +697,8 @@ struct netcode_packet_context_t
     uint64_t protocol_id;
     uint64_t current_timestamp;
 	uint8_t connect_token_key[NETCODE_KEY_BYTES];
+	uint8_t packet_write_key[NETCODE_KEY_BYTES];
+	uint8_t packet_read_key[NETCODE_KEY_BYTES];
 };
 
 int netcode_sequence_number_bytes_required( uint64_t sequence )
@@ -741,7 +743,9 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     }
     else
     {
-        // encrypted packets
+        // *** encrypted packets ***
+
+        // write the prefix byte (this is a combination of the packet type and number of sequence bytes)
 
         uint8_t * start = buffer;
 
@@ -752,7 +756,11 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
         assert( packet_type <= 0xF );
 
-        netcode_write_uint8( &buffer, packet_type | ( sequence_bytes << 4 ) );
+        uint8_t prefix_byte = packet_type | ( sequence_bytes << 4 );
+
+        netcode_write_uint8( &buffer, prefix_byte );
+
+		// write the variable length sequence number [1,7] bytes.
 
 		int i;
 		for ( i = 0; i < sequence_bytes; ++i )
@@ -760,6 +768,10 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 			netcode_write_uint8( &buffer, (uint8_t) ( sequence & 0xFF ) );
 			sequence >>= 8;
 		}
+
+        // write packet data according to type. this data will be encrypted.
+
+        uint8_t * encrypted_start = buffer;
 
 		switch ( packet_type )
 		{
@@ -803,6 +815,50 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 				assert( 0 );
 		}
 
+        assert( buffer - start <= buffer_length - NETCODE_MAC_BYTES );
+
+        uint8_t * encrypted_finish = buffer;
+
+        // encrypt the per-packet packet written with the prefix byte, protocol id and version as the associated data. this must match to decrypt.
+
+		uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+1];
+		{
+			uint8_t * p = additional_data;
+			netcode_write_bytes( &p, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+			netcode_write_uint64( &p, context->protocol_id );
+			netcode_write_uint8( &p, prefix_byte );
+		}
+
+        uint8_t nonce[8];
+        {
+            uint8_t * p = nonce;
+            netcode_write_uint64( &p, sequence );
+        }
+
+        uint64_t encrypted_length;
+
+        #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+            if ( !netcode_encrypt_aead( buffer, encrypted_finish - encrypted_start, buffer, &encrypted_length, additional_data, sizeof( additional_data ), nonce, context->packet_write_key ) )
+                return 0;
+
+        #else // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+            uint8_t * temp = alloca( buffer_length );
+
+            if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, temp, &encrypted_length, &prefix_byte, additional_data, sizeof( additional_data ), nonce, contexts->packet_write_key ) )
+                return 0;        
+
+            memcpy( buffer, temp, NETCODE_CONNECT_TOKEN_BYTES );
+
+        #endif // #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
+
+        // ^--- todo: you know, I seem to be doing the overlapping buffer encrypt/decrypt so much, just move it all into the one function? yes.
+
+        assert( encrypted_length == (uint64_t) ( encrypted_finish - encrypted_start + NETCODE_MAC_BYTES ) );
+
+        buffer += NETCODE_MAC_BYTES;
+
 		assert( buffer - start <= buffer_length );
 
         return (int) ( buffer - start );
@@ -816,11 +872,14 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 	*sequence = 0;
 
+	if ( buffer_length < 1 )
+		return NULL;
+
     const uint8_t * start = buffer;
 
-    uint8_t packet_type = netcode_read_uint8( &buffer );
+    uint8_t prefix_byte = netcode_read_uint8( &buffer );
 
-    if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
+    if ( prefix_byte == NETCODE_CONNECTION_REQUEST_PACKET )
     {
         // connection request packet
 
@@ -881,7 +940,71 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
     {
         // encrypted packets
 
-        // ...
+        if ( buffer_length < 1 + 1 + NETCODE_MAC_BYTES )
+            return NULL;
+
+        int packet_type = prefix_byte & 0xF;
+
+        int sequence_bytes = prefix_byte >> 4;
+
+        if ( sequence_bytes < 1 || sequence_bytes > 7 )
+            return NULL;
+
+        if ( buffer_length < 1 + sequence_bytes + NETCODE_MAC_BYTES )
+            return NULL;
+
+        int i;
+        for ( i = 0; i < sequence_bytes; ++i )
+        {
+            *sequence |= (uint64_t) netcode_read_uint8( &buffer );
+            *sequence <<= 8;
+        }
+
+        switch ( packet_type )
+        {
+            case NETCODE_CONNECTION_DENIED_PACKET:
+            {
+                struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) malloc( sizeof( struct netcode_connection_denied_packet_t ) );
+				if ( !packet )
+					return NULL;
+				packet->packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+				return packet;
+            }
+            break;
+
+            case NETCODE_CONNECTION_CHALLENGE_PACKET:
+            {
+            }
+            break;
+
+            case NETCODE_CONNECTION_RESPONSE_PACKET:
+            {
+            }
+            break;
+
+            case NETCODE_CONNECTION_CONFIRM_PACKET:
+            {
+            }
+            break;
+            
+            case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
+            {
+            }
+            break;
+
+            case NETCODE_CONNECTION_PAYLOAD_PACKET:
+            {
+            }
+            break;
+
+            case NETCODE_CONNECTION_DISCONNECT_PACKET:
+            {
+            }
+            break;
+
+            default:
+                return NULL;
+        }
     }
 
     return NULL;
@@ -1385,6 +1508,50 @@ static void test_connection_request_packet()
     free( output_packet );
 }
 
+void test_connection_denied_packet()
+{
+    // setup a connection denied packet
+
+    struct netcode_connection_denied_packet_t input_packet;
+
+	input_packet.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+
+	// write the connection denied packet to a buffer
+
+    uint8_t buffer[2048];
+
+    struct netcode_packet_context_t context;
+    memset( &context, 0, sizeof( context ) );
+	context.protocol_id = TEST_PROTOCOL_ID;
+	netcode_generate_key( context.packet_write_key );
+	memcpy( context.packet_read_key, context.packet_write_key, NETCODE_KEY_BYTES );
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 0, &context );
+
+    check( bytes_written > 0 );
+
+	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+
+	uint64_t sequence = 0;
+
+    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+
+    check( output_packet );
+
+	// make sure the packet data read matches what was written
+	
+    check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
+	/*
+    check( memcmp( output_packet->version_info, input_packet.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
+    check( output_packet->protocol_id == input_packet.protocol_id );
+    check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
+	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );
+    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
+	*/
+
+    free( output_packet );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -1400,6 +1567,7 @@ void netcode_test()
     RUN_TEST( test_connect_token );
     RUN_TEST( test_challenge_token );
     RUN_TEST( test_connection_request_packet );
+    RUN_TEST( test_connection_denied_packet );
 }
 
 #endif // #if NETCODE_TEST
