@@ -1,8 +1,22 @@
 DONE
 
-TODO
-
     Implement the remaining packet types.
+
+    Implement the payload packet. Include a data length in the packet, but don't serialize that to the buffer. 
+
+    On read, reconstruct it from what is left in the packet.
+
+    Done. Made the payload packet type a variable size struct. Seems like the best option.
+
+    Added a maximum payload size of 1400 bytes. Seems reasonable given 1500 MTU. In future versions of the protocol, might be nice to let the server tell the client the maximum # payload packet size instead. 
+
+    For a first pass, I think this is OK.
+
+    Added a function to create the dynamically sized payload packet.
+
+    Need to add a test for payload packet. Done.
+
+TODO
 
     -----------------
 

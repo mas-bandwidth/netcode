@@ -62,6 +62,7 @@
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
+#define NETCODE_MAX_PAYLOAD_BYTES 1400
 
 #define NETCODE_VERSION_INFO ( (const uint8_t*) "NETCODE 1.00" )
 
@@ -717,12 +718,31 @@ struct netcode_connection_keep_alive_packet_t
 struct netcode_connection_payload_packet_t
 {
     uint8_t packet_type;
+    uint32_t payload_bytes;
+    uint8_t payload_data[1];
+    // ...
 };
 
 struct netcode_connection_disconnect_packet_t
 {
     uint8_t packet_type;
 };
+
+struct netcode_connection_payload_packet_t * netcode_create_payload_packet( int payload_bytes )
+{
+    assert( payload_bytes >= 0 );
+    assert( payload_bytes <= NETCODE_MAX_PAYLOAD_BYTES );
+
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) malloc( sizeof( struct netcode_connection_payload_packet_t ) + payload_bytes );
+
+    if ( !packet )
+        return NULL;
+    
+    packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
+    packet->payload_bytes = payload_bytes;
+
+    return packet;
+}
 
 struct netcode_packet_context_t
 {
@@ -846,6 +866,11 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
 			case NETCODE_CONNECTION_PAYLOAD_PACKET:
 			{
+				struct netcode_connection_payload_packet_t * p = (struct netcode_connection_payload_packet_t*) packet;
+
+                assert( p->payload_bytes <= NETCODE_MAX_PAYLOAD_BYTES );
+
+				netcode_write_bytes( &buffer, p->payload_data, p->payload_bytes );
 			}
 			break;
 
@@ -1106,6 +1131,17 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
             case NETCODE_CONNECTION_PAYLOAD_PACKET:
             {
+                if ( decrypted_bytes > NETCODE_MAX_PAYLOAD_BYTES )
+                    return NULL;
+
+                struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( decrypted_bytes );
+
+                if ( !packet )
+                    return NULL;
+                
+                memcpy( packet->payload_data, buffer, decrypted_bytes );
+                
+                return packet;
             }
             break;
 
@@ -1129,8 +1165,6 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                 return NULL;
         }
     }
-
-    return NULL;
 }
 
 // ----------------------------------------------------------------
@@ -1789,6 +1823,49 @@ void test_connection_confirm_packet()
     free( output_packet );
 }
 
+void test_connection_payload_packet()
+{
+    // setup a connection payload packet
+
+    struct netcode_connection_payload_packet_t * input_packet = netcode_create_payload_packet( NETCODE_MAX_PAYLOAD_BYTES );
+
+	check( input_packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
+	check( input_packet->payload_bytes == NETCODE_MAX_PAYLOAD_BYTES );
+
+	netcode_random_bytes( input_packet->payload_data, NETCODE_MAX_PAYLOAD_BYTES );
+    
+    // write the packet to a buffer
+
+    uint8_t buffer[2048];
+
+    struct netcode_packet_context_t context;
+    memset( &context, 0, sizeof( context ) );
+    context.protocol_id = TEST_PROTOCOL_ID;
+    netcode_generate_key( context.write_packet_key );
+    memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
+
+    int bytes_written = netcode_write_packet( input_packet, buffer, sizeof( buffer ), 1000, &context );
+
+    check( bytes_written > 0 );
+
+    // read the packet back in from the buffer
+
+    uint64_t sequence;
+
+    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+
+    check( output_packet );
+
+    // make sure the read packet matches what was written
+    
+    check( output_packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
+	check( output_packet->payload_bytes == input_packet->payload_bytes );
+	check( memcmp( output_packet->payload_data, input_packet->payload_data, NETCODE_MAX_PAYLOAD_BYTES ) == 0 );
+
+	free( input_packet );
+    free( output_packet );
+}
+
 void test_connection_disconnect_packet()
 {
     // setup a connection disconnect packet
@@ -1845,6 +1922,7 @@ void netcode_test()
     RUN_TEST( test_connection_challenge_packet );
     RUN_TEST( test_connection_response_packet );
     RUN_TEST( test_connection_confirm_packet );
+    RUN_TEST( test_connection_payload_packet );
     RUN_TEST( test_connection_disconnect_packet );
 }
 
