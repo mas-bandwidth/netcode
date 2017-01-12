@@ -833,11 +833,14 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 
 			case NETCODE_CONNECTION_CONFIRM_PACKET:
 			{
+                struct netcode_connection_confirm_packet_t * p = (struct netcode_connection_confirm_packet_t*) packet;
+                netcode_write_uint32( &buffer, p->client_index );
 			}
 			break;
 			
 			case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
 			{
+                // ...
 			}
 			break;
 
@@ -1069,6 +1072,18 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
             case NETCODE_CONNECTION_CONFIRM_PACKET:
             {
+                if ( decrypted_bytes != 4 )
+                    return NULL;
+
+                struct netcode_connection_confirm_packet_t * packet = (struct netcode_connection_confirm_packet_t*) malloc( sizeof( struct netcode_connection_confirm_packet_t ) );
+
+                if ( !packet )
+                    return NULL;
+                
+                packet->packet_type = NETCODE_CONNECTION_CONFIRM_PACKET;
+                packet->client_index = netcode_read_uint32( &buffer );
+                
+                return packet;
             }
             break;
             
@@ -1581,7 +1596,7 @@ static void test_connection_request_packet()
 
     check( output_packet );
 
-	// make sure the packet data read matches what was written
+	// make sure the read packet matches what was written
 	
     check( output_packet->packet_type == NETCODE_CONNECTION_REQUEST_PACKET );
     check( memcmp( output_packet->version_info, input_packet.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
@@ -1601,7 +1616,7 @@ void test_connection_denied_packet()
 
 	input_packet.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
 
-	// write the connection denied packet to a buffer
+	// write the packet to a buffer
 
     uint8_t buffer[2048];
 
@@ -1615,7 +1630,7 @@ void test_connection_denied_packet()
 
     check( bytes_written > 0 );
 
-	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+	// read the packet back in from the buffer
 
 	uint64_t sequence;
 
@@ -1623,7 +1638,7 @@ void test_connection_denied_packet()
 
     check( output_packet );
 
-	// make sure the packet data read matches what was written
+	// make sure the read packet matches what was written
 	
     check( output_packet->packet_type == NETCODE_CONNECTION_DENIED_PACKET );
 
@@ -1640,7 +1655,7 @@ void test_connection_challenge_packet()
 	input_packet.challenge_token_sequence = 0;
 	netcode_random_bytes( input_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
 
-	// write the connection challenge packet to a buffer
+	// write the packet to a buffer
 
     uint8_t buffer[2048];
 
@@ -1654,7 +1669,7 @@ void test_connection_challenge_packet()
 
     check( bytes_written > 0 );
 
-	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+	// read the packet back in from the buffer
 
 	uint64_t sequence;
 
@@ -1662,7 +1677,7 @@ void test_connection_challenge_packet()
 
     check( output_packet );
 
-	// make sure the packet data read matches what was written
+	// make sure the read packet packet matches what was written
 	
     check( output_packet->packet_type == NETCODE_CONNECTION_CHALLENGE_PACKET );
 	check( output_packet->challenge_token_sequence == input_packet.challenge_token_sequence );
@@ -1681,7 +1696,7 @@ void test_connection_response_packet()
     input_packet.challenge_token_sequence = 0;
     netcode_random_bytes( input_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
 
-    // write the connection response packet to a buffer
+    // write the packet to a buffer
 
     uint8_t buffer[2048];
 
@@ -1695,7 +1710,7 @@ void test_connection_response_packet()
 
     check( bytes_written > 0 );
 
-    // read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
+    // read the packet back in from the buffer
 
     uint64_t sequence;
 
@@ -1703,11 +1718,50 @@ void test_connection_response_packet()
 
     check( output_packet );
 
-    // make sure the packet data read matches what was written
+    // make sure the read packet matches what was written
     
     check( output_packet->packet_type == NETCODE_CONNECTION_RESPONSE_PACKET );
     check( output_packet->challenge_token_sequence == input_packet.challenge_token_sequence );
     check( memcmp( output_packet->challenge_token_data, input_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES ) == 0 );
+
+    free( output_packet );
+}
+
+void test_connection_confirm_packet()
+{
+    // setup a connection confirm packet
+
+    struct netcode_connection_confirm_packet_t input_packet;
+
+    input_packet.packet_type = NETCODE_CONNECTION_CONFIRM_PACKET;
+    input_packet.client_index = 10;
+
+    // write the packet to a buffer
+
+    uint8_t buffer[2048];
+
+    struct netcode_packet_context_t context;
+    memset( &context, 0, sizeof( context ) );
+    context.protocol_id = TEST_PROTOCOL_ID;
+    netcode_generate_key( context.write_packet_key );
+    memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+
+    check( bytes_written > 0 );
+
+    // read the packet back in from the buffer
+
+    uint64_t sequence;
+
+    struct netcode_connection_confirm_packet_t * output_packet = (struct netcode_connection_confirm_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context );
+
+    check( output_packet );
+
+    // make sure the read packet matches what was written
+    
+    check( output_packet->packet_type == NETCODE_CONNECTION_CONFIRM_PACKET );
+    check( output_packet->client_index == input_packet.client_index );
 
     free( output_packet );
 }
@@ -1730,6 +1784,7 @@ void netcode_test()
     RUN_TEST( test_connection_denied_packet );
     RUN_TEST( test_connection_challenge_packet );
     RUN_TEST( test_connection_response_packet );
+    RUN_TEST( test_connection_confirm_packet );
 }
 
 #endif // #if NETCODE_TEST
