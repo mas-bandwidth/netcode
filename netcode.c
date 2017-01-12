@@ -1156,7 +1156,48 @@ static void test_connect_token()
 
 static void test_challenge_token()
 {
-	// ...
+    // generate a challenge token
+
+    struct netcode_challenge_token_t input_token;
+
+    input_token.client_id = TEST_CLIENT_ID;
+	netcode_random_bytes( input_token.connect_token_mac, NETCODE_MAC_BYTES );
+	netcode_generate_key( input_token.client_to_server_key );
+	netcode_generate_key( input_token.server_to_client_key );
+
+    // write it to a buffer
+
+    uint8_t buffer[NETCODE_CHALLENGE_TOKEN_BYTES];
+
+    netcode_write_challenge_token( &input_token, buffer, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+	/*
+    // encrypt the buffer
+
+    uint64_t sequence = 0;
+    uint64_t expire_timestamp = time( NULL ) + 30;
+    uint8_t key[NETCODE_KEY_BYTES];
+    netcode_generate_key( key );    
+
+    check( netcode_encrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+
+    // decrypt the buffer
+
+    check( netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+	*/
+
+    // read the challenge token back in
+
+    struct netcode_challenge_token_t output_token;
+
+    check( netcode_read_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, &output_token ) == 1 );
+
+	// make sure that everything matches the original connect token
+
+    check( output_token.client_id == input_token.client_id );
+    check( memcmp( output_token.connect_token_mac, input_token.connect_token_mac, NETCODE_MAC_BYTES ) == 0 );
+    check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_token.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
 }
 
 static void test_connection_request_packet()
