@@ -1,12 +1,12 @@
 DONE
 
-TODO
-
-    -----------------
-
     Bring across implementations for challenge token functions.
 
     Unit test challenge tokens.
+
+TODO
+
+    Need to write code to encode/decode the sequence 
 
     -----------------
 
