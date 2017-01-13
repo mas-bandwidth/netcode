@@ -31,22 +31,31 @@ int netcode_init();
 
 void netcode_term();
 
-struct netcode_client_t * netcode_client_create();
+struct netcode_client_t * netcode_client_create( double time );
 
-void netcode_client_connect( struct netcode_client_t * client, const char * connect_token );
+void netcode_client_destroy( struct netcode_client_t * client );
 
-void netcode_client_update( struct netcode_client_t * client, double time );
+void netcode_client_connect( struct netcode_client_t * client, const uint8_t * connect_data );
 
+void netcode_client_receive_packets( struct netcode_client_t * client );
+
+void netcode_client_send_packets( struct netcode_client_t * client );
+
+void netcode_client_advance_time( struct netcode_client_t * client, double time );
+
+void netcode_client_disconnect( struct netcode_client_t * client );
+
+/*
 int netcode_client_get_client_index( struct netcode_client_t * client );
 
 int netcode_client_receive_packet_from_server( struct netcode_client_t * client, uint8_t * buffer, int buffer_length );
 
 void netcode_client_send_packet_to_server( struct netcode_client_t * client, const uint8_t * packet_data, int packet_size );
 
-void netcode_client_disconnect( struct netcode_client_t * client );
+*/
 
-void netcode_client_destroy( struct netcode_client_t * client );
 
+/*
 struct netcode_server_t * netcode_server_create( uint16_t port );
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients );
@@ -66,5 +75,6 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server );
 void netcode_server_stop( struct netcode_server_t * server );
 
 void netcode_server_destroy( struct netcode_server_t * server );
+*/
 
 #endif // #ifndef NETCODE_H

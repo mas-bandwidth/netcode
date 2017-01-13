@@ -28,11 +28,13 @@ DONE
 
     But I don't want to expose this concept outside of the internal implementation. It's internal only, and compiles out in release build.
 
-TODO
-
-    -----------------
-
     Implement the client side of the state machine (simpler)
+
+    Implement it all end-to-end. eg. the state machine, the packet processing, the sending packets etc.
+
+TODO
+    
+    Making reasonable progress on the client state machine. Thinking of it more like a port job from C++ to C makes me hopeful that I can get this done quickly, as long as I don't make too many changes.
 
     -----------------
 

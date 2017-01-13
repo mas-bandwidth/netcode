@@ -65,6 +65,8 @@
 #define NETCODE_MAX_PAYLOAD_BYTES 1400
 
 #define NETCODE_VERSION_INFO ( (const uint8_t*) "NETCODE 1.00" )
+#define NETCODE_PACKET_SEND_RATE 10.0
+#define NETCODE_TIMEOUT_SECONDS 5.0
 
 // ----------------------------------------------------------------
 
@@ -1198,12 +1200,26 @@ void netcode_term()
 
 // ----------------------------------------------------------------
 
+#define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT           -5
+#define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT     -4
+#define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT    -3
+#define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT     -2
+#define NETCODE_CLIENT_STATE_CONNECTION_DENIED              -1
+#define NETCODE_CLIENT_STATE_DISCONNECTED                   0
+#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST     1
+#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE    2
+#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM     3
+#define NETCODE_CLIENT_STATE_CONNECTED                      4
+    
 struct netcode_client_t
 {
-	int dummy;
+	int state;
+	double time;
+	double last_packet_send_time;
+	double last_packet_receive_time;
 };
 
-struct netcode_client_t * netcode_client_create()
+struct netcode_client_t * netcode_client_create( double time )
 {
     assert( netcode.initialized );
 
@@ -1212,87 +1228,232 @@ struct netcode_client_t * netcode_client_create()
     if ( !client )
         return NULL;
 
-	// ...
+	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->time = time;
+    client->last_packet_send_time = -1000.0;
+    client->last_packet_receive_time = -1000.0;
 
 	return client;
-}
-
-void netcode_client_update( struct netcode_client_t * client, double time )
-{
-    assert( client );
-
-	(void) client;
-	(void) time;
-	
-	// ...
-}
-
-int netcode_client_get_client_index( struct netcode_client_t * client )
-{
-    assert( client );
-
-	(void) client;
-
-	// ...
-
-	return -1;
-}
-
-void netcode_client_connect( struct netcode_client_t * client, const char * token )
-{
-    assert( client );
-    assert( token );
-
-	(void) client;
-	(void) token;
-
-	// ...
-}
-
-void netcode_client_send_packet_to_server( struct netcode_client_t * client, const uint8_t * packet_data, int packet_size )
-{
-    assert( client );
-    assert( packet_data );
-    assert( packet_size );
-
-	(void) client;
-	(void) packet_data;
-	(void) packet_size;
-
-	// ...
-}
-
-int netcode_client_receive_packet_from_server( struct netcode_client_t * client, uint8_t * buffer, int buffer_length )
-{
-    assert( client );
-    assert( buffer );
-    assert( buffer_length > 0 );
-
-	(void) client;
-	(void) buffer;
-	(void) buffer_length;
-
-	// ...
-
-	return 0;
-}
-
-void netcode_client_disconnect( struct netcode_client_t * client )
-{
-    assert( client );
-
-	(void) client;
-
-	// ...
 }
 
 void netcode_client_destroy( struct netcode_client_t * client )
 {
     assert( client );
 
-    // ...
+    netcode_client_disconnect( client );
 
-	free( client );
+    free( client );
+}
+
+void netcode_client_connect( struct netcode_client_t * client, const uint8_t * connect_data )
+{
+    assert( client );
+
+	netcode_client_disconnect( client );
+
+    // todo: we're going to need a binary format for the connect data here (combo of public info and private connect token)
+
+    (void) client;
+    (void) connect_data;
+
+    // temp hack
+	client->state = NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST;
+}
+
+void netcode_client_receive_packets( struct netcode_client_t * client )
+{
+	assert( client );
+
+	(void) client;
+
+	// ...
+}
+
+void netcode_client_send_packets( struct netcode_client_t * client )
+{
+	assert( client );
+
+    switch ( client->state )
+    {
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:
+        {
+            if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) > client->time )
+                return;
+
+            printf( "send connection request packet\n" );
+
+            // todo: create connection request packet
+            
+            /*
+            ConnectionRequestPacket * packet = (ConnectionRequestPacket*) CreatePacket( CLIENT_SERVER_PACKET_CONNECTION_REQUEST );
+
+            if ( packet )
+            {
+                packet->connectTokenExpireTimestamp = m_connectTokenExpireTimestamp;
+                memcpy( packet->connectTokenData, m_connectTokenData, ConnectTokenBytes );
+                memcpy( packet->connectTokenNonce, m_connectTokenNonce, NonceBytes );
+
+                SendPacketToServer_Internal( packet );
+            }
+            */
+        }
+        break;
+
+        /*
+        case CLIENT_STATE_SENDING_CHALLENGE_RESPONSE:
+        {
+            if ( m_lastPacketSendTime + ( 1.0f / m_config.connectionNegotiationSendRate ) > time )
+                return;
+
+            ChallengeResponsePacket * packet = (ChallengeResponsePacket*) CreatePacket( CLIENT_SERVER_PACKET_CHALLENGE_RESPONSE );
+            
+            if ( packet )
+            {
+                memcpy( packet->challengeTokenData, m_challengeTokenData, ChallengeTokenBytes );
+                memcpy( packet->challengeTokenNonce, m_challengeTokenNonce, NonceBytes );
+                
+                SendPacketToServer_Internal( packet );
+            }
+        }
+        break;
+
+        case CLIENT_STATE_CONNECTED:
+        {
+            if ( m_connection )
+            {
+                ConnectionPacket * packet = m_connection->GeneratePacket();
+
+                if ( packet )
+                {
+                    SendPacketToServer( packet );
+                }
+            }
+
+            if ( m_lastPacketSendTime + ( 1.0f / m_config.connectionKeepAliveSendRate ) <= time )
+            {
+                KeepAlivePacket * packet = (KeepAlivePacket*) CreatePacket( CLIENT_SERVER_PACKET_KEEPALIVE );
+
+                if ( packet )
+                {
+                    SendPacketToServer( packet );
+                }
+            }
+        }
+        break;
+        */
+
+        default:
+            break;
+    }
+}
+
+void netcode_client_advance_time( struct netcode_client_t * client, double time )
+{
+    assert( client );
+
+    client->time = time;
+
+    /*
+    if ( m_shouldDisconnect )
+    {
+        debug_printf( "m_shouldDisconnect -> %s\n", GetClientStateName( m_shouldDisconnectState ) );
+        if ( ConnectToNextServer() )
+            return;
+        Disconnect( m_shouldDisconnectState, false );
+        return;
+    }
+    */
+
+    switch ( client->state )
+    {
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:
+        {
+            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            {
+                printf( "connection request timed out\n" );
+                /*
+                if ( ConnectToNextServer() )
+                    return;
+                    */
+
+                // todo: need to bring across internal disconnect
+                //netcode_client_disconnect_internal( client, CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT, false );
+
+                return;
+            }
+        }
+        break;
+
+        /*
+        case CLIENT_STATE_SENDING_CHALLENGE_RESPONSE:
+        {
+            if ( m_lastPacketReceiveTime + m_config.connectionNegotiationTimeOut < time )
+            {
+                debug_printf( "challenge response timed out\n" );
+                if ( ConnectToNextServer() )
+                    return;
+                Disconnect( CLIENT_STATE_CHALLENGE_RESPONSE_TIMEOUT, false );
+                return;
+            }
+        }
+        break;
+
+        case CLIENT_STATE_CONNECTED:
+        {
+            if ( m_lastPacketReceiveTime + m_config.connectionTimeOut < time )
+            {
+                debug_printf( "connection timed out (%f<%f)\n", m_lastPacketReceiveTime, time );
+                Disconnect( CLIENT_STATE_CONNECTION_TIMEOUT, false );
+                return;
+            }
+        }
+        break;
+        */
+
+        default:
+            break;
+    }
+}
+
+void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets )
+{
+    assert( destination_state <= NETCODE_CLIENT_STATE_DISCONNECTED );
+
+    if ( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED || client->state == destination_state )
+        return;
+
+    // todo
+    //OnDisconnect();
+
+    if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
+    {
+		// todo: send disconnect packets
+        /*
+        for ( int i = 0; i < m_config.numDisconnectPackets; ++i )
+        {
+            DisconnectPacket * packet = (DisconnectPacket*) CreatePacket( CLIENT_SERVER_PACKET_DISCONNECT );            
+
+            if ( packet )
+            {
+                SendPacketToServer_Internal( packet, true );
+            }
+        }
+        */
+    }
+
+	// todo
+    /*
+    ResetConnectionData( clientState );
+
+    ShutdownConnection();
+    */
+}
+
+void netcode_client_disconnect( struct netcode_client_t * client )
+{
+	assert( client );
+
+    netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_DISCONNECTED, 1 );
 }
 
 // ----------------------------------------------------------------
