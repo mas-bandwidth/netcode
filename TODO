@@ -32,9 +32,13 @@ DONE
 
     Implement it all end-to-end. eg. the state machine, the packet processing, the sending packets etc.
 
-TODO
-    
     Making reasonable progress on the client state machine. Thinking of it more like a port job from C++ to C makes me hopeful that I can get this done quickly, as long as I don't make too many changes.
+
+TODO
+
+    Port across more bits of the C++ code, and see how it fits. I should be able to port over most of the state machine structure, with commented out parts.
+
+    Bring across the code for processing packets. This can be called directly to manipulate the     
 
     -----------------
 

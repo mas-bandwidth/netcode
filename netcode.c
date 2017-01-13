@@ -1211,12 +1211,35 @@ void netcode_term()
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM     3
 #define NETCODE_CLIENT_STATE_CONNECTED                      4
     
+const char * netcode_client_state_name( int client_state )
+{
+    switch ( client_state )
+    {
+        case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:             return "connection timed out";
+        case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:       return "connection request timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:      return "connection response timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT:       return "connection confirm timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_DENIED:                return "connection denied";
+        case NETCODE_CLIENT_STATE_DISCONNECTED:                     return "disconnected";
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:       return "sending connection request";
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:      return "sending connection response";
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM:       return "sending connection confirm";
+        case NETCODE_CLIENT_STATE_CONNECTED:                        return "connected";
+        default:
+            assert( 0 );
+            return "???";
+    }
+}
+
 struct netcode_client_t
 {
 	int state;
 	double time;
 	double last_packet_send_time;
 	double last_packet_receive_time;
+    int should_disconnect;
+    int should_disconnect_state;
+	uint64_t sequence;
 };
 
 struct netcode_client_t * netcode_client_create( double time )
@@ -1232,6 +1255,9 @@ struct netcode_client_t * netcode_client_create( double time )
     client->time = time;
     client->last_packet_send_time = -1000.0;
     client->last_packet_receive_time = -1000.0;
+    client->should_disconnect = 0;
+    client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
+	client->sequence = 0;
 
 	return client;
 }
@@ -1245,6 +1271,34 @@ void netcode_client_destroy( struct netcode_client_t * client )
     free( client );
 }
 
+void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
+{
+    client->sequence = 0;
+    client->last_packet_send_time = client->time - 1.0f;
+    client->last_packet_receive_time = client->time;
+    client->should_disconnect = 0;
+    client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
+}
+
+void netcode_client_reset_connection_data( struct netcode_client_t * client, int client_state )
+{
+    assert( client );
+
+    // todo
+    /*
+    m_clientId = 0;
+    m_clientIndex = -1;
+    m_serverAddress = Address();
+    m_serverAddressIndex = 0;
+    m_numServerAddresses = 0;
+    */
+
+	// todo: function to set client state is nice because I can print out all transitions
+    client->state = client_state;
+
+	netcode_client_reset_before_next_connect( client );
+}
+
 void netcode_client_connect( struct netcode_client_t * client, const uint8_t * connect_data )
 {
     assert( client );
@@ -1256,7 +1310,10 @@ void netcode_client_connect( struct netcode_client_t * client, const uint8_t * c
     (void) client;
     (void) connect_data;
 
-    // temp hack
+	// todo: temp hack
+	netcode_client_reset_before_next_connect( client );
+
+    // todo: function to set state is nice because I can use it to print all state transitions
 	client->state = NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST;
 }
 
@@ -1347,22 +1404,32 @@ void netcode_client_send_packets( struct netcode_client_t * client )
     }
 }
 
+int netcode_client_connect_to_next_server( struct netcode_client_t * client )
+{
+	assert( client );
+
+	(void) client;
+
+    // todo
+    return 0;
+}
+
+void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
+
 void netcode_client_advance_time( struct netcode_client_t * client, double time )
 {
     assert( client );
 
     client->time = time;
 
-    /*
-    if ( m_shouldDisconnect )
+    if ( client->should_disconnect )
     {
-        debug_printf( "m_shouldDisconnect -> %s\n", GetClientStateName( m_shouldDisconnectState ) );
-        if ( ConnectToNextServer() )
+        printf( "should disconnect -> %s\n", netcode_client_state_name( client->should_disconnect_state ) );
+        if ( netcode_client_connect_to_next_server( client) )
             return;
-        Disconnect( m_shouldDisconnectState, false );
+        netcode_client_disconnect_internal( client, client->should_disconnect_state, 0 );
         return;
     }
-    */
 
     switch ( client->state )
     {
@@ -1371,48 +1438,61 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
             if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
             {
                 printf( "connection request timed out\n" );
-                /*
-                if ( ConnectToNextServer() )
+                if ( netcode_client_connect_to_next_server( client ) )
                     return;
-                    */
-
-                // todo: need to bring across internal disconnect
-                //netcode_client_disconnect_internal( client, CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT, false );
-
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT, 0 );
                 return;
             }
         }
         break;
 
-        /*
-        case CLIENT_STATE_SENDING_CHALLENGE_RESPONSE:
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:
         {
-            if ( m_lastPacketReceiveTime + m_config.connectionNegotiationTimeOut < time )
+            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
             {
-                debug_printf( "challenge response timed out\n" );
-                if ( ConnectToNextServer() )
+                printf( "connection response timed out\n" );
+                if ( netcode_client_connect_to_next_server( client ) )
                     return;
-                Disconnect( CLIENT_STATE_CHALLENGE_RESPONSE_TIMEOUT, false );
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT, 0 );
                 return;
             }
         }
         break;
 
-        case CLIENT_STATE_CONNECTED:
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM:
         {
-            if ( m_lastPacketReceiveTime + m_config.connectionTimeOut < time )
+            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
             {
-                debug_printf( "connection timed out (%f<%f)\n", m_lastPacketReceiveTime, time );
-                Disconnect( CLIENT_STATE_CONNECTION_TIMEOUT, false );
+                printf( "connection confirm timed out\n" );
+                if ( netcode_client_connect_to_next_server( client ) )
+                    return;
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT, 0 );
                 return;
             }
         }
         break;
-        */
+
+		case NETCODE_CLIENT_STATE_CONNECTED:
+        {
+            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            {
+                printf( "connection timed out\n" );
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT, 0 );
+                return;
+            }
+        }
+        break;
 
         default:
             break;
     }
+}
+
+void netcode_client_disconnect( struct netcode_client_t * client )
+{
+	assert( client );
+
+    netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_DISCONNECTED, 1 );
 }
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets )
@@ -1422,38 +1502,31 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     if ( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED || client->state == destination_state )
         return;
 
-    // todo
-    //OnDisconnect();
+    printf( "disconnected\n" );
 
     if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
     {
-		// todo: send disconnect packets
-        /*
-        for ( int i = 0; i < m_config.numDisconnectPackets; ++i )
+        for ( int i = 0; i < 10; ++i )
         {
+			// todo: send disconnect packets
+
+			/*
             DisconnectPacket * packet = (DisconnectPacket*) CreatePacket( CLIENT_SERVER_PACKET_DISCONNECT );            
 
             if ( packet )
             {
                 SendPacketToServer_Internal( packet, true );
             }
+			*/
         }
-        */
     }
+
+    netcode_client_reset_connection_data( client, destination_state );
 
 	// todo
     /*
-    ResetConnectionData( clientState );
-
     ShutdownConnection();
     */
-}
-
-void netcode_client_disconnect( struct netcode_client_t * client )
-{
-	assert( client );
-
-    netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_DISCONNECTED, 1 );
 }
 
 // ----------------------------------------------------------------
