@@ -1310,7 +1310,7 @@ void netcode_client_connect( struct netcode_client_t * client, const uint8_t * c
     (void) client;
     (void) connect_data;
 
-	// todo: temp hack
+	// todo: temporary
 	netcode_client_reset_before_next_connect( client );
 
     // todo: function to set state is nice because I can use it to print all state transitions
@@ -1323,7 +1323,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
 	(void) client;
 
-	// ...
+	// todo
 }
 
 void netcode_client_send_packets( struct netcode_client_t * client )

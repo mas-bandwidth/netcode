@@ -34,11 +34,33 @@ DONE
 
     Making reasonable progress on the client state machine. Thinking of it more like a port job from C++ to C makes me hopeful that I can get this done quickly, as long as I don't make too many changes.
 
-TODO
-
     Port across more bits of the C++ code, and see how it fits. I should be able to port over most of the state machine structure, with commented out parts.
 
-    Bring across the code for processing packets. This can be called directly to manipulate the     
+TODO
+
+    Biggest things that need to be done for client:
+
+        0. actually generate and send "connection request packets" to the server, while in the connection request state
+
+        1. work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
+
+        2. port across the code to process packets and comment most bits out
+
+        3. get the actual connect working from real data (eg. a connect token + associated data... big sink hole here)
+
+    I feel that the client is starting to get complex, although this is a reference implementation it needs to be:
+
+        a) testable
+
+        b) readable
+
+    This is not write only code.
+
+    Make sure the code that is written is as simple as possible, and readable. It's starting to jump around a bit with the literal porting from C++. Think if this can be simplified in some way.
+
+    -----------------
+
+    Specifically, the setting client state in one place is important for logging so do that. I need this printed out.
 
     -----------------
 
