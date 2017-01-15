@@ -26,7 +26,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
-#include <malloc.h>
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -64,7 +63,7 @@
 #define NETCODE_USER_DATA_BYTES 512
 #define NETCODE_MAX_PAYLOAD_BYTES 1400
 
-#define NETCODE_VERSION_INFO ( (const uint8_t*) "NETCODE 1.00" )
+#define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
 #define NETCODE_TIMEOUT_SECONDS 5.0
 
@@ -84,7 +83,7 @@ struct netcode_address_t
     uint16_t port;
 };
 
-int netcode_address_is_equal( const struct netcode_address_t * a, const struct netcode_address_t * b )
+int netcode_address_is_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
     assert( a );
     assert( b );
@@ -158,7 +157,7 @@ void netcode_write_uint64( uint8_t ** p, uint64_t value )
     *p += 8;
 }
 
-void netcode_write_bytes( uint8_t ** p, const uint8_t * byte_array, int num_bytes )
+void netcode_write_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
 {
     int i;
     for ( i = 0; i < num_bytes; ++i )
@@ -167,14 +166,14 @@ void netcode_write_bytes( uint8_t ** p, const uint8_t * byte_array, int num_byte
     }
 }
 
-uint8_t netcode_read_uint8( const uint8_t ** p )
+uint8_t netcode_read_uint8( uint8_t ** p )
 {
     uint8_t value = **p;
     ++(*p);
     return value;
 }
 
-uint16_t netcode_read_uint16( const uint8_t ** p )
+uint16_t netcode_read_uint16( uint8_t ** p )
 {
     uint16_t value;
     value  = ( ( (uint16_t)( (*p)[0] ) ) << 8 );
@@ -183,7 +182,7 @@ uint16_t netcode_read_uint16( const uint8_t ** p )
     return value;
 }
 
-uint32_t netcode_read_uint32( const uint8_t ** p )
+uint32_t netcode_read_uint32( uint8_t ** p )
 {
     uint32_t value;
     value  = ( ( (uint32_t)( (*p)[0] ) ) << 24 );
@@ -194,7 +193,7 @@ uint32_t netcode_read_uint32( const uint8_t ** p )
     return value;
 }
 
-uint64_t netcode_read_uint64( const uint8_t ** p )
+uint64_t netcode_read_uint64( uint8_t ** p )
 {
     uint64_t value;
     value  = ( ( (uint64_t)( (*p)[0] ) ) << 56 );
@@ -209,7 +208,7 @@ uint64_t netcode_read_uint64( const uint8_t ** p )
     return value;
 }
 
-void netcode_read_bytes( const uint8_t ** p, uint8_t * byte_array, int num_bytes )
+void netcode_read_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
 {
     int i;
     for ( i = 0; i < num_bytes; ++i )
@@ -243,10 +242,10 @@ void netcode_random_bytes( uint8_t * data, int bytes )
     randombytes_buf( data, bytes );
 }
 
-int netcode_encrypt( const uint8_t * message, int message_length, 
+int netcode_encrypt( uint8_t * message, int message_length, 
                      uint8_t * encrypted_message, int * encrypted_message_length, 
-                     const uint8_t * nonce, 
-                     const uint8_t * key )
+                     uint8_t * nonce, 
+                     uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
@@ -264,10 +263,10 @@ int netcode_encrypt( const uint8_t * message, int message_length,
     return 1;
 }
 
-int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_length, 
+int netcode_decrypt( uint8_t * encrypted_message, int encrypted_message_length, 
                      uint8_t * decrypted_message, int * decrypted_message_length, 
-                     const uint8_t * nonce, 
-                     const uint8_t * key )
+                     uint8_t * nonce, 
+                     uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
@@ -281,9 +280,9 @@ int netcode_decrypt( const uint8_t * encrypted_message, int encrypted_message_le
 }
 
 int netcode_encrypt_aead( uint8_t * message, uint64_t message_length, 
-                          const uint8_t * additional, uint64_t additional_length,
-                          const uint8_t * nonce,
-                          const uint8_t * key )
+                          uint8_t * additional, uint64_t additional_length,
+                          uint8_t * nonce,
+                          uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
@@ -322,9 +321,9 @@ int netcode_encrypt_aead( uint8_t * message, uint64_t message_length,
 }
 
 int netcode_decrypt_aead( uint8_t * message, uint64_t message_length, 
-                          const uint8_t * additional, uint64_t additional_length,
-                          const uint8_t * nonce,
-                          const uint8_t * key )
+                          uint8_t * additional, uint64_t additional_length,
+                          uint8_t * nonce,
+                          uint8_t * key )
 {
     assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
@@ -376,7 +375,7 @@ struct netcode_connect_token_t
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
-void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, const uint8_t * user_data )
+void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint8_t * user_data )
 {
     assert( connect_token );
     assert( num_server_addresses > 0 );
@@ -400,7 +399,7 @@ void netcode_generate_connect_token( struct netcode_connect_token_t * connect_to
     memcpy( connect_token->user_data, user_data, NETCODE_USER_DATA_BYTES );
 }
 
-void netcode_write_connect_token( const struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
+void netcode_write_connect_token( struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
 {
     (void) buffer_length;
 
@@ -455,7 +454,7 @@ void netcode_write_connect_token( const struct netcode_connect_token_t * connect
     assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, const uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
 {
     assert( buffer );
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
@@ -481,7 +480,7 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, const ui
     return 1;
 }
 
-int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, const uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, const uint8_t * key )
+int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
 {
 	assert( buffer );
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
@@ -509,7 +508,7 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, const ui
 	return 1;
 }
 
-int netcode_read_connect_token( const uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
+int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
 {
     assert( buffer );
     assert( connect_token );
@@ -574,7 +573,7 @@ struct netcode_challenge_token_t
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
 };
 
-void netcode_write_challenge_token( const struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
+void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
 {
     (void) buffer_length;
 
@@ -597,7 +596,7 @@ void netcode_write_challenge_token( const struct netcode_challenge_token_t * cha
     assert( buffer - start <= NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, const uint8_t * key )
+int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
 {
 	assert( buffer );
 	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
@@ -619,7 +618,7 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	return 1;
 }
 
-int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, const uint8_t * key )
+int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
 {
 	assert( buffer );
 	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
@@ -643,7 +642,7 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	return 1;
 }
 
-int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
+int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
 {
     assert( buffer );
     assert( challenge_token );
@@ -651,7 +650,7 @@ int netcode_read_challenge_token( const uint8_t * buffer, int buffer_length, str
     if ( buffer_length < NETCODE_CHALLENGE_TOKEN_BYTES )
         return 0;
 
-	const uint8_t * start = buffer;
+    uint8_t * start = buffer;
     
     challenge_token->client_id = netcode_read_uint64( &buffer );
 
@@ -927,7 +926,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 	if ( buffer_length < 1 )
 		return NULL;
 
-    const uint8_t * start = buffer;
+    uint8_t * start = buffer;
 
     uint8_t prefix_byte = netcode_read_uint8( &buffer );
 
@@ -1211,7 +1210,7 @@ void netcode_term()
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM     3
 #define NETCODE_CLIENT_STATE_CONNECTED                      4
     
-const char * netcode_client_state_name( int client_state )
+char * netcode_client_state_name( int client_state )
 {
     switch ( client_state )
     {
@@ -1299,7 +1298,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 	netcode_client_reset_before_next_connect( client );
 }
 
-void netcode_client_connect( struct netcode_client_t * client, const uint8_t * connect_data )
+void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_data )
 {
     assert( client );
 
@@ -1590,7 +1589,7 @@ int netcode_server_receive_packet_from_client( struct netcode_server_t * server,
 	return 0;
 }
 
-void netcode_server_send_packet_to_client( struct netcode_server_t * server, int client_index, const uint8_t * packet_data, int packet_size )
+void netcode_server_send_packet_to_client( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_size )
 {
 	(void) server;
 	(void) client_index;
@@ -1644,9 +1643,9 @@ void netcode_server_destroy( struct netcode_server_t * server )
 #include <memory.h>
 #include <time.h>
 
-static void check_handler( const char * condition, 
-                           const char * function,
-                           const char * file,
+static void check_handler( char * condition, 
+                           char * function,
+                           char * file,
                            int line )
 {
     printf( "check failed: ( %s ), function %s, file %s, line %d\n", condition, function, file, line );
@@ -1660,20 +1659,20 @@ static void check_handler( const char * condition,
     exit( 1 );
 }
 
-#define check( condition )                                                     \
-do                                                                             \
-{                                                                              \
-    if ( !(condition) )                                                        \
-    {                                                                          \
-        check_handler( #condition, __FUNCTION__, __FILE__, __LINE__ );         \
-    }                                                                          \
+#define check( condition )                                                                      \
+do                                                                                              \
+{                                                                                               \
+    if ( !(condition) )                                                                         \
+    {                                                                                           \
+        check_handler( #condition, (char*) __FUNCTION__, (char*) __FILE__, __LINE__ );          \
+    }                                                                                           \
 } while(0)
 
 static void test_endian()
 {
     uint32_t value = 0x11223344;
 
-    const char * bytes = (const char*) &value;
+    char * bytes = (char*) &value;
 
 #if NETCODE_LITTLE_ENDIAN
 

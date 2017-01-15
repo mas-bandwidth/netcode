@@ -35,7 +35,7 @@ struct netcode_client_t * netcode_client_create( double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
-void netcode_client_connect( struct netcode_client_t * client, const uint8_t * connect_data );
+void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_data );
 
 void netcode_client_receive_packets( struct netcode_client_t * client );
 
@@ -50,7 +50,7 @@ int netcode_client_get_client_index( struct netcode_client_t * client );
 
 int netcode_client_receive_packet_from_server( struct netcode_client_t * client, uint8_t * buffer, int buffer_length );
 
-void netcode_client_send_packet_to_server( struct netcode_client_t * client, const uint8_t * packet_data, int packet_size );
+void netcode_client_send_packet_to_server( struct netcode_client_t * client, uint8_t * packet_data, int packet_size );
 
 */
 
@@ -66,7 +66,7 @@ int netcode_server_is_client_connected( struct netcode_server_t * server, int cl
 
 int netcode_server_receive_packet_from_client( struct netcode_server_t * server, int client_index, uint8_t * buffer, int buffer_length );
 
-void netcode_server_send_packet_to_client( struct netcode_server_t * server, int client_index, const uint8_t * packet_data, int packet_size );
+void netcode_server_send_packet_to_client( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_size );
 
 void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index );
 
