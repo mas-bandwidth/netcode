@@ -69,8 +69,9 @@
 
 // ----------------------------------------------------------------
 
-#define NETCODE_ADDRESS_IPV4 0
-#define NETCODE_ADDRESS_IPV6 1
+#define NETCODE_ADDRESS_NONE 0
+#define NETCODE_ADDRESS_IPV4 1
+#define NETCODE_ADDRESS_IPV6 2
 
 struct netcode_address_t
 {
@@ -686,9 +687,12 @@ struct netcode_connection_request_packet_t
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
 };
 
+#define NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL 0
+
 struct netcode_connection_denied_packet_t
 {
     uint8_t packet_type;
+    uint32_t reason;
 };
 
 struct netcode_connection_challenge_packet_t
@@ -832,7 +836,8 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 		{
 			case NETCODE_CONNECTION_DENIED_PACKET:
 			{
-				// ...
+                struct netcode_connection_denied_packet_t * p = (struct netcode_connection_denied_packet_t*) packet;
+                netcode_write_uint32( &buffer, p->reason );
 			}
 			break;
 
@@ -1047,7 +1052,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         {
             case NETCODE_CONNECTION_DENIED_PACKET:
             {
-				if ( decrypted_bytes != 0 )
+				if ( decrypted_bytes != 4 )
 					return NULL;
 
                 struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) malloc( sizeof( struct netcode_connection_denied_packet_t ) );
@@ -1056,6 +1061,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 					return NULL;
 				
 				packet->packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+                packet->reason = netcode_read_uint32( &buffer );
 				
 				return packet;
             }
@@ -1239,6 +1245,9 @@ struct netcode_client_t
     int should_disconnect;
     int should_disconnect_state;
 	uint64_t sequence;
+    uint64_t client_id;
+    int client_index;
+
 };
 
 struct netcode_client_t * netcode_client_create( double time )
@@ -1257,6 +1266,8 @@ struct netcode_client_t * netcode_client_create( double time )
     client->should_disconnect = 0;
     client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
 	client->sequence = 0;
+    client->client_id = 0;
+    client->client_index = 0;
 
 	return client;
 }
@@ -1268,6 +1279,12 @@ void netcode_client_destroy( struct netcode_client_t * client )
     netcode_client_disconnect( client );
 
     free( client );
+}
+
+void netcode_client_set_state( struct netcode_client_t * client, int client_state )
+{
+    printf( "%s -> %s\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+    client->state = client_state;
 }
 
 void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
@@ -1283,19 +1300,19 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 {
     assert( client );
 
+    client->client_id = 0;
+    client->client_index = 0;
+
     // todo
     /*
-    m_clientId = 0;
-    m_clientIndex = -1;
     m_serverAddress = Address();
     m_serverAddressIndex = 0;
     m_numServerAddresses = 0;
     */
 
-	// todo: function to set client state is nice because I can print out all transitions
-    client->state = client_state;
+    netcode_client_set_state( client, client_state );
 
-	netcode_client_reset_before_next_connect( client );
+    netcode_client_reset_before_next_connect( client );
 }
 
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_data )
@@ -1309,11 +1326,10 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     (void) client;
     (void) connect_data;
 
-	// todo: temporary
+	// todo: this is temporary until the connect to multiple servers code is ported across
 	netcode_client_reset_before_next_connect( client );
 
-    // todo: function to set state is nice because I can use it to print all state transitions
-	client->state = NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST;
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 }
 
 void netcode_client_receive_packets( struct netcode_client_t * client )
@@ -1501,7 +1517,7 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     if ( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED || client->state == destination_state )
         return;
 
-    printf( "disconnected\n" );
+    printf( "client disconnected\n" );
 
     if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
     {
