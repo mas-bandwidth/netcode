@@ -2,11 +2,59 @@ DONE
 
     Added none type for address (0), so an address memset to 0 will be none by default.
 
-TODO
-
     For generality, the connection denied packet should have a reason. 
 
     Even if there is only one reason right now, in the future, their might be more. Be flexible.
+
+    Reason added.
+
+    Don't have time for a complete rewrite and refactor. Keep the code clean and as simple as possible.
+
+    Adding concept of allowed packet types on read.
+
+    This will allow early reject for any packet types that aren't supported, for example on the client, or on the server.
+
+    No point performing allocation for packet types we don't expect to receive.
+
+    Adding this now.
+
+    Continue cleaning up the client. Resolved: Don't change logic in the client from C++ unless necessary.
+
+    Next thing that needs to be done is define a fixed size format for the connect data. 
+
+    The connect data is the token, plus the unencrypted data which is sent to the client. It can be bigger than MTU because it's going to be sent across HTTPS.
+
+    It should be binary because:
+
+    a) I don't want JSON in this code
+    
+    b) The addresses are very large. Keep the address data binary and it's a lot more efficient.
+
+    Added code to write the connect data. Because of addresses it is variable length.
+
+    Should it be made fixed length, like the connect token is? Round up to 2k? 4k?
+
+    What's the worst case size?
+
+    We have fixed connect token size, which is 1400.
+
+    It's not going to be worse than 1400 + 1400 = 2800, because it doesn't duplicate the user data (512 bytes).
+
+    What if I just pad it to 4k? 4k is nothing, and this leaves room for future expansion.
+
+    Makes the read and write a bit easier too. Pad to zeros like the connect token.
+
+    Done.
+
+    Move the version info to the front of the connect data as well, so we can have a format that evolves.
+
+    ps. Good reason for the large block of data, it might be possible to include multiple connect tokens in there for future expansion (eg. MTU is a hard limit for each single connect token, but potentially a connect data could have multiple sets of connect tokens, and a list of addresses larger than would fit in a single connect token).
+
+TODO
+
+    Add an implementation for read connect data.
+
+    Add a unit test for read and write connect data.
     
     ------------------
 
