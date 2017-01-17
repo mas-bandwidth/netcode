@@ -67,6 +67,44 @@
 #define NETCODE_PACKET_SEND_RATE 10.0
 #define NETCODE_TIMEOUT_SECONDS 5.0
 
+// ------------------------------------------------------------------
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    #define NOMINMAX
+    #define _WINSOCK_DEPRECATED_NO_WARNINGS
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <ws2ipdef.h>
+    #pragma comment( lib, "WS2_32.lib" )
+
+    #ifdef SetPort
+    #undef SetPort
+    #endif // #ifdef SetPort
+
+    #include <iphlpapi.h>
+    #pragma comment( lib, "IPHLPAPI.lib" )
+    
+#elif NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+
+    #include <netdb.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <ifaddrs.h>
+    #include <net/if.h>
+    #include <fcntl.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <errno.h>
+    
+#else
+
+    #error netcode.io - unknown platform!
+
+#endif
+
 // ----------------------------------------------------------------
 
 #define NETCODE_ADDRESS_NONE 0
@@ -1297,7 +1335,10 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
     assert( connect_data );
 
     if ( buffer_length != NETCODE_CONNECT_DATA_BYTES )
+    {
+        printf( "read connect data: bad buffer length (%d)\n", buffer_length );
         return 0;
+    }
 
     netcode_read_bytes( &buffer, connect_data->version_info, NETCODE_VERSION_INFO_BYTES );
     if ( connect_data->version_info[0]  != 'N' || 
@@ -1314,7 +1355,7 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
          connect_data->version_info[11] != '0' ||
          connect_data->version_info[12] != '\0' )
     {
-        printf( "bad version info\n" );
+        printf( "read connect data: bad version info\n" );
         return 0;
     }
 
@@ -1330,11 +1371,11 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
 
     connect_data->num_server_addresses = netcode_read_uint32( &buffer );
 
-    if ( connect_data->num_server_addresses <= 0 )
+    if ( connect_data->num_server_addresses <= 0 || connect_data->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
+    {
+        printf( "read connect data: bad num server addresses (%d)\n", connect_data->num_server_addresses );
         return 0;
-
-    if ( connect_data->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
-        return 0;
+    }
 
     int i,j;
 
@@ -1360,6 +1401,7 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
         }
         else
         {
+            printf( "read connect data: bad address type (%d)\n", connect_data->server_addresses[i].type );
             return 0;
         }
     }

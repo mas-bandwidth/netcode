@@ -4,17 +4,17 @@ TODO
 
     ------------------
 
-    Work out how to get a connect token for client testing generated from C.
+    Would be nice if the connect data from the server included the timeout value for the client to use. This way it could be customizable server-side.
 
-    This is important because I want to move forward with the client connect without having to waste time integrating mbedtls.
+    Do it.
 
-    Added a test function to do this:
+    ------------------
 
-        netcode_generate_connect_data
+    Port across code to parse a string to an address.
 
-    The only caveat is that I need to port across code to parse an address from a string, in order to setup the server addresses.
+    ------------------
 
-    This is because I don't want to expose internal details to the netcode.h header, such as the netcode_address_t struct.
+    Implement netcode 
 
     ------------------
 
