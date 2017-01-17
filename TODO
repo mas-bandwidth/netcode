@@ -60,13 +60,13 @@ TODO
 
     Biggest things that need to be done for client:
 
-        0. actually generate and send "connection request packets" to the server, while in the connection request state
+        1. Read in the connect data in "connect" and extract and cache the data needed for connect.
 
-        1. work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
+        2. Actually generate and send "connection request packets" to the server, while in the connection request state
 
-        2. port across the code to process packets and comment most bits out
+        3. Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
 
-        3. get the actual connect working from real data (eg. a connect token + associated data... big sink hole here)
+        4. port across the code to process packets and comment most bits out
 
     -----------------
 
