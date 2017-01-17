@@ -1231,7 +1231,7 @@ struct netcode_connect_data_t
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
 };
 
-void write_connect_data( struct netcode_connect_data_t * connect_data, uint8_t * buffer, int buffer_length )
+void netcode_write_connect_data( struct netcode_connect_data_t * connect_data, uint8_t * buffer, int buffer_length )
 {
     assert( connect_data );
     assert( buffer );
@@ -1252,6 +1252,8 @@ void write_connect_data( struct netcode_connect_data_t * connect_data, uint8_t *
     netcode_write_bytes( &buffer, connect_data->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
     int i,j;
+
+    netcode_write_uint32( &buffer, connect_data->num_server_addresses );
 
     for ( i = 0; i < connect_data->num_server_addresses; ++i )
     {
@@ -1290,7 +1292,7 @@ void write_connect_data( struct netcode_connect_data_t * connect_data, uint8_t *
     netcode_write_uint32( &buffer, connect_data->num_server_addresses );
 }
 
-int read_connect_data( uint8_t * buffer, int buffer_length, struct netcode_connect_data_t * connect_data )
+int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netcode_connect_data_t * connect_data )
 {
     assert( buffer );
     assert( connect_data );
@@ -1323,6 +1325,8 @@ int read_connect_data( uint8_t * buffer, int buffer_length, struct netcode_conne
     connect_data->connect_token_expire_timestamp = netcode_read_uint64( &buffer );
 
     connect_data->connect_token_sequence = netcode_read_uint64( &buffer );
+
+    netcode_read_bytes( &buffer, connect_data->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
     connect_data->num_server_addresses = netcode_read_uint32( &buffer );
 
@@ -2352,20 +2356,20 @@ void test_connect_data()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
 
-    struct netcode_connect_token_t input_token;
+    struct netcode_connect_token_t connect_token;
 
-    netcode_generate_connect_token( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token( &connect_token, TEST_CLIENT_ID, 1, &server_address, user_data );
 
-    check( input_token.client_id == TEST_CLIENT_ID );
-    check( input_token.num_server_addresses == 1 );
-    check( memcmp( input_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
-    check( netcode_address_is_equal( &input_token.server_addresses[0], &server_address ) );
+    check( connect_token.client_id == TEST_CLIENT_ID );
+    check( connect_token.num_server_addresses == 1 );
+    check( memcmp( connect_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
+    check( netcode_address_is_equal( &connect_token.server_addresses[0], &server_address ) );
 
     // write it to a buffer
 
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
 
-    netcode_write_connect_token( &input_token, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_connect_token( &connect_token, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
     // encrypt the buffer
 
@@ -2379,20 +2383,41 @@ void test_connect_data()
 
     // wrap the connect token inside a connect data
 
-    struct netcode_connect_data_t connect_data;
+    struct netcode_connect_data_t input_connect_data;
 
-    memcpy( connect_data.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-    connect_data.protocol_id = TEST_PROTOCOL_ID;
-    connect_data.connect_token_create_timestamp = create_timestamp;
-    connect_data.connect_token_expire_timestamp = expire_timestamp;
-    connect_data.connect_token_sequence = sequence;
-    memcpy( connect_data.connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
-    connect_data.num_server_addresses = 1;
-    connect_data.server_addresses[0] = server_address;
-    memcpy( connect_data.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES );
-    memcpy( connect_data.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES );
+    memcpy( input_connect_data.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    input_connect_data.protocol_id = TEST_PROTOCOL_ID;
+    input_connect_data.connect_token_create_timestamp = create_timestamp;
+    input_connect_data.connect_token_expire_timestamp = expire_timestamp;
+    input_connect_data.connect_token_sequence = sequence;
+    memcpy( input_connect_data.connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    input_connect_data.num_server_addresses = 1;
+    input_connect_data.server_addresses[0] = server_address;
+    memcpy( input_connect_data.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
+    memcpy( input_connect_data.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
 
-    // todo
+    // write the connect data to a buffer
+
+    uint8_t buffer[NETCODE_CONNECT_DATA_BYTES];
+
+    netcode_write_connect_data( &input_connect_data, buffer, NETCODE_CONNECT_DATA_BYTES );
+
+    // read the buffer back in
+
+    struct netcode_connect_data_t output_connect_data;
+
+    check( netcode_read_connect_data( buffer, NETCODE_CONNECT_DATA_BYTES, &output_connect_data ) == 1 );
+
+    // make sure the connect data matches what was written
+
+    check( memcmp( output_connect_data.version_info, input_connect_data.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
+    check( output_connect_data.protocol_id == input_connect_data.protocol_id );
+    check( output_connect_data.connect_token_create_timestamp == input_connect_data.connect_token_create_timestamp );
+    check( output_connect_data.connect_token_expire_timestamp == input_connect_data.connect_token_expire_timestamp );
+    check( output_connect_data.connect_token_sequence == input_connect_data.connect_token_sequence );
+    check( memcmp( output_connect_data.connect_token_data, input_connect_data.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
+    check( output_connect_data.num_server_addresses == input_connect_data.num_server_addresses );
+    check( netcode_address_is_equal( &output_connect_data.server_addresses[0], &input_connect_data.server_addresses[0] ) );
 }
 
 #define RUN_TEST( test_function )                                           \

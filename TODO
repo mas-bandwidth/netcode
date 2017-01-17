@@ -50,12 +50,12 @@ DONE
 
     ps. Good reason for the large block of data, it might be possible to include multiple connect tokens in there for future expansion (eg. MTU is a hard limit for each single connect token, but potentially a connect data could have multiple sets of connect tokens, and a list of addresses larger than would fit in a single connect token).
 
-TODO
-
     Add an implementation for read connect data.
 
     Add a unit test for read and write connect data.
-    
+
+TODO
+
     ------------------
 
     Biggest things that need to be done for client:
@@ -67,20 +67,6 @@ TODO
         2. port across the code to process packets and comment most bits out
 
         3. get the actual connect working from real data (eg. a connect token + associated data... big sink hole here)
-
-    I feel that the client is starting to get complex, although this is a reference implementation it needs to be:
-
-        a) testable
-
-        b) readable
-
-    This is not write only code.
-
-    Make sure the code that is written is as simple as possible, and readable. It's starting to jump around a bit with the literal porting from C++. Think if this can be simplified in some way.
-
-    -----------------
-
-    Specifically, the setting client state in one place is important for logging so do that. I need this printed out.
 
     -----------------
 
