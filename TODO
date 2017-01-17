@@ -62,6 +62,8 @@ DONE
 
 TODO
 
+        3. Add code to send the other packet types.
+
         3. Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
 
         4. port across the code to process packets and comment most bits out

@@ -1315,6 +1315,7 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
          connect_data->version_info[11] != '0' ||
          connect_data->version_info[12] != '\0' )
     {
+        printf( "bad version info\n" );
         return 0;
     }
 
@@ -1518,6 +1519,16 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 	// todo
 }
 
+void netcode_client_send_packet_to_server( struct netcode_client_t * client, void * packet )
+{
+    assert( client );
+
+    // todo: actually send packet to server
+    (void) packet;
+
+    client->last_packet_send_time = client->time;
+}
+
 void netcode_client_send_packets( struct netcode_client_t * client )
 {
 	assert( client );
@@ -1540,7 +1551,7 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             packet.connect_token_sequence = client->connect_data.connect_token_sequence;
             memcpy( packet.connect_token_data, client->connect_data.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-            // todo: send packet to server
+            netcode_client_send_packet_to_server( client, &packet );
         }
         break;
 

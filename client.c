@@ -48,7 +48,7 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    netcode_client_connect( client, (const uint8_t*) "connect data" );
+    netcode_client_connect( client, (uint8_t*) "connect data" );
 
 	for ( int i = 0; i < 10; ++i )
 	{
