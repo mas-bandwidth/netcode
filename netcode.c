@@ -62,6 +62,7 @@
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
 #define NETCODE_MAX_PAYLOAD_BYTES 1400
+#define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -121,6 +122,92 @@ struct netcode_address_t
     } address;
     uint16_t port;
 };
+
+static uint16_t bswap_uint16( uint16_t value )
+{
+    return ( ( value & 0xFF ) << 8 ) | ( ( value & 0xFF00 ) >> 8 );
+}
+
+int netcode_parse_address( const char * address_string_in, struct netcode_address_t * address )
+{
+    assert( address_string_in );
+    assert( address );
+
+    memset( address, 0, sizeof( struct netcode_address_t ) );
+
+    // first try to parse the string as an IPv6 address:
+    // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
+    // 2. otherwise try to parse as a raw IPv6 address using inet_pton
+
+    char buffer[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    char * address_string = buffer;
+    strncpy( address_string, address_string_in, NETCODE_MAX_ADDRESS_STRING_LENGTH - 1 );
+    address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH-1] = '\0';
+
+    int address_string_length = (int) strlen( address_string );
+
+    if ( address_string[0] == '[' )
+    {
+        const int base_index = address_string_length - 1;
+        
+        for ( int i = 0; i < 6; ++i )         // note: no need to search past 6 characters as ":65535" is longest possible port value
+        {
+            const int index = base_index - i;
+            if ( index < 3 )
+                return 0;
+            if ( address_string[index] == ':' )
+            {
+                address->port = (uint16_t) ( atoi( &address_string[index + 1] ) );
+                address_string[index-1] = '\0';
+            }
+        }
+        address_string += 1;
+    }
+
+    struct in6_addr sockaddr6;
+    
+    if ( inet_pton( AF_INET6, address_string, &sockaddr6 ) == 1 )
+    {
+        address->type = NETCODE_ADDRESS_IPV6;
+        for ( int i = 0; i < 8; ++i )
+        {
+            address->address.ipv6[i] = bswap_uint16( ( (uint16_t*) &sockaddr6 ) [i] );
+        }
+        return 1;
+    }
+
+    // otherwise it's probably an IPv4 address:
+    // 1. look for ":portnum", if found save the portnum and strip it out
+    // 2. parse remaining ipv4 address via inet_pton
+
+    address_string_length = (int) strlen( address_string );
+    const int base_index = address_string_length - 1;
+    for ( int i = 0; i < 6; ++i )
+    {
+        const int index = base_index - i;
+        if ( index < 0 )
+            break;
+        if ( address_string[index] == ':' )
+        {
+            address->port = (uint16_t) atoi( &address_string[index+1] );
+            address_string[index] = '\0';
+        }
+    }
+
+    struct sockaddr_in sockaddr4;
+    if ( inet_pton( AF_INET, address_string, &sockaddr4.sin_addr ) == 1 )
+    {
+        address->type = NETCODE_ADDRESS_IPV4;
+        address->address.ipv4[3] = ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24;
+        address->address.ipv4[2] = ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16;
+        address->address.ipv4[1] = ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8;
+        address->address.ipv4[0] = ( sockaddr4.sin_addr.s_addr & 0x000000FF ) >> 0;
+        return 1;
+    }
+
+    return 0;
+}
 
 int netcode_address_is_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
@@ -1982,6 +2069,113 @@ static void test_sequence()
     check( netcode_sequence_number_bytes_required( 0x1122334455667788 ) == 8 );
 }
 
+static void test_address()
+{
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "107.77.207.77", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV4 );
+        check( address.port == 0 );
+        check( address.address.ipv4[0] == 107 );
+        check( address.address.ipv4[1] == 77 );
+        check( address.address.ipv4[2] == 207 );
+        check( address.address.ipv4[3] == 77 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "127.0.0.1", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV4 );
+        check( address.port == 0 );
+        check( address.address.ipv4[0] == 127 );
+        check( address.address.ipv4[1] == 0 );
+        check( address.address.ipv4[2] == 0 );
+        check( address.address.ipv4[3] == 1 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "107.77.207.77:40000", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV4 );
+        check( address.port == 40000 );
+        check( address.address.ipv4[0] == 107 );
+        check( address.address.ipv4[1] == 77 );
+        check( address.address.ipv4[2] == 207 );
+        check( address.address.ipv4[3] == 77 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "127.0.0.1:40000", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV4 );
+        check( address.port == 40000 );
+        check( address.address.ipv4[0] == 127 );
+        check( address.address.ipv4[1] == 0 );
+        check( address.address.ipv4[2] == 0 );
+        check( address.address.ipv4[3] == 1 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "fe80::202:b3ff:fe1e:8329", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 0 );
+        check( address.address.ipv6[0] == 0xfe80 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0202 );
+        check( address.address.ipv6[5] == 0xb3ff );
+        check( address.address.ipv6[6] == 0xfe1e );
+        check( address.address.ipv6[7] == 0x8329 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "::1", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 0 );
+        check( address.address.ipv6[0] == 0x0000 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0000 );
+        check( address.address.ipv6[5] == 0x0000 );
+        check( address.address.ipv6[6] == 0x0000 );
+        check( address.address.ipv6[7] == 0x0001 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "[fe80::202:b3ff:fe1e:8329]:40000", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 40000 );
+        check( address.address.ipv6[0] == 0xfe80 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0202 );
+        check( address.address.ipv6[5] == 0xb3ff );
+        check( address.address.ipv6[6] == 0xfe1e );
+        check( address.address.ipv6[7] == 0x8329 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "[::1]:40000", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 40000 );
+        check( address.address.ipv6[0] == 0x0000 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0000 );
+        check( address.address.ipv6[5] == 0x0000 );
+        check( address.address.ipv6[6] == 0x0000 );
+        check( address.address.ipv6[7] == 0x0001 );
+    }
+}
+
 #define TEST_PROTOCOL_ID    0x1122334455667788LL
 #define TEST_CLIENT_ID      0x1LL
 #define TEST_SERVER_PORT    40000
@@ -2529,6 +2723,7 @@ void test_connect_data()
 void netcode_test()
 {
     RUN_TEST( test_endian );
+    RUN_TEST( test_address );
     RUN_TEST( test_sequence );
     RUN_TEST( test_connect_token );
     RUN_TEST( test_challenge_token );
