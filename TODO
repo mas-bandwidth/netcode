@@ -14,19 +14,23 @@ DONE
 
     Done.
 
+    Port across code to parse a string to an address.
+
 TODO
 
     ------------------
 
-    Port across code to parse a string to an address.
+    Implement code to parse the array of addresses and generate a connect token given a private key.
 
-    ------------------
-
-    Implement netcode 
+    This will unblock further work on the client state machine, ideally I would be able to finish the client by end of day today, at minimum.
 
     ------------------
 
     Add code to send the other packet types.
+
+    ------------------
+
+    Work out a design for the 
 
     ------------------
 

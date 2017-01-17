@@ -139,9 +139,11 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
     // 2. otherwise try to parse as a raw IPv6 address using inet_pton
 
-    char buffer[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+    #define NETCODE_ADDRESS_BUFFER_SAFETY 32
 
-    char * address_string = buffer;
+    char buffer[NETCODE_MAX_ADDRESS_STRING_LENGTH + NETCODE_ADDRESS_BUFFER_SAFETY*2];
+
+    char * address_string = buffer + NETCODE_ADDRESS_BUFFER_SAFETY;
     strncpy( address_string, address_string_in, NETCODE_MAX_ADDRESS_STRING_LENGTH - 1 );
     address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH-1] = '\0';
 
@@ -2071,6 +2073,15 @@ static void test_sequence()
 
 static void test_address()
 {
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "", &address ) == 0 );
+        check( netcode_parse_address( "[", &address ) == 0 );
+        check( netcode_parse_address( "[]", &address ) == 0 );
+        check( netcode_parse_address( "[]:", &address ) == 0 );
+        check( netcode_parse_address( ":", &address ) == 0 );
+    }
+
     {
         struct netcode_address_t address;
         check( netcode_parse_address( "107.77.207.77", &address ) );
