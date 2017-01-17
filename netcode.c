@@ -1266,6 +1266,7 @@ struct netcode_connect_data_t
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+    int timeout_seconds;
 };
 
 void netcode_write_connect_data( struct netcode_connect_data_t * connect_data, uint8_t * buffer, int buffer_length )
@@ -1326,7 +1327,7 @@ void netcode_write_connect_data( struct netcode_connect_data_t * connect_data, u
 
     memset( buffer, 0, NETCODE_CONNECT_DATA_BYTES - ( buffer - start ) );
 
-    netcode_write_uint32( &buffer, connect_data->num_server_addresses );
+    netcode_write_uint32( &buffer, connect_data->timeout_seconds );
 }
 
 int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netcode_connect_data_t * connect_data )
@@ -1410,11 +1411,14 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
 
     netcode_read_bytes( &buffer, connect_data->server_to_client_key, NETCODE_KEY_BYTES );
 
+    connect_data->timeout_seconds = (int) netcode_read_uint32( &buffer );
+    
     return 1;
 }
 
 // ----------------------------------------------------------------
 
+#define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED          -7
 #define NETCODE_CLIENT_STATE_INVALID_CONNECT_DATA           -6
 #define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT           -5
 #define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT     -4
@@ -1452,6 +1456,7 @@ struct netcode_client_t
 {
 	int state;
 	double time;
+    double connect_start_time;
 	double last_packet_send_time;
 	double last_packet_receive_time;
     int should_disconnect;
@@ -1474,6 +1479,7 @@ struct netcode_client_t * netcode_client_create( double time )
 
 	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;
+    client->connect_start_time = 0.0;
     client->last_packet_send_time = -1000.0;
     client->last_packet_receive_time = -1000.0;
     client->should_disconnect = 0;
@@ -1515,8 +1521,9 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     assert( client );
 
     client->client_index = 0;
-    memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
+    client->connect_start_time = 0.0;
     client->server_address_index = 0;
+    memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->connect_data, 0, sizeof( struct netcode_connect_data_t ) );
 
     // todo: clear context (send and receive keys)
@@ -1662,6 +1669,18 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
 
     client->time = time;
 
+    if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
+    {
+        int connect_token_expire_seconds = ( client->connect_data.connect_token_expire_timestamp - client->connect_data.connect_token_create_timestamp );
+        
+        if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
+        {
+            printf( "connect token expired\n" );
+            netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED, 0 );
+            return;
+        }
+    }
+
     if ( client->should_disconnect )
     {
         printf( "should disconnect -> %s\n", netcode_client_state_name( client->should_disconnect_state ) );
@@ -1675,7 +1694,7 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
     {
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:
         {
-            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            if ( client->last_packet_receive_time + client->connect_data.timeout_seconds < time )
             {
                 printf( "connection request timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -1688,7 +1707,7 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
 
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:
         {
-            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            if ( client->last_packet_receive_time + client->connect_data.timeout_seconds < time )
             {
                 printf( "connection response timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -1701,7 +1720,7 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
 
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM:
         {
-            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            if ( client->last_packet_receive_time + client->connect_data.timeout_seconds < time )
             {
                 printf( "connection confirm timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -1714,7 +1733,7 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
 
 		case NETCODE_CLIENT_STATE_CONNECTED:
         {
-            if ( client->last_packet_receive_time + NETCODE_TIMEOUT_SECONDS < time )
+            if ( client->last_packet_receive_time + client->connect_data.timeout_seconds < time )
             {
                 printf( "connection timed out\n" );
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT, 0 );
@@ -2470,6 +2489,7 @@ void test_connect_data()
     input_connect_data.server_addresses[0] = server_address;
     memcpy( input_connect_data.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( input_connect_data.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
+    input_connect_data.timeout_seconds = NETCODE_TIMEOUT_SECONDS;
 
     // write the connect data to a buffer
 
@@ -2493,6 +2513,9 @@ void test_connect_data()
     check( memcmp( output_connect_data.connect_token_data, input_connect_data.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
     check( output_connect_data.num_server_addresses == input_connect_data.num_server_addresses );
     check( netcode_address_is_equal( &output_connect_data.server_addresses[0], &input_connect_data.server_addresses[0] ) );
+    check( memcmp( output_connect_data.client_to_server_key, input_connect_data.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_connect_data.server_to_client_key, input_connect_data.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
+    check( output_connect_data.timeout_seconds == input_connect_data.timeout_seconds );
 }
 
 #define RUN_TEST( test_function )                                           \

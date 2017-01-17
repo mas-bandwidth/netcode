@@ -1,12 +1,20 @@
 DONE
 
-TODO
+    Added some error logs when the connect data fails to read. Will want to see these in the reference client for debug purposes.
 
-    ------------------
+    Later on going to want to add this 
 
     Would be nice if the connect data from the server included the timeout value for the client to use. This way it could be customizable server-side.
 
-    Do it.
+    Done.
+
+    Add code to track time connect started, and if the connect goes on longer than the connect data expire time (expire timestamp - create timestamp), timout the connect to a new state "connect token expired".
+
+    This avoids a bad situation where clients with lots of servers in their list keep trying to use the connect token to connect, which will be ignored by the server, therefore client will wait up to timeout (5 seconds) * number of servers left to try after timeout.
+
+    Done.
+
+TODO
 
     ------------------
 
