@@ -27,7 +27,7 @@
 
 #include <stdint.h>
 
-#define NETCODE_CONNECT_DATA_BYTES 4096
+#define NETCODE_SERVER_INFO_BYTES 4096
 
 int netcode_init();
 
@@ -37,7 +37,7 @@ struct netcode_client_t * netcode_client_create( double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
-void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_data );
+void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_info );
 
 void netcode_client_receive_packets( struct netcode_client_t * client );
 
@@ -47,6 +47,6 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
 
 void netcode_client_disconnect( struct netcode_client_t * client );
 
-int netcode_generate_connect_data( struct netcode_client_t * client, int num_server_addresses, char ** server_addresses, int expire_seconds, char * private_key, uint8_t * connect_data );
+int netcode_generate_server_info( struct netcode_client_t * client, int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, char * private_key, uint8_t * server_info );
 
 #endif // #ifndef NETCODE_H

@@ -16,13 +16,25 @@ DONE
 
     Port across code to parse a string to an address.
 
+    Implement code to parse the array of addresses and generate a connect token given a private key.
+
+    This will unblock further work on the client state machine, ideally I would be able to finish the client by end of day today, at minimum.
+
+    Maybe connect data should be renamed "server info"?
+
+    I dislike the similarity between "connect data" and "connect token".
+
+    I like the name server info. It's describes the servers to connect to. It *contains* a connect token. Its distinct enough to avoid confusion.
+
+    Renaming now. Completed. I think this is much better, especially when people "talk" about this protocol.
+
+    A "server info" is very distinct in naming from "connect token". They would not be confused.
+
 TODO
 
     ------------------
 
-    Implement code to parse the array of addresses and generate a connect token given a private key.
-
-    This will unblock further work on the client state machine, ideally I would be able to finish the client by end of day today, at minimum.
+    Implement client connecting with a generated connect data.
 
     ------------------
 
