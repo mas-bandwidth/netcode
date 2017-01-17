@@ -62,11 +62,33 @@ DONE
 
 TODO
 
-        3. Add code to send the other packet types.
+    ------------------
 
-        3. Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
+    Work out how to get a connect token for client testing generated from C.
 
-        4. port across the code to process packets and comment most bits out
+    This is important because I want to move forward with the client connect without having to waste time integrating mbedtls.
+
+    Added a test function to do this:
+
+        netcode_generate_connect_data
+
+    The only caveat is that I need to port across code to parse an address from a string, in order to setup the server addresses.
+
+    This is because I don't want to expose internal details to the netcode.h header, such as the netcode_address_t struct.
+
+    ------------------
+
+    Add code to send the other packet types.
+
+    ------------------
+
+    Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept).
+
+    I'm thinking a callback function to perform the actual send which by default goes through a socket, but can be overridden to do something else (eg. simulator or pass directly to the server).
+
+    -----------------
+
+    Port across the code to process packets.
 
     -----------------
 

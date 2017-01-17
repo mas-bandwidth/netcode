@@ -62,7 +62,6 @@
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
 #define NETCODE_MAX_PAYLOAD_BYTES 1400
-#define NETCODE_CONNECT_DATA_BYTES 4096
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -1825,6 +1824,29 @@ void netcode_server_destroy( struct netcode_server_t * server )
 	// ...
 
     free( server );
+}
+
+// ----------------------------------------------------------------
+
+int netcode_generate_connect_data( struct netcode_client_t * client, int num_server_addresses, char ** server_addresses, int expire_seconds, char * private_key, uint8_t * connect_data )
+{
+    assert( client );
+    assert( num_server_addresses > 0 );
+    assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
+    assert( server_addresses );
+    assert( private_key );
+    assert( connect_data );
+
+    (void) client;
+    (void) num_server_addresses;
+    (void) server_addresses;
+    (void) expire_seconds;
+    (void) private_key;
+    (void) connect_data;
+
+    // ...
+
+    return 0;
 }
 
 // ---------------------------------------------------------------
