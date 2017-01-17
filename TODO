@@ -54,15 +54,13 @@ DONE
 
     Add a unit test for read and write connect data.
 
-TODO
-
-    ------------------
-
     Biggest things that need to be done for client:
 
         1. Read in the connect data in "connect" and extract and cache the data needed for connect.
 
-        2. Actually generate and send "connection request packets" to the server, while in the connection request state
+        2. Actually generate and "connection request packets" to the server, while in the connection request state
+
+TODO
 
         3. Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept)
 

@@ -1373,6 +1373,7 @@ int netcode_read_connect_data( uint8_t * buffer, int buffer_length, struct netco
 
 // ----------------------------------------------------------------
 
+#define NETCODE_CLIENT_STATE_INVALID_CONNECT_DATA           -6
 #define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT           -5
 #define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT     -4
 #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT    -3
@@ -1388,6 +1389,7 @@ char * netcode_client_state_name( int client_state )
 {
     switch ( client_state )
     {
+        case NETCODE_CLIENT_STATE_INVALID_CONNECT_DATA:             return "invalid connect data";
         case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:             return "connection timed out";
         case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:       return "connection request timeout";
         case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:      return "connection response timeout";
@@ -1413,11 +1415,10 @@ struct netcode_client_t
     int should_disconnect;
     int should_disconnect_state;
 	uint64_t sequence;
-    uint64_t client_id;
     int client_index;
-    struct netcode_address_t server_address;
     int server_address_index;
-    int num_server_addresses;
+    struct netcode_address_t server_address;
+    struct netcode_connect_data_t connect_data;
 };
 
 struct netcode_client_t * netcode_client_create( double time )
@@ -1436,11 +1437,9 @@ struct netcode_client_t * netcode_client_create( double time )
     client->should_disconnect = 0;
     client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
 	client->sequence = 0;
-    client->client_id = 0;
     client->client_index = 0;
-    memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     client->server_address_index = 0;
-    client->num_server_addresses = 0;
+    memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
 
 	return client;
 }
@@ -1473,11 +1472,10 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 {
     assert( client );
 
-    client->client_id = 0;
     client->client_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     client->server_address_index = 0;
-    client->num_server_addresses = 0;
+    memset( &client->connect_data, 0, sizeof( struct netcode_connect_data_t ) );
 
     // todo: clear context (send and receive keys)
 
@@ -1486,18 +1484,26 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     netcode_client_reset_before_next_connect( client );
 }
 
+void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
+
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_data )
 {
     assert( client );
+    assert( connect_data );
 
 	netcode_client_disconnect( client );
 
-    // todo: we're going to need a binary format for the connect data here (combo of public info and private connect token)
+    if ( !netcode_read_connect_data( connect_data, NETCODE_CONNECT_DATA_BYTES, &client->connect_data ) )
+    {
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_DATA );
+        return;
+    }
 
-    (void) client;
-    (void) connect_data;            // todo: connect data is not the best name. what exactly is this?
+    client->server_address_index = 0;
+    client->server_address = client->connect_data.server_addresses[0];
 
-	// todo: this is temporary until the connect to multiple servers code is ported across
+    // todo: setup context send and receive keys
+
 	netcode_client_reset_before_next_connect( client );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
@@ -1525,20 +1531,16 @@ void netcode_client_send_packets( struct netcode_client_t * client )
 
             printf( "send connection request packet\n" );
 
-            // todo: create connection request packet
-            
-            /*
-            ConnectionRequestPacket * packet = (ConnectionRequestPacket*) CreatePacket( CLIENT_SERVER_PACKET_CONNECTION_REQUEST );
+            struct netcode_connection_request_packet_t packet;
 
-            if ( packet )
-            {
-                packet->connectTokenExpireTimestamp = m_connectTokenExpireTimestamp;
-                memcpy( packet->connectTokenData, m_connectTokenData, ConnectTokenBytes );
-                memcpy( packet->connectTokenNonce, m_connectTokenNonce, NonceBytes );
+            packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+            memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+            packet.protocol_id = client->connect_data.protocol_id;
+            packet.connect_token_expire_timestamp = client->connect_data.connect_token_expire_timestamp;
+            packet.connect_token_sequence = client->connect_data.connect_token_sequence;
+            memcpy( packet.connect_token_data, client->connect_data.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-                SendPacketToServer_Internal( packet );
-            }
-            */
+            // todo: send packet to server
         }
         break;
 
@@ -1601,8 +1603,6 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
     // todo
     return 0;
 }
-
-void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
 
 void netcode_client_advance_time( struct netcode_client_t * client, double time )
 {
