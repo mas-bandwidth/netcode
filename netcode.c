@@ -53,10 +53,6 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_MAX_SERVERS_PER_CONNECT 16
-#define NETCODE_KEY_BYTES 32
-#define NETCODE_MAC_BYTES 16
-#define NETCODE_NONCE_BYTES 8
 #define NETCODE_CONNECT_TOKEN_BYTES 1400
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 #define NETCODE_VERSION_INFO_BYTES 13
@@ -1506,19 +1502,6 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
 }
 
 // ----------------------------------------------------------------
-
-#define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED          -7
-#define NETCODE_CLIENT_STATE_INVALID_SERVER_INFO            -6
-#define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT           -5
-#define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT     -4
-#define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT    -3
-#define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT     -2
-#define NETCODE_CLIENT_STATE_CONNECTION_DENIED              -1
-#define NETCODE_CLIENT_STATE_DISCONNECTED                   0
-#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST     1
-#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE    2
-#define NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM     3
-#define NETCODE_CLIENT_STATE_CONNECTED                      4
     
 char * netcode_client_state_name( int client_state )
 {
@@ -1873,6 +1856,13 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     netcode_client_reset_connection_data( client, destination_state );
 }
 
+int netcode_client_state( struct netcode_client_t * client )
+{
+    assert( client );
+
+    return client->state;
+}
+
 // ----------------------------------------------------------------
 
 struct netcode_server_t
@@ -1979,9 +1969,8 @@ void netcode_server_destroy( struct netcode_server_t * server )
 
 // ----------------------------------------------------------------
 
-int netcode_generate_server_info( struct netcode_client_t * client, int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, char * private_key, uint8_t * output_buffer )
+int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint8_t * private_key, uint8_t * output_buffer )
 {
-    assert( client );
     assert( num_server_addresses > 0 );
     assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
     assert( server_addresses );
@@ -2129,6 +2118,18 @@ static void test_address()
         check( netcode_parse_address( "[]", &address ) == 0 );
         check( netcode_parse_address( "[]:", &address ) == 0 );
         check( netcode_parse_address( ":", &address ) == 0 );
+        check( netcode_parse_address( "1", &address ) == 0 );
+        check( netcode_parse_address( "12", &address ) == 0 );
+        check( netcode_parse_address( "123", &address ) == 0 );
+        check( netcode_parse_address( "1234", &address ) == 0 );
+        check( netcode_parse_address( "1234.0.12313.0000", &address ) == 0 );
+        check( netcode_parse_address( "1234.0.12313.0000.0.0.0.0.0", &address ) == 0 );
+        check( netcode_parse_address( "1312313:123131:1312313:123131:1312313:123131:1312313:123131:1312313:123131:1312313:123131", &address ) == 0 );
+        check( netcode_parse_address( ".", &address ) == 0 );
+        check( netcode_parse_address( "..", &address ) == 0 );
+        check( netcode_parse_address( "...", &address ) == 0 );
+        check( netcode_parse_address( "....", &address ) == 0 );
+        check( netcode_parse_address( ".....", &address ) == 0 );
     }
 
     {

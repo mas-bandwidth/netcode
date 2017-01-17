@@ -28,13 +28,11 @@ DONE
 
     Renaming now. Completed. I think this is much better, especially when people "talk" about this protocol.
 
-    A "server info" is very distinct in naming from "connect token". They would not be confused.
-
-TODO
-
-    ------------------
+    A "server info" is very distinct in naming from "connect token". They would not be confused with each other.
 
     Implement client connecting with a generated connect data.
+
+TODO
 
     ------------------
 
@@ -42,7 +40,11 @@ TODO
 
     ------------------
 
-    Work out a design for the 
+    Work out a design for the client and how it waits for the connection confirm
+
+    Basically, I think it works like this
+
+    On the server, a 'pending' flag is set until the client replies with either a payload packet or a keep-alive packet.
 
     ------------------
 

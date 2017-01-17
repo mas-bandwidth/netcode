@@ -26,7 +26,10 @@
 #include <stdio.h>
 #include <assert.h>
 
-extern void netcode_test();
+static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea, 
+                                                  0x9a, 0x65, 0x62, 0xf6, 0x6f, 0x2b, 0x30, 0xe4, 
+                                                  0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
+                                                  0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1 };
 
 int main( int argc, char ** argv )
 {
@@ -48,17 +51,30 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    netcode_client_connect( client, (uint8_t*) "connect data" );
+    #define TEST_CONNECT_TOKEN_EXPIRY 30
+    #define TEST_CLIENT_ID 1000
+    #define TEST_PROTOCOL_ID 0x1122334455667788
 
-	for ( int i = 0; i < 10; ++i )
+    char * server_address = "[::1]:50000";
+
+    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+
+    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, server_info ) )
+    {
+        printf( "error: failed to generate server info\n" );
+        return 1;
+    }
+
+    netcode_client_connect( client, server_info );
+
+	while ( 1 )
 	{
-		printf( "%d: ...\n", i );
-
 		netcode_client_receive_packets( client );
 
 		netcode_client_send_packets( client );
 
-        // todo: if client is in error state break
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
 
 		// todo: sleep
 
