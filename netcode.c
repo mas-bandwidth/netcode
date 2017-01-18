@@ -58,8 +58,8 @@
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
-#define NETCODE_MAX_PACKET_BYTES 1420
-#define NETCODE_MAX_PAYLOAD_BYTES 1400
+#define NETCODE_MAX_PACKET_BYTES 1240
+#define NETCODE_MAX_PAYLOAD_BYTES 1200
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
@@ -1165,7 +1165,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     {
         // connection request packet: first byte is zero
 
-        assert( buffer_length >= 1 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer_length >= 1 + 13 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES );
 
         struct netcode_connection_request_packet_t * p = (struct netcode_connection_request_packet_t*) packet;
 
@@ -1907,6 +1907,10 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
     struct netcode_packet_context_t context;
 
     int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &context );
+
+    printf( "packet bytes = %d\n", packet_bytes );
+
+    assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
     netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
 
