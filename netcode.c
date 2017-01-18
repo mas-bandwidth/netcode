@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
+#include <stdio.h>
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -121,11 +122,6 @@ struct netcode_address_t
     uint16_t port;
 };
 
-static uint16_t bswap_uint16( uint16_t value )
-{
-    return ( ( value & 0xFF ) << 8 ) | ( ( value & 0xFF00 ) >> 8 );
-}
-
 int netcode_parse_address( const char * address_string_in, struct netcode_address_t * address )
 {
     assert( address_string_in );
@@ -166,13 +162,12 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     }
 
     struct in6_addr sockaddr6;
-    
     if ( inet_pton( AF_INET6, address_string, &sockaddr6 ) == 1 )
     {
         address->type = NETCODE_ADDRESS_IPV6;
         for ( int i = 0; i < 8; ++i )
         {
-            address->address.ipv6[i] = bswap_uint16( ( (uint16_t*) &sockaddr6 ) [i] );
+            address->address.ipv6[i] = ntohs( ( (uint16_t*) &sockaddr6 ) [i] );
         }
         return 1;
     }
@@ -297,8 +292,8 @@ struct netcode_socket_t
     netcode_socket_handle_t handle;
 };
 
-#define NETCODE_SOCKET_SNDBUF_SIZE      1024 * 1024
-#define NETCODE_SOCKET_RCVBUF_SIZE      1024 * 1024
+#define NETCODE_SOCKET_SNDBUF_SIZE     ( 1024 * 1024 )
+#define NETCODE_SOCKET_RCVBUF_SIZE     ( 1024 * 1024 )
 
 #define NETCODE_SOCKET_ERROR_NONE                               0
 #define NETCODE_SOCKET_ERROR_CREATE_FAILED                      1
@@ -329,6 +324,9 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     }
 }
 
+// temp
+#include <errno.h>
+
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
     assert( socket );
@@ -338,6 +336,8 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     assert( address->type != NETCODE_ADDRESS_NONE );
 
     s->address = *address;
+
+    printf( "address type = %d\n", address->type );
 
     // create socket
 
@@ -349,6 +349,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     if ( s->handle <= 0 )
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     {
+        printf( "error: failed to create socket\n" );
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
@@ -359,6 +360,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         int yes = 1;
         if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&yes, sizeof(yes) ) != 0 )
         {
+            printf( "error: failed to set socket ipv6 only\n" );
             netcode_socket_destroy( s );
             return NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED;
         }
@@ -368,48 +370,52 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     if ( setsockopt( s->handle, SOL_SOCKET, SO_SNDBUF, (char*)&send_buffer_size, sizeof(int) ) != 0 )
     {
+        printf( "error: failed to set socket send buffer size\n" );
         netcode_socket_destroy( s );
         return NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED;
     }
 
     if ( setsockopt( s->handle, SOL_SOCKET, SO_RCVBUF, (char*)&receive_buffer_size, sizeof(int) ) != 0 )
     {
+        printf( "error: failed to set socket receive buffer size\n" );
         netcode_socket_destroy( s );
         return NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED;
     }
 
     // bind to port
 
-    // todo: this will require some shuffling (bswap)
-    /*
     if ( address->type == NETCODE_ADDRESS_IPV6 )
     {
-        sockaddr_in6 sock_address;
-        memset( &sock_address, 0, sizeof( sockaddr_in6 ) );
+        struct sockaddr_in6 sock_address;
+        memset( &sock_address, 0, sizeof( struct sockaddr_in6 ) );
         sock_address.sin6_family = AF_INET6;
-        memcpy( &sock_address.sin6_addr, address.GetAddress6(), sizeof( sock_address.sin6_addr ) );
-        sock_address.sin6_port = htons( address.GetPort() );
-
-        if ( ::bind( m_socket, (const sockaddr*) &sock_address, sizeof(sock_address) ) < 0 )
+        for ( int i = 0; i < 8; ++i )
         {
-            m_socket = SOCKET_ERROR_BIND_IPV6_FAILED;
-            return;
+            ( (uint16_t*) &sock_address.sin6_addr ) [i] = htons( address->address.ipv6[i] );
+        }
+        sock_address.sin6_port = htons( address->port );
+
+        if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
+        {
+            printf( "error: failed to bind socket (ipv6)\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED;
         }
     }
     else
     {
-        sockaddr_in sock_address;
+        struct sockaddr_in sock_address;
         sock_address.sin_family = AF_INET;
-        sock_address.sin_addr.s_addr = address.GetAddress4();
-        sock_address.sin_port = htons( address.GetPort() );
+        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->address.ipv4[0] ) << 24 ) | ( ( (uint32_t) address->address.ipv4[1] ) << 16 ) | ( ( (uint32_t) address->address.ipv4[2] ) << 8 ) | ( (uint32_t) address->address.ipv4[3] );
+        sock_address.sin_port = htons( address->port );
 
-        if ( ::bind( m_socket, (const sockaddr*) &sock_address, sizeof(sock_address) ) < 0 )
+        if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
         {
-            m_error = SOCKET_ERROR_BIND_IPV4_FAILED;
-            return;
+            printf( "error: failed to bind socket (ipv4)\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED;
         }
     }
-    */
 
     // if bound to port 0 find the actual port we got
 
@@ -421,6 +427,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             socklen_t len = sizeof( sin );
             if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
             {
+                printf( "error: failed to get socket port (ipv6)\n" );
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED;
             }
@@ -432,6 +439,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             socklen_t len = sizeof( sin );
             if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
             {
+                printf( "error: failed to get socket port (ipv4)\n" );
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED;
             }
@@ -1732,6 +1740,7 @@ char * netcode_client_state_name( int client_state )
 
 struct netcode_client_t
 {
+    struct netcode_socket_t socket;
 	int state;
 	double time;
     double connect_start_time;
@@ -1748,14 +1757,29 @@ struct netcode_client_t
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
-struct netcode_client_t * netcode_client_create( double time )
+struct netcode_client_t * netcode_client_create( char * address_string, double time )
 {
     assert( netcode.initialized );
+
+    struct netcode_address_t address;
+    if ( !netcode_parse_address( address_string, &address ) )
+    {
+        printf( "error: failed to parse client address\n" );
+        return NULL;
+    }
+
+    struct netcode_socket_t socket;
+    if ( netcode_socket_create( &socket, &address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+    {
+        return NULL;
+    }
 
 	struct netcode_client_t * client = (struct netcode_client_t*) malloc( sizeof( struct netcode_client_t ) );
 
     if ( !client )
+    {
         return NULL;
+    }
 
 	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;

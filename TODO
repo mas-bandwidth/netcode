@@ -6,23 +6,21 @@ DONE
 
     Port across socket create function (99%)
 
-TODO
-
-    Port across remainder of function with address conversion.
-
-    ------------------
-
-    Port across send packet function.
-
-    Port across receive packet function.
-
-    ------------------
+    Port across remainder of socket create function with address conversions.
 
     Hook up the client to create a socket.
 
     Client create function should be extended take port # before current time.
 
     If the client fails to create a socket, print an error and return NULL when creating the client.
+
+TODO
+
+    ------------------
+
+    Port across send packet function.
+
+    Port across receive packet function.
 
     ------------------
 

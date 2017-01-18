@@ -47,7 +47,9 @@ int main( int argc, char ** argv )
 
 	printf( "[client]\n" );
 
-    struct netcode_client_t * client = netcode_client_create( time );
+    struct netcode_client_t * client = netcode_client_create( "::1", time );
+
+    // todo: need a way go get client port
 
     if ( !client )
     {

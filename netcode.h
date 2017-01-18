@@ -46,11 +46,14 @@
 #define NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM     3
 #define NETCODE_CLIENT_STATE_CONNECTED                          4
 
+#define NETCODE_SOCKET_IPV6     1
+#define NETCODE_SOCKET_IPV4     2
+
 int netcode_init();
 
 void netcode_term();
 
-struct netcode_client_t * netcode_client_create( double time );
+struct netcode_client_t * netcode_client_create( char * address, double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
