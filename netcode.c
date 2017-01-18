@@ -61,6 +61,7 @@
 #define NETCODE_MAX_PACKET_BYTES 1220
 #define NETCODE_MAX_PAYLOAD_BYTES 1200
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
+#define NETCODE_PACKET_QUEUE_SIZE 256
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -1846,6 +1847,63 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
     server_info->timeout_seconds = (int) netcode_read_uint32( &buffer );
     
     return 1;
+}
+
+// ----------------------------------------------------------------
+
+struct netcode_packet_queue_t
+{
+    int num_packets;
+    int start_index;
+    void * packets[NETCODE_PACKET_QUEUE_SIZE];
+};
+
+void netcode_packet_queue_create( struct netcode_packet_queue_t * queue )
+{
+    assert( queue );
+    queue->num_packets = 0;
+    queue->start_index = 0;
+    memset( queue->packets, 0, sizeof( queue->packets ) );
+}
+
+void netcode_packet_queue_destroy( struct netcode_packet_queue_t * queue )
+{
+    assert( queue );
+    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    {
+        if ( queue->packets[i] )
+        {
+            free( queue->packets[i] );
+        }
+    }
+    queue->num_packets = 0;
+    queue->start_index = 0;
+    memset( queue->packets, 0, sizeof( queue->packets ) );
+}
+
+int netcode_packet_queue_push( struct netcode_packet_queue_t * queue, void * packet )
+{
+    assert( queue );
+    assert( packet );
+    if ( queue->num_packets == NETCODE_PACKET_QUEUE_SIZE )
+    {
+        free( packet );
+        return 0;
+    }
+    int index = ( queue->start_index + queue->num_packets ) % NETCODE_PACKET_QUEUE_SIZE;
+    queue->packets[index] = packet;
+    queue->num_packets++;
+    return 1;
+}
+
+void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue )
+{
+    if ( queue->num_packets == 0 )
+        return NULL;
+    void * packet = queue->packets[queue->start_index];
+    queue->start_index = ( queue->start_index + 1 ) % NETCODE_PACKET_QUEUE_SIZE;
+    queue->num_packets--;
+    return packet;
 }
 
 // ----------------------------------------------------------------

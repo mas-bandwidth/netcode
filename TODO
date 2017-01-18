@@ -8,21 +8,21 @@ DONE
 
     Log server address when client connects to next server.
 
+    Port across the simple queue code.
+
 TODO
 
     -----------------
 
-    Port across the simple queue code.
-
-    Maybe I want the queue to prefer more recent packets over older packets.
-
-    Either way, make the queue large enough (say 256 entries), that it's unlikely to happen in normal operation.
-
-    So don't do this. Keep the queue basic. It's more important that when there are few packets in the queue that the walk is fast. I don't want to walk 256 entries every time to receive a packet.
+    Port across tests for queue.
 
     -----------------
 
     Add function to send and receive payload packets to/from server.
+
+    -----------------
+
+    *** STOP ***
 
     -----------------
 
