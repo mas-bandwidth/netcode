@@ -26,25 +26,21 @@ TODO
 
     ------------------
 
+    Set up client context on connect, and clear it on disconnect.
+
+    ------------------
+
+    Set up array of client allowed packets.
+
+    ------------------
+
     Port across code on the client to receive packets from the client and process those packets.
 
     Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator)
 
-    ------------------
-
-    Add code to send the other packet types.
-
-    ------------------
-
-    Work out a design for the client and how it waits for the connection confirm
-
-    Basically, I think it works like this
-
-    On the server, a 'pending' flag is set until the client replies with either a payload packet or a keep-alive packet.
-
     -----------------
 
-    Port across the code to process packets.
+    Port across the code to process client packets.
 
     -----------------
 
@@ -52,25 +48,15 @@ TODO
 
     -----------------
 
-    Implement tests to make sure the client/server state machine is working as expected.
+    Get client connecting to server.
 
     -----------------
 
     Bring across matcher in golang and port to binary format connect tokens.
 
+    -----------------
+
     Integrate mbedtls library.
-
-    -----------------
-
-    Bring across a netcode_socket_t
-
-    Implement just enough to get my shit done.
-
-    Probably need more address functionality to interface with sockets sendto/recvfrom as well.
-
-    -----------------
-
-    Implement standalone server on localhost port 40000.
 
     -----------------
 
@@ -78,9 +64,19 @@ TODO
 
     -----------------
 
-    Implement client that connects to matcher, gets connect token and connects to server.
+    Convert client to get server info from web server.
+
+    -----------------
 
     Implement stress that connects 256 clients.
+
+    -----------------
+
+    Implement network simulator and shim for packets sent/received from client and server.
+
+    -----------------
+
+    Implement functional tests for client connect connection functionality.
 
     -----------------
 
