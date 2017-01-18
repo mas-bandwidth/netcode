@@ -2230,12 +2230,9 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     netcode_client_reset_before_next_connect( client );
 
-    // todo: i would like to print address of next server client is connecting to
-    /*
-    char addressString[MaxAddressLength];
-    m_serverAddresses[m_serverAddressIndex].ToString( addressString, sizeof( addressString ) );
-    debug_printf( "connect to next secure server: %s (%d/%d)\n", addressString, m_serverAddressIndex + 1, m_numServerAddresses );
-    */
+    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    printf( "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ), client->server_address_index, client->server_info.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 

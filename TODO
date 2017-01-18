@@ -1,12 +1,24 @@
 DONE
 
+    Added code to convert address to string for logging.
+
+    Log port client starts on when it is created.
+
+    Log server address client is connecting.
+
+    Log server address when client connects to next server.
+
 TODO
 
-    Need to implement a queue so the client can buffer payload packets for receive.
-
-    Doesn't need to be sequence buffer, can be derived from simple queue in yojimbo.
+    -----------------
 
     Port across the simple queue code.
+
+    Maybe I want the queue to prefer more recent packets over older packets.
+
+    Either way, make the queue large enough (say 256 entries), that it's unlikely to happen in normal operation.
+
+    So don't do this. Keep the queue basic. It's more important that when there are few packets in the queue that the walk is fast. I don't want to walk 256 entries every time to receive a packet.
 
     -----------------
 
@@ -25,6 +37,10 @@ TODO
     -----------------
 
     Implement network simulator and shim for packets sent/received from client and server.
+
+    -----------------
+
+    Implement replay protection.
 
     -----------------
 
