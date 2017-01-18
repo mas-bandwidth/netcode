@@ -32,7 +32,39 @@ DONE
 
     Implement client connecting with a generated connect data.
 
+    Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept).
+
+    I'm thinking a callback function to perform the actual send which by default goes through a socket, but can be overridden to do something else (eg. simulator or pass directly to the server).
+
+    I think I'm definitely going to need a simulator, for testing, because proper testing of this system requires simulated network conditions.
+
 TODO
+
+    Extend change state so it's no longer "sending connection confirm" to "waiting for confirm"
+
+    ------------------
+
+    Implement code in the other states to send packets, including logic for sending keep-alive (don't send confirm any more from client -> server).
+
+    ------------------
+
+    Port across socket code from yojimbo.
+
+    netcode_socket_t
+
+    ------------------
+
+    Hook up the client to create a socket.
+
+    Client create function should be extended take port # before current time.
+
+    If the client fails to create a socket, print an error and return NULL when creating the client.
+
+    ------------------
+
+    Port across code on the client to receive packets from the client and process those packets.
+
+    Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator)
 
     ------------------
 
@@ -45,12 +77,6 @@ TODO
     Basically, I think it works like this
 
     On the server, a 'pending' flag is set until the client replies with either a payload packet or a keep-alive packet.
-
-    ------------------
-
-    Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept).
-
-    I'm thinking a callback function to perform the actual send which by default goes through a socket, but can be overridden to do something else (eg. simulator or pass directly to the server).
 
     -----------------
 

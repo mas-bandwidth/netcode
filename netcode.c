@@ -1507,18 +1507,18 @@ char * netcode_client_state_name( int client_state )
 {
     switch ( client_state )
     {
-        case NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED:            return "connect token expired";
-        case NETCODE_CLIENT_STATE_INVALID_SERVER_INFO:              return "invalid connect data";
-        case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:             return "connection timed out";
-        case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:       return "connection request timeout";
-        case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:      return "connection response timeout";
-        case NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT:       return "connection confirm timeout";
-        case NETCODE_CLIENT_STATE_CONNECTION_DENIED:                return "connection denied";
-        case NETCODE_CLIENT_STATE_DISCONNECTED:                     return "disconnected";
-        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:       return "sending connection request";
-        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:      return "sending connection response";
-        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM:       return "sending connection confirm";
-        case NETCODE_CLIENT_STATE_CONNECTED:                        return "connected";
+        case NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED:                return "connect token expired";
+        case NETCODE_CLIENT_STATE_INVALID_SERVER_INFO:                  return "invalid connect data";
+        case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:                 return "connection timed out";
+        case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:           return "connection request timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:          return "connection response timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT:           return "connection confirm timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_DENIED:                    return "connection denied";
+        case NETCODE_CLIENT_STATE_DISCONNECTED:                         return "disconnected";
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:           return "sending connection request";
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:          return "sending connection response";
+        case NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM:       return "waiting for connection confirm";
+        case NETCODE_CLIENT_STATE_CONNECTED:                            return "connected";
         default:
             assert( 0 );
             return "???";
@@ -1791,7 +1791,7 @@ void netcode_client_advance_time( struct netcode_client_t * client, double time 
         }
         break;
 
-        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_CONFIRM:
+        case NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM:
         {
             if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
             {
