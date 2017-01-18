@@ -73,7 +73,9 @@
     #include <winsock2.h>
     #include <ws2tcpip.h>
     #include <ws2ipdef.h>
+    #include <iphlpapi.h>
     #pragma comment( lib, "WS2_32.lib" )
+    #pragma comment( lib, "IPHLPAPI.lib" )
 
     #ifdef SetPort
     #undef SetPort
@@ -95,7 +97,7 @@
     #include <arpa/inet.h>
     #include <unistd.h>
     #include <errno.h>
-    
+
 #else
 
     #error netcode.io - unknown platform!
@@ -246,6 +248,43 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
 
 // ----------------------------------------------------------------
 
+struct netcode_t
+{
+    int initialized;
+};
+
+static struct netcode_t netcode;
+
+int netcode_init()
+{
+    assert( !netcode.initialized );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    WSADATA WsaData;         
+    int result = WSAStartup( MAKEWORD(2,2), &WsaData ) == NO_ERROR;
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    int result = 1;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    if ( result )
+        netcode.initialized = 1;
+
+    return result;
+}
+
+void netcode_term()
+{
+    assert( netcode.initialized );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    WSACleanup();
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    netcode.initialized = 0;
+}
+
+// ----------------------------------------------------------------
+
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 typedef uint64_t netcode_socket_handle_t;
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
@@ -275,12 +314,23 @@ struct netcode_socket_t
 int netcode_create_socket( struct netcode_socket_t * socket, struct netcode_address_t address )
 {
     assert( socket );
+    assert( netcode.initialized );
 
     socket->address = address;
 
     // ...
 
     return NETCODE_SOCKET_ERROR_NONE;
+}
+
+void netcode_destroy_socket( struct netcode_socket_t * socket )
+{
+    assert( socket );
+    assert( netcode.initialized );
+
+    (void) socket;
+
+    //
 }
 
 // ----------------------------------------------------------------
@@ -1345,35 +1395,6 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                 return NULL;
         }
     }
-}
-
-// ----------------------------------------------------------------
-
-struct netcode_t
-{
-    int initialized;
-};
-
-static struct netcode_t netcode;
-
-int netcode_init()
-{
-    assert( !netcode.initialized );
-
-    // ...
-
-    netcode.initialized = 1;
-
-	return 0;
-}
-
-void netcode_term()
-{
-	assert( netcode.initialized );
-
-    // ...
-
-    netcode.initialized = 0;
 }
 
 // ----------------------------------------------------------------

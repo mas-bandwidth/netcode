@@ -1,5 +1,11 @@
 DONE
 
+    Sketched out netcode_socket_t
+
+    Actually, I need to bring across some stuff to netcode_init for winsock, eg. the WSAStartup for windows.
+
+    
+
 TODO
 
     ------------------

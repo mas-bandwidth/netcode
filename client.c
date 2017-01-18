@@ -36,7 +36,11 @@ int main( int argc, char ** argv )
 	(void) argc;
 	(void) argv;
 
-	netcode_init();
+	if ( !netcode_init() )
+    {
+        printf( "error: failed to initialize netcode.io\n" );
+        return 1;
+    }
 
     double time = 0.0f;
 	double delta_time = 0.1f;
