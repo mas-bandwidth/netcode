@@ -1,22 +1,12 @@
 DONE
 
-TODO
-
-    *** GO TO BED YOU MORON ***
-    
-    ------------------
-
     Set up array of client allowed packets for read.
-
-    ------------------
 
     Make sure client sets current timestamp on read.
 
-    ------------------
+    Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator).
 
-    Port across code on the client to receive packets from the client and process those packets.
-
-    Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator)
+TODO
 
     -----------------
 
