@@ -1792,6 +1792,8 @@ void netcode_client_destroy( struct netcode_client_t * client )
 
     netcode_client_disconnect( client );
 
+    netcode_socket_destroy( &client->socket );
+
     free( client );
 }
 

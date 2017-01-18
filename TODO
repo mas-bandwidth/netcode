@@ -14,6 +14,8 @@ DONE
 
     If the client fails to create a socket, print an error and return NULL when creating the client.
 
+    Client should destroy socket when it is destroyed. Done.
+
 TODO
 
     ------------------
