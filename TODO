@@ -10,19 +10,23 @@ DONE
 
     Port across the simple queue code.
 
-TODO
-
-    -----------------
-
     Port across tests for queue.
 
-    -----------------
+    Add packet queue to client. 
+
+    Create and destroy it along with client.
 
     Add function to send and receive payload packets to/from server.
 
-    -----------------
+    Add a function to receive packets from server. Adjust the packet pointer so it is just the payload data.
 
-    *** STOP ***
+    Need a function to destroy payload packets received from client, because the pointer will be adjusted.
+
+    Done. The client is finished.
+
+    Stopping work here.
+
+TODO
 
     -----------------
 

@@ -49,6 +49,8 @@
 #define NETCODE_SOCKET_IPV6     1
 #define NETCODE_SOCKET_IPV4     2
 
+#define NETCODE_MAX_PACKET_SIZE 1200
+
 int netcode_init();
 
 void netcode_term();
@@ -60,6 +62,8 @@ void netcode_client_destroy( struct netcode_client_t * client );
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_info );
 
 void netcode_client_update( struct netcode_client_t * client, double time );
+
+void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes );
 
 void netcode_client_disconnect( struct netcode_client_t * client );
 

@@ -1858,7 +1858,7 @@ struct netcode_packet_queue_t
     void * packets[NETCODE_PACKET_QUEUE_SIZE];
 };
 
-void netcode_packet_queue_create( struct netcode_packet_queue_t * queue )
+void netcode_packet_queue_init( struct netcode_packet_queue_t * queue )
 {
     assert( queue );
     queue->num_packets = 0;
@@ -1866,16 +1866,8 @@ void netcode_packet_queue_create( struct netcode_packet_queue_t * queue )
     memset( queue->packets, 0, sizeof( queue->packets ) );
 }
 
-void netcode_packet_queue_destroy( struct netcode_packet_queue_t * queue )
+void netcode_packet_queue_clear( struct netcode_packet_queue_t * queue )
 {
-    assert( queue );
-    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
-    {
-        if ( queue->packets[i] )
-        {
-            free( queue->packets[i] );
-        }
-    }
     queue->num_packets = 0;
     queue->start_index = 0;
     memset( queue->packets, 0, sizeof( queue->packets ) );
@@ -1946,6 +1938,7 @@ struct netcode_client_t
     struct netcode_server_info_t server_info;
     struct netcode_socket_t socket;
     struct netcode_packet_context_t context;
+    struct netcode_packet_queue_t packet_receive_queue;
     uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
@@ -1994,6 +1987,8 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
     memset( &client->context, 0, sizeof( struct netcode_packet_context_t ) );
     memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 
+    netcode_packet_queue_init( &client->packet_receive_queue );
+
 	return client;
 }
 
@@ -2004,6 +1999,8 @@ void netcode_client_destroy( struct netcode_client_t * client )
     netcode_client_disconnect( client );
 
     netcode_socket_destroy( &client->socket );
+
+    netcode_packet_queue_clear( &client->packet_receive_queue );
 
     free( client );
 }
@@ -2140,13 +2137,11 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
             {
-                // todo: process payload packet, eg. queue it up.
+                netcode_packet_queue_push( &client->packet_receive_queue, packet );
 
                 client->last_packet_receive_time = client->time;
 
-                // todo: don't free the packet
-
-                // return;                
+                return;
             }
         }
         break;
@@ -2383,6 +2378,61 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         default:
             break;
     }
+}
+
+void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes )
+{
+    assert( client );
+    assert( packet_data );
+    assert( NETCODE_MAX_PACKET_SIZE == NETCODE_MAX_PAYLOAD_BYTES );
+    assert( packet_bytes >= 0 );
+    assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
+
+    if ( client->state != NETCODE_CLIENT_STATE_CONNECTED )
+        return;
+
+    uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+
+    packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
+    packet->payload_bytes = packet_bytes;
+    memcpy( packet->payload_data, packet_data, packet_bytes );
+
+    netcode_client_send_packet_to_server_internal( client, packet );
+}
+
+void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes )
+{
+    assert( client );
+    assert( packet_bytes );
+
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &client->packet_receive_queue );
+    
+    if ( packet )
+    {
+        assert( packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
+        *packet_bytes = packet->payload_bytes;
+        assert( *packet_bytes >= 0 );
+        assert( *packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+        return &packet->payload_data;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+void netcode_client_free_packet( struct netcode_client_t * client, void * packet )
+{
+    assert( client );
+    assert( packet );
+
+    (void) client;
+
+    int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
+
+    free( ( (uint8_t*) packet ) - offset );
 }
 
 void netcode_client_disconnect( struct netcode_client_t * client )
@@ -2633,6 +2683,90 @@ do                                                                              
         check_handler( #condition, (char*) __FUNCTION__, (char*) __FILE__, __LINE__ );          \
     }                                                                                           \
 } while(0)
+
+static void test_queue()
+{
+    struct netcode_packet_queue_t queue;
+
+    netcode_packet_queue_init( &queue );
+
+    check( queue.num_packets == 0 );
+    check( queue.start_index == 0 );
+
+    // attempting to pop a packet off an empty queue should return NULL
+
+    check( netcode_packet_queue_pop( &queue ) == NULL );
+
+    // add some packets to the queue and make sure they pop off in the correct order
+    {
+        #define NUM_PACKETS 100
+
+        void * packets[NUM_PACKETS];
+
+        for ( int i = 0; i < NUM_PACKETS; ++i )
+        {
+            packets[i] = malloc( i * 256 );
+            check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+        }
+
+        check( queue.num_packets == NUM_PACKETS );
+
+        for ( int i = 0; i < NUM_PACKETS; ++i )
+        {
+            void * packet = netcode_packet_queue_pop( &queue );
+            check( packet == packets[i] );
+            free( packet );
+        }
+    }
+
+    // after all entries are popped off, the queue is empty, so calls to pop should return NULL
+
+    check( queue.num_packets == 0 );
+
+    check( netcode_packet_queue_pop( &queue ) == NULL );
+
+    // test that the packet queue can be filled to max capacity
+
+    void * packets[NETCODE_PACKET_QUEUE_SIZE];
+
+    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    {
+        packets[i] = malloc( i * 256 );
+        check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+    }
+
+    check( queue.num_packets == NETCODE_PACKET_QUEUE_SIZE );
+
+    // when the queue is full, attempting to push a packet should fail and return 0
+
+    check( netcode_packet_queue_push( &queue, malloc( 100 ) ) == 0 );
+
+    // make sure all packets pop off in the correct order
+
+    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    {
+        void * packet = netcode_packet_queue_pop( &queue );
+        check( packet == packets[i] );
+        free( packet );
+    }
+
+    // add some packets again
+
+    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    {
+        packets[i] = malloc( i * 256 );
+        check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+    }
+
+    // clear the queue and make sure that all packets are freed
+
+    netcode_packet_queue_clear( &queue );
+
+    check( queue.start_index == 0 );
+    check( queue.num_packets == 0 );
+    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+        check( queue.packets[i] == NULL );
+}
 
 static void test_endian()
 {
@@ -3344,6 +3478,7 @@ void test_server_info()
 
 void netcode_test()
 {
+    RUN_TEST( test_queue );
     RUN_TEST( test_endian );
     RUN_TEST( test_address );
     RUN_TEST( test_sequence );
