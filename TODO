@@ -1,36 +1,16 @@
 DONE
 
-    Sketched out netcode_socket_t
-
-    Actually, I need to bring across some stuff to netcode_init for winsock, eg. the WSAStartup for windows.
-
-    Port across socket create function (99%)
-
-    Port across remainder of socket create function with address conversions.
-
-    Hook up the client to create a socket.
-
-    Client create function should be extended take port # before current time.
-
-    If the client fails to create a socket, print an error and return NULL when creating the client.
-
-    Client should destroy socket when it is destroyed. Done.
-
 TODO
 
+    *** GO TO BED YOU MORON ***
+    
     ------------------
 
-    Port across send packet function.
-
-    Port across receive packet function.
-
-    ------------------
-
-    Set up client context on connect, and clear it on disconnect.
+    Set up array of client allowed packets for read.
 
     ------------------
 
-    Set up array of client allowed packets.
+    Make sure client sets current timestamp on read.
 
     ------------------
 
@@ -41,6 +21,10 @@ TODO
     -----------------
 
     Port across the code to process client packets.
+
+    -----------------
+
+    Make sure the client has all the logic necessary to progress to connected state.
 
     -----------------
 

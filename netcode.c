@@ -54,11 +54,11 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_CONNECT_TOKEN_BYTES 1200
+#define NETCODE_CONNECT_TOKEN_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 #define NETCODE_VERSION_INFO_BYTES 13
-#define NETCODE_USER_DATA_BYTES 512
-#define NETCODE_MAX_PACKET_BYTES 1240
+#define NETCODE_USER_DATA_BYTES 256
+#define NETCODE_MAX_PACKET_BYTES 1220
 #define NETCODE_MAX_PAYLOAD_BYTES 1200
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 
@@ -502,6 +502,80 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         socket_address.sin_port = htons( to->port );
         sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
     }
+}
+
+int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netcode_address_t * from, void * packet_data, int max_packet_size )
+{
+    assert( socket );
+    assert( socket->handle != 0 );
+    assert( from );
+    assert( packet_data );
+    assert( max_packet_size > 0 );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    typedef int socklen_t;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    
+    struct sockaddr_storage sockaddr_from;
+    socklen_t from_length = sizeof( sockaddr_from );
+
+    int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    if ( result == SOCKET_ERROR )
+    {
+        int error = WSAGetLastError();
+
+        if ( error == WSAEWOULDBLOCK )
+            return 0;
+
+        printf( "recvfrom failed with error %d\n", error );
+
+        return 0;
+    }
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    if ( result <= 0 )
+    {
+        if ( errno == EAGAIN )
+            return 0;
+
+        printf( "recvfrom failed with error %d\n", errno );
+
+        return 0;
+    }
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    if ( sockaddr_from.ss_family == AF_INET6 )
+    {
+        struct sockaddr_in6 * addr_ipv6 = (struct sockaddr_in6*) &sockaddr_from;
+        from->type = NETCODE_ADDRESS_IPV6;
+        for ( int i = 0; i < 8; ++i )
+        {
+            from->address.ipv6[i] = ntohs( ( (uint16_t*) &addr_ipv6->sin6_addr ) [i] );
+        }
+        from->port = ntohs( addr_ipv6->sin6_port );
+    }
+    else if ( sockaddr_from.ss_family == AF_INET )
+    {
+        struct sockaddr_in * addr_ipv4 = (struct sockaddr_in*) &sockaddr_from;
+        from->type = NETCODE_ADDRESS_IPV4;
+        from->address.ipv4[0] = ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24;
+        from->address.ipv4[1] = ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16;
+        from->address.ipv4[2] = ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8;
+        from->address.ipv4[3] = ( addr_ipv4->sin_addr.s_addr & 0x000000FF ) >> 0;
+        from->port = ntohs( addr_ipv4->sin_port );
+    }
+    else
+    {
+        assert( 0 );
+        return 0;
+    }
+  
+    assert( result >= 0 );
+
+    int bytes_read = result;
+
+    return bytes_read;
 }
 
 // ----------------------------------------------------------------
@@ -1758,7 +1832,6 @@ char * netcode_client_state_name( int client_state )
 
 struct netcode_client_t
 {
-    struct netcode_socket_t socket;
 	int state;
 	double time;
     double connect_start_time;
@@ -1771,6 +1844,8 @@ struct netcode_client_t
     int server_address_index;
     struct netcode_address_t server_address;
     struct netcode_server_info_t server_info;
+    struct netcode_socket_t socket;
+    struct netcode_packet_context_t context;
     uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
@@ -1813,6 +1888,7 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
     client->challenge_token_sequence = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
+    memset( &client->context, 0, sizeof( struct netcode_packet_context_t ) );
     memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 
 	return client;
@@ -1855,8 +1931,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     client->server_address_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
-
-    // todo: clear context (send and receive keys)
+    memset( &client->context, 0, sizeof( struct netcode_packet_context_t ) );
 
     netcode_client_set_state( client, client_state );
 
@@ -1881,7 +1956,9 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
     client->server_address_index = 0;
     client->server_address = client->server_info.server_addresses[0];
 
-    // todo: setup context (send and receive keys)
+    client->context.protocol_id = client->server_info.protocol_id;
+    memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
+    memcpy( client->context.write_packet_key, client->server_info.client_to_server_key, NETCODE_KEY_BYTES );
 
 	netcode_client_reset_before_next_connect( client );
 
@@ -1903,10 +1980,9 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-    // todo: temporary
-    struct netcode_packet_context_t context;
+    client->context.current_timestamp = (uint64_t) time( NULL );
 
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &context );
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &client->context );
 
     printf( "packet bytes = %d\n", packet_bytes );
 
