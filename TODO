@@ -4,15 +4,13 @@ DONE
 
     Actually, I need to bring across some stuff to netcode_init for winsock, eg. the WSAStartup for windows.
 
-    
-
 TODO
 
-    ------------------
+    Port across socket create function.
 
-    Port across socket code from yojimbo.
+    Port across send packet function.
 
-    netcode_socket_t
+    Port across receive packet function.
 
     ------------------
 

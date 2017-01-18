@@ -294,7 +294,7 @@ typedef int netcode_socket_handle_t;
 struct netcode_socket_t
 {
     struct netcode_address_t address;
-    netcode_socket_handle_t socket_handle;
+    netcode_socket_handle_t handle;
 };
 
 #define NETCODE_SOCKET_SNDBUF_SIZE      1024 * 1024
@@ -311,14 +311,159 @@ struct netcode_socket_t
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           7
 
-int netcode_create_socket( struct netcode_socket_t * socket, struct netcode_address_t address )
+void netcode_socket_destroy( struct netcode_socket_t * socket )
 {
     assert( socket );
     assert( netcode.initialized );
 
-    socket->address = address;
+    if ( socket->handle != 0 )
+    {
+        #if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+        close( socket->handle );
+        #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+        closesocket( socket->handle );
+        #else
+        #error unsupported platform
+        #endif
+        socket->handle = 0;
+    }
+}
 
-    // ...
+int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
+{
+    assert( socket );
+    assert( address );
+    assert( netcode.initialized );
+
+    assert( address->type != NETCODE_ADDRESS_NONE );
+
+    s->address = *address;
+
+    // create socket
+
+    s->handle = socket( ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    if ( s->handle == INVALID_SOCKET )
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    if ( s->handle <= 0 )
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    {
+        return NETCODE_SOCKET_ERROR_CREATE_FAILED;
+    }
+
+    // force IPv6 only if necessary
+
+    if ( address->type == NETCODE_ADDRESS_IPV6 )
+    {
+        int yes = 1;
+        if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&yes, sizeof(yes) ) != 0 )
+        {
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED;
+        }
+    }
+
+    // increase socket send and receive buffer sizes
+
+    if ( setsockopt( s->handle, SOL_SOCKET, SO_SNDBUF, (char*)&send_buffer_size, sizeof(int) ) != 0 )
+    {
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED;
+    }
+
+    if ( setsockopt( s->handle, SOL_SOCKET, SO_RCVBUF, (char*)&receive_buffer_size, sizeof(int) ) != 0 )
+    {
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED;
+    }
+
+    // bind to port
+
+    // todo: this will require some shuffling (bswap)
+    /*
+    if ( address->type == NETCODE_ADDRESS_IPV6 )
+    {
+        sockaddr_in6 sock_address;
+        memset( &sock_address, 0, sizeof( sockaddr_in6 ) );
+        sock_address.sin6_family = AF_INET6;
+        memcpy( &sock_address.sin6_addr, address.GetAddress6(), sizeof( sock_address.sin6_addr ) );
+        sock_address.sin6_port = htons( address.GetPort() );
+
+        if ( ::bind( m_socket, (const sockaddr*) &sock_address, sizeof(sock_address) ) < 0 )
+        {
+            m_socket = SOCKET_ERROR_BIND_IPV6_FAILED;
+            return;
+        }
+    }
+    else
+    {
+        sockaddr_in sock_address;
+        sock_address.sin_family = AF_INET;
+        sock_address.sin_addr.s_addr = address.GetAddress4();
+        sock_address.sin_port = htons( address.GetPort() );
+
+        if ( ::bind( m_socket, (const sockaddr*) &sock_address, sizeof(sock_address) ) < 0 )
+        {
+            m_error = SOCKET_ERROR_BIND_IPV4_FAILED;
+            return;
+        }
+    }
+    */
+
+    // if bound to port 0 find the actual port we got
+
+    if ( address->port == 0 )
+    {
+        if ( address->type == NETCODE_ADDRESS_IPV6 )
+        {
+            struct sockaddr_in6 sin;
+            socklen_t len = sizeof( sin );
+            if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
+            {
+                netcode_socket_destroy( s );
+                return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED;
+            }
+            address->port = ntohs( sin.sin6_port );
+        }
+        else
+        {
+            struct sockaddr_in sin;
+            socklen_t len = sizeof( sin );
+            if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
+            {
+                netcode_socket_destroy( s );
+                return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED;
+            }
+            address->port = ntohs( sin.sin_port );
+        }
+    }
+
+    // set non-blocking io
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+
+    int non_blocking = 1;
+    if ( fcntl( s->handle, F_SETFL, O_NONBLOCK, non_blocking ) == -1 )
+    {
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED;
+    }
+
+#elif YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_WINDOWS
+
+    DWORD nonBlocking = 1;
+    if ( ioctlsocket( m_socket, FIONBIO, &nonBlocking ) != 0 )
+    {
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED;
+    }
+
+#else
+
+    #error unsupported platform
+
+#endif
 
     return NETCODE_SOCKET_ERROR_NONE;
 }
