@@ -42,9 +42,9 @@
   #define NETCODE_BIG_ENDIAN 1
 #endif
 
-#define NETCODE_PLATFORM_WINDOWS                    1
-#define NETCODE_PLATFORM_MAC                        2
-#define NETCODE_PLATFORM_UNIX                       3
+#define NETCODE_PLATFORM_WINDOWS    1
+#define NETCODE_PLATFORM_MAC        2
+#define NETCODE_PLATFORM_UNIX       3
 
 #if defined(_WIN32)
 #define NETCODE_PLATFORM NETCODE_PLATFORM_WINDOWS
@@ -54,10 +54,11 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_CONNECT_TOKEN_BYTES 1400
+#define NETCODE_CONNECT_TOKEN_BYTES 1200
 #define NETCODE_CHALLENGE_TOKEN_BYTES 256
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 512
+#define NETCODE_MAX_PACKET_BYTES 1420
 #define NETCODE_MAX_PAYLOAD_BYTES 1400
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 
@@ -334,8 +335,6 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     s->address = *address;
 
-    printf( "address type = %d\n", address->type );
-
     // create socket
 
     s->handle = socket( ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET, SOCK_DGRAM, IPPROTO_UDP );
@@ -471,6 +470,38 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 #endif
 
     return NETCODE_SOCKET_ERROR_NONE;
+}
+
+void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcode_address_t * to, void * packet_data, int packet_bytes )
+{
+    assert( socket );
+    assert( socket->handle != 0 );
+    assert( to );
+    assert( to->type == NETCODE_ADDRESS_IPV6 || to->type == NETCODE_ADDRESS_IPV4 );
+    assert( packet_data );
+    assert( packet_bytes > 0 );
+
+    if ( to->type == NETCODE_ADDRESS_IPV6 )
+    {
+        struct sockaddr_in6 socket_address;
+        memset( &socket_address, 0, sizeof( socket_address ) );
+        socket_address.sin6_family = AF_INET6;
+        for ( int i = 0; i < 8; ++i )
+        {
+            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->address.ipv6[i] );
+        }
+        socket_address.sin6_port = htons( to->port );
+        sendto( socket->handle, (char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in6 ) );
+    }
+    else if ( to->type == NETCODE_ADDRESS_IPV4 )
+    {
+        struct sockaddr_in socket_address;
+        memset( &socket_address, 0, sizeof( socket_address ) );
+        socket_address.sin_family = AF_INET;
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->address.ipv4[0] ) << 24 ) | ( ( (uint32_t) to->address.ipv4[1] ) << 16 ) | ( ( (uint32_t) to->address.ipv4[2] ) << 8 ) | ( (uint32_t) to->address.ipv4[3] );
+        socket_address.sin_port = htons( to->port );
+        sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
+    }
 }
 
 // ----------------------------------------------------------------
@@ -1768,6 +1799,7 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
         return NULL;
     }
 
+    client->socket = socket;
 	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;
     client->connect_start_time = 0.0;
@@ -1805,7 +1837,6 @@ void netcode_client_set_state( struct netcode_client_t * client, int client_stat
 
 void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
 {
-    client->sequence = 0;
     client->last_packet_send_time = client->time - 1.0f;
     client->last_packet_receive_time = client->time;
     client->should_disconnect = 0;
@@ -1818,6 +1849,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 {
     assert( client );
 
+    client->sequence = 0;
     client->client_index = 0;
     client->connect_start_time = 0.0;
     client->server_address_index = 0;
@@ -1869,8 +1901,14 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 {
     assert( client );
 
-    // todo: actually send packet to server
-    (void) packet;
+    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+    // todo: temporary
+    struct netcode_packet_context_t context;
+
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &context );
+
+    netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
 
     client->last_packet_send_time = client->time;
 }
