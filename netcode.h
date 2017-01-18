@@ -59,11 +59,7 @@ void netcode_client_destroy( struct netcode_client_t * client );
 
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_info );
 
-void netcode_client_receive_packets( struct netcode_client_t * client );
-
-void netcode_client_send_packets( struct netcode_client_t * client );
-
-void netcode_client_advance_time( struct netcode_client_t * client, double time );
+void netcode_client_update( struct netcode_client_t * client, double time );
 
 void netcode_client_disconnect( struct netcode_client_t * client );
 

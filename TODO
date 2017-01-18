@@ -6,43 +6,39 @@ DONE
 
     Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator).
 
+    Port across the code to process client packets.
+
+    Simplified client interface. No more separates send and receive packets. Just update. Call the update, receive user packets after it.
+
+    You can send payload packets at any time, so it's not any benefit to have separation of read and write like with yojimbo.
+
+    Make sure the client has all the logic necessary to progress to connected state.
+
+    Implement code to connect to next server. This shouldn't be that hard, the data structures are already setup. Done.
+
 TODO
 
     -----------------
 
-    Port across the code to process client packets.
+    Need to implement a queue so the client can buffer payload packets for receive.
+
+    Doesn't need to be sequence buffer, can be derived from simple queue in yojimbo.
+
+    Port across the simple queue code.
 
     -----------------
 
-    Make sure the client has all the logic necessary to progress to connected state.
+    Add function to send and receive payload packets to/from server.
 
     -----------------
 
     Implement the server side of the state machine (up to 256 players, for agar.io)
 
+    Gee this is going to be a lot of work...
+
     -----------------
 
     Get client connecting to server.
-
-    -----------------
-
-    Bring across matcher in golang and port to binary format connect tokens.
-
-    -----------------
-
-    Integrate mbedtls library.
-
-    -----------------
-
-    Port across code for matcher. Keep it blocking. Doesn't matter for now.
-
-    -----------------
-
-    Convert client to get server info from web server.
-
-    -----------------
-
-    Implement stress that connects 256 clients.
 
     -----------------
 
@@ -51,6 +47,20 @@ TODO
     -----------------
 
     Implement functional tests for client connect connection functionality.
+
+    -----------------
+
+    Bring across matcher in golang and port to binary format connect tokens.
+
+    Integrate mbedtls library.
+
+    Port across code for matcher. Keep it blocking. Doesn't matter for now.
+
+    Convert client to get server info from web server.
+
+    -----------------
+
+    Implement stress that connects 256 clients.
 
     -----------------
 

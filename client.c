@@ -75,9 +75,7 @@ int main( int argc, char ** argv )
 
 	while ( 1 )
 	{
-		netcode_client_receive_packets( client );
-
-		netcode_client_send_packets( client );
+        netcode_client_update( client, time );
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;
@@ -85,8 +83,6 @@ int main( int argc, char ** argv )
 		// todo: sleep
 
 		time += delta_time;
-
-		netcode_client_advance_time( client, time );
 	}
 
     netcode_client_destroy( client );

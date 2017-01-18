@@ -1956,6 +1956,9 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
     client->server_address_index = 0;
     client->server_address = client->server_info.server_addresses[0];
 
+    // todo: would like a function to print address to string for logging here
+    //printf( "client connecting to %s\n", server_address_string );
+
     client->context.protocol_id = client->server_info.protocol_id;
     memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->server_info.client_to_server_key, NETCODE_KEY_BYTES );
@@ -1965,16 +1968,90 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 }
 
-void netcode_client_process_packet( struct netcode_client_t * client, void * packet, uint64_t sequence )
+void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, void * packet, uint64_t sequence )
 {
     assert( client );
     assert( packet );
 
-    (void) client;
-    (void) packet;
     (void) sequence;
-    
-    // ...
+
+    uint8_t packet_type = ( (uint8_t*) packet ) [0];
+
+    switch ( packet_type )
+    {
+        case NETCODE_CONNECTION_DENIED_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST && netcode_address_equal( from, &client->server_address ) )
+            {
+                client->should_disconnect = 1;
+                client->should_disconnect_state = NETCODE_CLIENT_STATE_CONNECTION_DENIED;
+                client->last_packet_receive_time = client->time;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_CHALLENGE_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST && netcode_address_equal( from, &client->server_address ) )
+            {
+                struct netcode_connection_challenge_packet_t * p = (struct netcode_connection_challenge_packet_t*) packet;
+                client->challenge_token_sequence = p->challenge_token_sequence;
+                memcpy( client->challenge_token_data, p->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+                client->last_packet_receive_time = client->time;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_DISCONNECT_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
+            {
+                client->should_disconnect = 1;
+                client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
+                client->last_packet_receive_time = client->time;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_CONFIRM_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM && netcode_address_equal( from, &client->server_address ) )
+            {
+                netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
+                client->last_packet_receive_time = client->time;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
+            {
+                client->last_packet_receive_time = client->time;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_PAYLOAD_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
+            {
+                // todo: process payload packet, eg. queue it up.
+
+                client->last_packet_receive_time = client->time;
+
+                // todo: don't free the packet
+
+                // return;                
+            }
+        }
+        break;
+
+        default:
+            break;
+    }
+
+    free( packet );    
 }
 
 void netcode_client_receive_packets( struct netcode_client_t * client )
@@ -2009,9 +2086,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
         if ( !packet )
             continue;
 
-        netcode_client_process_packet( client, packet, sequence );
-
-        free( packet );
+        netcode_client_process_packet( client, &from, packet, sequence );
     }
 }
 
@@ -2082,6 +2157,8 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) > client->time )
                 return;
 
+            printf( "send connection keep-alive packet\n" );
+
             struct netcode_connection_keep_alive_packet_t packet;
 
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -2099,17 +2176,35 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 {
 	assert( client );
 
-	(void) client;
+    if ( client->server_address_index + 1 >= client->server_info.num_server_addresses )
+        return 0;
 
-    // todo
-    return 0;
+    client->server_address_index++;
+    client->server_address = client->server_info.server_addresses[client->server_address_index];
+
+    netcode_client_reset_before_next_connect( client );
+
+    // todo: i would like to print address of next server client is connecting to
+    /*
+    char addressString[MaxAddressLength];
+    m_serverAddresses[m_serverAddressIndex].ToString( addressString, sizeof( addressString ) );
+    debug_printf( "connect to next secure server: %s (%d/%d)\n", addressString, m_serverAddressIndex + 1, m_numServerAddresses );
+    */
+
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+
+    return 1;
 }
 
-void netcode_client_advance_time( struct netcode_client_t * client, double time )
+void netcode_client_update( struct netcode_client_t * client, double time )
 {
     assert( client );
 
     client->time = time;
+
+    netcode_client_receive_packets( client );
+
+    netcode_client_send_packets( client );
 
     if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
     {
@@ -2209,16 +2304,12 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     {
         for ( int i = 0; i < 10; ++i )
         {
-			// todo: send disconnect packets
+            printf( "send disconnect packet\n" );
 
-			/*
-            DisconnectPacket * packet = (DisconnectPacket*) CreatePacket( CLIENT_SERVER_PACKET_DISCONNECT );            
-
-            if ( packet )
-            {
-                SendPacketToServer_Internal( packet, true );
-            }
-			*/
+            struct netcode_connection_disconnect_packet_t packet;
+            packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
+            
+            netcode_client_send_packet_to_server_internal( client, &packet );
         }
     }
 
