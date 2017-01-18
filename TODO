@@ -1,50 +1,18 @@
 DONE
 
-    Added some error logs when the connect data fails to read. Will want to see these in the reference client for debug purposes.
+    Implement code in the other states to send packets, including logic for sending keep-alive (don't send confirm any more from client -> server).
 
-    Later on going to want to add this 
+    Started with connection response packet.
 
-    Would be nice if the connect data from the server included the timeout value for the client to use. This way it could be customizable server-side.
+    To implement this, I need the challenge sequence and challenge token data cached on client.
 
-    Done.
+    Added this, and made sure it gets cleared on connect to next server, as well as cleared initially.
 
-    Add code to track time connect started, and if the connect goes on longer than the connect data expire time (expire timestamp - create timestamp), timout the connect to a new state "connect token expired".
+    Implement code to write connection response packet. Done.
 
-    This avoids a bad situation where clients with lots of servers in their list keep trying to use the connect token to connect, which will be ignored by the server, therefore client will wait up to timeout (5 seconds) * number of servers left to try after timeout.
-
-    Done.
-
-    Port across code to parse a string to an address.
-
-    Implement code to parse the array of addresses and generate a connect token given a private key.
-
-    This will unblock further work on the client state machine, ideally I would be able to finish the client by end of day today, at minimum.
-
-    Maybe connect data should be renamed "server info"?
-
-    I dislike the similarity between "connect data" and "connect token".
-
-    I like the name server info. It's describes the servers to connect to. It *contains* a connect token. Its distinct enough to avoid confusion.
-
-    Renaming now. Completed. I think this is much better, especially when people "talk" about this protocol.
-
-    A "server info" is very distinct in naming from "connect token". They would not be confused with each other.
-
-    Implement client connecting with a generated connect data.
-
-    Work out how packets will be sent to the server, and how this will be mocked for testing purposes (eg. through a loopback or simulator, without all the complexity of 'transport' concept).
-
-    I'm thinking a callback function to perform the actual send which by default goes through a socket, but can be overridden to do something else (eg. simulator or pass directly to the server).
-
-    I think I'm definitely going to need a simulator, for testing, because proper testing of this system requires simulated network conditions.
+    Implement code to write connection keep alive.
 
 TODO
-
-    Extend change state so it's no longer "sending connection confirm" to "waiting for confirm"
-
-    ------------------
-
-    Implement code in the other states to send packets, including logic for sending keep-alive (don't send confirm any more from client -> server).
 
     ------------------
 

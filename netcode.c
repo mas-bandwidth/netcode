@@ -1539,6 +1539,8 @@ struct netcode_client_t
     int server_address_index;
     struct netcode_address_t server_address;
     struct netcode_server_info_t server_info;
+    uint64_t challenge_token_sequence;
+    uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
 struct netcode_client_t * netcode_client_create( double time )
@@ -1560,7 +1562,10 @@ struct netcode_client_t * netcode_client_create( double time )
 	client->sequence = 0;
     client->client_index = 0;
     client->server_address_index = 0;
+    client->challenge_token_sequence = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
+    memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
+    memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 
 	return client;
 }
@@ -1587,6 +1592,8 @@ void netcode_client_reset_before_next_connect( struct netcode_client_t * client 
     client->last_packet_receive_time = client->time;
     client->should_disconnect = 0;
     client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->challenge_token_sequence = 0;
+    memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 }
 
 void netcode_client_reset_connection_data( struct netcode_client_t * client, int client_state )
@@ -1640,7 +1647,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 	// todo
 }
 
-void netcode_client_send_packet_to_server( struct netcode_client_t * client, void * packet )
+void netcode_client_send_packet_to_server_internal( struct netcode_client_t * client, void * packet )
 {
     assert( client );
 
@@ -1672,55 +1679,40 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             packet.connect_token_sequence = client->server_info.connect_token_sequence;
             memcpy( packet.connect_token_data, client->server_info.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
-            netcode_client_send_packet_to_server( client, &packet );
+            netcode_client_send_packet_to_server_internal( client, &packet );
         }
         break;
 
-        /*
-        case CLIENT_STATE_SENDING_CHALLENGE_RESPONSE:
+        case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:
         {
-            if ( m_lastPacketSendTime + ( 1.0f / m_config.connectionNegotiationSendRate ) > time )
+            if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) > client->time )
                 return;
 
-            ChallengeResponsePacket * packet = (ChallengeResponsePacket*) CreatePacket( CLIENT_SERVER_PACKET_CHALLENGE_RESPONSE );
-            
-            if ( packet )
-            {
-                memcpy( packet->challengeTokenData, m_challengeTokenData, ChallengeTokenBytes );
-                memcpy( packet->challengeTokenNonce, m_challengeTokenNonce, NonceBytes );
-                
-                SendPacketToServer_Internal( packet );
-            }
+            printf( "send connection response packet\n" );
+
+            struct netcode_connection_response_packet_t packet;
+
+            packet.packet_type = NETCODE_CONNECTION_RESPONSE_PACKET;
+            packet.challenge_token_sequence = client->challenge_token_sequence;
+            memcpy( &packet.challenge_token_data, client->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+            netcode_client_send_packet_to_server_internal( client, &packet );
         }
         break;
 
-        // todo: we need connection confirm state here
-
-        case CLIENT_STATE_CONNECTED:
+        case NETCODE_CLIENT_STATE_CONNECTED:
         {
-            if ( m_connection )
-            {
-                ConnectionPacket * packet = m_connection->GeneratePacket();
+            if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) > client->time )
+                return;
 
-                if ( packet )
-                {
-                    SendPacketToServer( packet );
-                }
-            }
+            struct netcode_connection_keep_alive_packet_t packet;
 
-            if ( m_lastPacketSendTime + ( 1.0f / m_config.connectionKeepAliveSendRate ) <= time )
-            {
-                KeepAlivePacket * packet = (KeepAlivePacket*) CreatePacket( CLIENT_SERVER_PACKET_KEEPALIVE );
+            packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
 
-                if ( packet )
-                {
-                    SendPacketToServer( packet );
-                }
-            }
+            netcode_client_send_packet_to_server_internal( client, &packet );
         }
         break;
-        */
-
+        
         default:
             break;
     }
