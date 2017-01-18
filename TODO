@@ -1,24 +1,6 @@
 DONE
 
-    Set up array of client allowed packets for read.
-
-    Make sure client sets current timestamp on read.
-
-    Make sure the process packet code is separate from the client receive packet loop, so it can be pumped from elsewhere (eg. packets coming in from simulator).
-
-    Port across the code to process client packets.
-
-    Simplified client interface. No more separates send and receive packets. Just update. Call the update, receive user packets after it.
-
-    You can send payload packets at any time, so it's not any benefit to have separation of read and write like with yojimbo.
-
-    Make sure the client has all the logic necessary to progress to connected state.
-
-    Implement code to connect to next server. This shouldn't be that hard, the data structures are already setup. Done.
-
 TODO
-
-    -----------------
 
     Need to implement a queue so the client can buffer payload packets for receive.
 

@@ -205,6 +205,48 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     return 0;
 }
 
+char * netcode_address_to_string( struct netcode_address_t * address, char * buffer, int buffer_size )
+{
+    assert( address );
+    assert( buffer );
+    assert( buffer_size >= NETCODE_MAX_ADDRESS_STRING_LENGTH );
+
+    if ( address->type == NETCODE_ADDRESS_IPV6 )
+    {
+        if ( address->port == 0 )
+        {
+            uint16_t ipv6_network_order[8];
+            for ( int i = 0; i < 8; ++i )
+                ipv6_network_order[i] = htons( address->address.ipv6[i] );
+            inet_ntop( AF_INET6, (void*) ipv6_network_order, buffer, buffer_size );
+            return buffer;
+        }
+        else
+        {
+            char address_string[INET6_ADDRSTRLEN];
+            uint16_t ipv6_network_order[8];
+            for ( int i = 0; i < 8; ++i )
+                ipv6_network_order[i] = htons( address->address.ipv6[i] );
+            inet_ntop( AF_INET6, (void*) ipv6_network_order, address_string, INET6_ADDRSTRLEN );
+            snprintf( buffer, buffer_size, "[%s]:%d", address_string, address->port );
+            return buffer;
+        }
+    }
+    else if ( address->type == NETCODE_ADDRESS_IPV4 )
+    {
+        if ( address->port != 0 )
+            snprintf( buffer, buffer_size, "%d.%d.%d.%d:%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3], address->port );
+        else
+            snprintf( buffer, buffer_size, "%d.%d.%d.%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3] );
+        return buffer;
+    }
+    else
+    {
+        snprintf( buffer, buffer_size, "%s", "NONE" );
+        return buffer;
+    }
+}
+
 int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
     assert( a );
@@ -427,7 +469,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED;
             }
-            address->port = ntohs( sin.sin6_port );
+            s->address.port = ntohs( sin.sin6_port );
         }
         else
         {
@@ -439,7 +481,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED;
             }
-            address->port = ntohs( sin.sin_port );
+            s->address.port = ntohs( sin.sin_port );
         }
     }
 
@@ -1871,8 +1913,11 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
 
     if ( !client )
     {
+        netcode_socket_destroy( &socket );
         return NULL;
     }
+
+    printf( "client started on port %d\n", socket.address.port );
 
     client->socket = socket;
 	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
@@ -1956,8 +2001,9 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
     client->server_address_index = 0;
     client->server_address = client->server_info.server_addresses[0];
 
-    // todo: would like a function to print address to string for logging here
-    //printf( "client connecting to %s\n", server_address_string );
+    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    printf( "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ) );
 
     client->context.protocol_id = client->server_info.protocol_id;
     memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
@@ -2308,7 +2354,7 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
 
             struct netcode_connection_disconnect_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
-            
+
             netcode_client_send_packet_to_server_internal( client, &packet );
         }
     }
