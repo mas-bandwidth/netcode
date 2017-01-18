@@ -207,7 +207,7 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     return 0;
 }
 
-int netcode_address_is_equal( struct netcode_address_t * a, struct netcode_address_t * b )
+int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
     assert( a );
     assert( b );
@@ -242,6 +242,45 @@ int netcode_address_is_equal( struct netcode_address_t * a, struct netcode_addre
     }
 
     return 1;
+}
+
+// ----------------------------------------------------------------
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+typedef uint64_t netcode_socket_handle_t;
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+typedef int netcode_socket_handle_t;
+#endif // #if NETCODE_PLATFORM == NETCODe_PLATFORM_WINDOWS
+
+struct netcode_socket_t
+{
+    struct netcode_address_t address;
+    netcode_socket_handle_t socket_handle;
+};
+
+#define NETCODE_SOCKET_SNDBUF_SIZE      1024 * 1024
+#define NETCODE_SOCKET_RCVBUF_SIZE      1024 * 1024
+
+#define NETCODE_SOCKET_ERROR_NONE                               0
+#define NETCODE_SOCKET_ERROR_CREATE_FAILED                      1
+#define NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED            2
+#define NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED           3
+#define NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED              4
+#define NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED              5
+#define NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED                   6
+#define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           7
+
+int netcode_create_socket( struct netcode_socket_t * socket, struct netcode_address_t address )
+{
+    assert( socket );
+
+    socket->address = address;
+
+    // ...
+
+    return NETCODE_SOCKET_ERROR_NONE;
 }
 
 // ----------------------------------------------------------------
@@ -2255,7 +2294,7 @@ static void test_connect_token()
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
     check( memcmp( input_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
-    check( netcode_address_is_equal( &input_token.server_addresses[0], &server_address ) );
+    check( netcode_address_equal( &input_token.server_addresses[0], &server_address ) );
 
     // write it to a buffer
 
@@ -2286,7 +2325,7 @@ static void test_connect_token()
 
     check( output_token.client_id == input_token.client_id );
     check( output_token.num_server_addresses == input_token.num_server_addresses );
-    check( netcode_address_is_equal( &output_token.server_addresses[0], &input_token.server_addresses[0] ) );
+    check( netcode_address_equal( &output_token.server_addresses[0], &input_token.server_addresses[0] ) );
     check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
     check( memcmp( output_token.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
     check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
@@ -2357,7 +2396,7 @@ static void test_connection_request_packet()
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
     check( memcmp( input_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
-    check( netcode_address_is_equal( &input_token.server_addresses[0], &server_address ) );
+    check( netcode_address_equal( &input_token.server_addresses[0], &server_address ) );
 
     // write the conect token to a buffer (non-encrypted)
 
@@ -2704,7 +2743,7 @@ void test_server_info()
     check( connect_token.client_id == TEST_CLIENT_ID );
     check( connect_token.num_server_addresses == 1 );
     check( memcmp( connect_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
-    check( netcode_address_is_equal( &connect_token.server_addresses[0], &server_address ) );
+    check( netcode_address_equal( &connect_token.server_addresses[0], &server_address ) );
 
     // write it to a buffer
 
@@ -2759,7 +2798,7 @@ void test_server_info()
     check( output_server_info.connect_token_sequence == input_server_info.connect_token_sequence );
     check( memcmp( output_server_info.connect_token_data, input_server_info.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
     check( output_server_info.num_server_addresses == input_server_info.num_server_addresses );
-    check( netcode_address_is_equal( &output_server_info.server_addresses[0], &input_server_info.server_addresses[0] ) );
+    check( netcode_address_equal( &output_server_info.server_addresses[0], &input_server_info.server_addresses[0] ) );
     check( memcmp( output_server_info.client_to_server_key, input_server_info.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
     check( memcmp( output_server_info.server_to_client_key, input_server_info.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
     check( output_server_info.timeout_seconds == input_server_info.timeout_seconds );

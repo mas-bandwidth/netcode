@@ -1,17 +1,5 @@
 DONE
 
-    Implement code in the other states to send packets, including logic for sending keep-alive (don't send confirm any more from client -> server).
-
-    Started with connection response packet.
-
-    To implement this, I need the challenge sequence and challenge token data cached on client.
-
-    Added this, and made sure it gets cleared on connect to next server, as well as cleared initially.
-
-    Implement code to write connection response packet. Done.
-
-    Implement code to write connection keep alive.
-
 TODO
 
     ------------------
