@@ -324,9 +324,6 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     }
 }
 
-// temp
-#include <errno.h>
-
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
     assert( socket );
@@ -474,16 +471,6 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 #endif
 
     return NETCODE_SOCKET_ERROR_NONE;
-}
-
-void netcode_destroy_socket( struct netcode_socket_t * socket )
-{
-    assert( socket );
-    assert( netcode.initialized );
-
-    (void) socket;
-
-    //
 }
 
 // ----------------------------------------------------------------
