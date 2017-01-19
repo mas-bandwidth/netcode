@@ -45,45 +45,28 @@ int main( int argc, char ** argv )
     double time = 0.0;
 	double delta_time = 0.1f;
 
-	printf( "[client]\n" );
+	printf( "[server]\n" );
 
-    struct netcode_client_t * client = netcode_client_create( "::1", time );
+    struct netcode_server_t * server = netcode_server_create( "[::]:50000", "[::1]:50000", private_key, time );
 
-    if ( !client )
+    if ( !server )
     {
-        printf( "error: failed to create client\n" );
+        printf( "error: failed to create server\n" );
         return 1;
     }
 
-    #define TEST_CONNECT_TOKEN_EXPIRY 30
-    #define TEST_CLIENT_ID 1000
-    #define TEST_PROTOCOL_ID 0x1122334455667788
-
-    char * server_address = "[::]:50000";
-
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
-
-    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, server_info ) )
-    {
-        printf( "error: failed to generate server info\n" );
-        return 1;
-    }
-
-    netcode_client_connect( client, server_info );
+    netcode_server_start( server, NETCODE_MAX_CLIENTS );
 
 	while ( 1 )
 	{
-        netcode_client_update( client, time );
+        netcode_server_update( server, time );
 
-        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-            break;
-
-		netcode_sleep( delta_time );
+        netcode_sleep( delta_time );
 
 		time += delta_time;
 	}
 
-    netcode_client_destroy( client );
+    netcode_server_destroy( server );
 
     netcode_term();
 	

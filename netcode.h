@@ -27,6 +27,32 @@
 
 #include <stdint.h>
 
+#if    defined(__386__) || defined(i386)    || defined(__i386__)  \
+    || defined(__X86)   || defined(_M_IX86)                       \
+    || defined(_M_X64)  || defined(__x86_64__)                    \
+    || defined(alpha)   || defined(__alpha) || defined(__alpha__) \
+    || defined(_M_ALPHA)                                          \
+    || defined(ARM)     || defined(_ARM)    || defined(__arm__)   \
+    || defined(WIN32)   || defined(_WIN32)  || defined(__WIN32__) \
+    || defined(_WIN32_WCE) || defined(__NT__)                     \
+    || defined(__MIPSEL__)
+  #define NETCODE_LITTLE_ENDIAN 1
+#else
+  #define NETCODE_BIG_ENDIAN 1
+#endif
+
+#define NETCODE_PLATFORM_WINDOWS    1
+#define NETCODE_PLATFORM_MAC        2
+#define NETCODE_PLATFORM_UNIX       3
+
+#if defined(_WIN32)
+#define NETCODE_PLATFORM NETCODE_PLATFORM_WINDOWS
+#elif defined(__APPLE__)
+#define NETCODE_PLATFORM NETCODE_PLATFORM_MAC
+#else
+#define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
+#endif
+
 #define NETCODE_SERVER_INFO_BYTES 4096
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
@@ -46,10 +72,11 @@
 #define NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM     3
 #define NETCODE_CLIENT_STATE_CONNECTED                          4
 
-#define NETCODE_SOCKET_IPV6     1
-#define NETCODE_SOCKET_IPV4     2
+#define NETCODE_SOCKET_IPV6         1
+#define NETCODE_SOCKET_IPV4         2
 
-#define NETCODE_MAX_PACKET_SIZE 1200
+#define NETCODE_MAX_CLIENTS         256
+#define NETCODE_MAX_PACKET_SIZE     1200
 
 int netcode_init();
 
@@ -70,5 +97,17 @@ void netcode_client_disconnect( struct netcode_client_t * client );
 int netcode_client_state( struct netcode_client_t * client );
 
 int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint8_t * private_key, uint8_t * server_info );
+
+struct netcode_server_t * netcode_server_create( char * bind_address, char * public_address, uint8_t * private_key, double time );
+
+void netcode_server_start( struct netcode_server_t * server, int max_clients );
+
+void netcode_server_update( struct netcode_server_t * client, double time );
+
+void netcode_server_destroy( struct netcode_server_t * server );
+
+void netcode_sleep( double seconds );
+
+double netcode_time();
 
 #endif // #ifndef NETCODE_H

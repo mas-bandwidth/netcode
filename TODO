@@ -1,38 +1,38 @@
 DONE
 
-    Added code to convert address to string for logging.
+    Sketch out the server struct and the server program.
 
-    Log port client starts on when it is created.
+    Create and destroy the server socket, as is done for the client.
 
-    Log server address client is connecting.
+    Added separate bind and public addresses for server create. Necessary so we can bind on any address.
 
-    Log server address when client connects to next server.
+    Need to bring across sleep function. platform.h for test programs? 
 
-    Port across the simple queue code.
+    Yes. I don't want to duplicate the sleep code across client and server.
 
-    Port across tests for queue.
+    Perhaps just put it in netcode. eg: netcode_sleep instead. Fine.
 
-    Add packet queue to client. 
-
-    Create and destroy it along with client.
-
-    Add function to send and receive payload packets to/from server.
-
-    Add a function to receive packets from server. Adjust the packet pointer so it is just the payload data.
-
-    Need a function to destroy payload packets received from client, because the pointer will be adjusted.
-
-    Done. The client is finished.
-
-    Stopping work here.
+    Yes. Added netcode_sleep, netcode_time.
 
 TODO
 
+    Also bring across the signalling code for server and client, so the client and server can handle ^C and clean up properly (eg. disconnect)
+
     -----------------
 
-    Implement the server side of the state machine (up to 256 players, for agar.io)
+    Implement code to send and receive packets.
 
-    Gee this is going to be a lot of work...
+    Implement process packet, and allowed packet types.
+
+    Verify that server is receiving connection request packets from client when running.
+
+    -----------------
+
+    Work out what is in the struct allocated per-client slot.
+
+    -----------------
+
+    Work out what arrays I need for fast O(n) lookups for incoming packets (keep them separate). Hot/cold split.
 
     -----------------
 

@@ -2478,23 +2478,78 @@ int netcode_client_state( struct netcode_client_t * client )
 
 struct netcode_server_t
 {
-	int dummy;
+    struct netcode_socket_t socket;
+    struct netcode_address_t bind_address;
+    struct netcode_address_t public_address;
+	double time;
+    uint8_t private_key[NETCODE_KEY_BYTES];
 };
 
-struct netcode_server_t * netcode_server_create( uint16_t port )
+struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint8_t * private_key, double time )
 {
-	(void) port;
-
     assert( netcode.initialized );
+
+    struct netcode_address_t bind_address;
+    struct netcode_address_t public_address;
+
+    if ( !netcode_parse_address( bind_address_string, &bind_address ) )
+    {
+        printf( "error: failed to parse server public address\n" );
+        return NULL;
+    }
+
+    if ( bind_address.port == 0 )
+    {
+        printf( "error: server must bind to a specific port\n" );
+        return NULL;
+    }
+
+    if ( !netcode_parse_address( public_address_string, &public_address ) )
+    {
+        printf( "error: failed to parse server public address\n" );
+        return NULL;
+    }
+
+    struct netcode_socket_t socket;
+    if ( netcode_socket_create( &socket, &bind_address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+    {
+        return NULL;
+    }
 
     struct netcode_server_t * server = (struct netcode_server_t*) malloc( sizeof( struct netcode_server_t ) );
 
     if ( !server )
+    {
+        netcode_socket_destroy( &socket );
         return NULL;
+    }
 
-    // ...
+    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    printf( "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ) );
+
+    server->socket = socket;
+    server->bind_address = bind_address;
+    server->public_address = public_address;
+    server->time = time;
+    memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
+
+    // todo: more
 
     return server;
+}
+
+void netcode_server_stop( struct netcode_server_t * server );
+
+void netcode_server_destroy( struct netcode_server_t * server )
+{
+    assert( server );
+
+    netcode_server_stop( server );
+
+    netcode_socket_destroy( &server->socket );
+
+    free( server );
 }
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients )
@@ -2502,7 +2557,24 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
 	(void) server;
 	(void) max_clients;
 
-	// ...
+    // todo: already started? stop, then start again.
+
+    printf( "server started with %d client slots\n", max_clients );
+
+	// todo: allocate clients slots
+}
+
+void netcode_server_stop( struct netcode_server_t * server )
+{
+    (void) server;
+
+    // not running? ignore and return here
+
+    printf( "server stopped\n" );
+
+    // todo: disconnect all clients (send disconnect packets)
+
+    // todo: free client slots
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )
@@ -2510,72 +2582,11 @@ void netcode_server_update( struct netcode_server_t * server, double time )
 	(void) server;
 	(void) time;
 
-	// ...
-}
+    // todo: receive packets
 
-int netcode_server_is_client_connected( struct netcode_server_t * server, int client_index )
-{
-	(void) server;
-	(void) client_index;
+	// todo: send packets
 
-	// ...
-
-	return 0;
-}
-
-int netcode_server_receive_packet_from_client( struct netcode_server_t * server, int client_index, uint8_t * buffer, int buffer_length )
-{
-	(void) server;
-	(void) client_index;
-	(void) buffer;
-	(void) buffer_length;
-
-	// ...
-
-	return 0;
-}
-
-void netcode_server_send_packet_to_client( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_size )
-{
-	(void) server;
-	(void) client_index;
-	(void) packet_data;
-	(void) packet_size;
-
-	// ...
-}
-
-void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index )
-{
-	(void) server;
-	(void) client_index;
-
-	// ...
-}
-
-void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
-{
-	(void) server;
-
-	// ...
-}
-
-void netcode_server_stop( struct netcode_server_t * server )
-{
-	(void) server;
-
-	// ...
-}
-
-void netcode_server_destroy( struct netcode_server_t * server )
-{
-    assert( server );
-
-	(void) server;
-
-	// ...
-
-    free( server );
+    // todo: timeouts etc.
 }
 
 // ----------------------------------------------------------------
@@ -2647,6 +2658,104 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
 
     return 1;
 }
+
+// ---------------------------------------------------------------
+
+#if __APPLE__
+
+// MacOS
+
+#include <unistd.h>
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+
+void netcode_sleep( double time )
+{
+    usleep( (int) ( time * 1000000 ) );
+}
+
+static uint64_t start = 0;
+static mach_timebase_info_data_t timebase_info;
+
+double netcode_time()
+{
+    if ( start == 0 )
+    {
+        mach_timebase_info( &timebase_info );
+        start = mach_absolute_time();
+        return 0.0;
+    }
+
+    uint64_t current = mach_absolute_time();
+
+    return ( (double) ( current - start ) ) * ( (double) timebase_info.numer ) / ( (double) timebase_info.denom ) / 1000000000.0;
+}
+
+#elif __linux
+
+// linux
+
+#include <unistd.h>
+#include <time.h>
+
+void netcode_sleep( double time )
+{
+    usleep( (int) ( time * 1000000 ) );
+}
+
+double netcode_time()
+{
+    static double start = -1;
+
+    if ( start == -1 )
+    {
+        timespec ts;
+        clock_gettime( CLOCK_MONOTONIC_RAW, &ts );
+        start = ts.tv_sec + double( ts.tv_nsec ) / 1000000000.0;
+        return 0.0;
+    }
+
+    timespec ts;
+    clock_gettime( CLOCK_MONOTONIC_RAW, &ts );
+    double current = ts.tv_sec + double( ts.tv_nsec ) / 1000000000.0;
+    return current - start;
+}
+
+#elif defined( _WIN32 )
+
+// windows
+
+#define NOMINMAX
+#include <windows.h>
+
+void netcode_sleep( double time )
+{
+    const int milliseconds = time * 1000;
+    Sleep( milliseconds );
+}
+
+static bool timer_initialized = false;
+static LARGE_INTEGER timer_frequency;
+static LARGE_INTEGER timer_start;
+
+double netcode_time()
+{
+    if ( !timer_initialized )
+    {
+        QueryPerformanceFrequency( &timer_frequency );
+        QueryPerformanceCounter( &timer_start );
+        timer_initialized = true;
+    }
+    LARGE_INTEGER now;
+    QueryPerformanceCounter( &now );
+    return double( now.QuadPart - timer_start.QuadPart ) / double( timer_frequency.QuadPart );
+}
+
+#else
+
+#error unsupported platform!
+
+#endif
 
 // ---------------------------------------------------------------
 
@@ -2888,6 +2997,21 @@ static void test_address()
 
     {
         struct netcode_address_t address;
+        check( netcode_parse_address( "::", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 0 );
+        check( address.address.ipv6[0] == 0x0000 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0000 );
+        check( address.address.ipv6[5] == 0x0000 );
+        check( address.address.ipv6[6] == 0x0000 );
+        check( address.address.ipv6[7] == 0x0000 );
+    }
+
+    {
+        struct netcode_address_t address;
         check( netcode_parse_address( "::1", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 0 );
@@ -2914,6 +3038,21 @@ static void test_address()
         check( address.address.ipv6[5] == 0xb3ff );
         check( address.address.ipv6[6] == 0xfe1e );
         check( address.address.ipv6[7] == 0x8329 );
+    }
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "[::]:40000", &address ) );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 40000 );
+        check( address.address.ipv6[0] == 0x0000 );
+        check( address.address.ipv6[1] == 0x0000 );
+        check( address.address.ipv6[2] == 0x0000 );
+        check( address.address.ipv6[3] == 0x0000 );
+        check( address.address.ipv6[4] == 0x0000 );
+        check( address.address.ipv6[5] == 0x0000 );
+        check( address.address.ipv6[6] == 0x0000 );
+        check( address.address.ipv6[7] == 0x0000 );
     }
 
     {
