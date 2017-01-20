@@ -28,6 +28,12 @@
 #include <memory.h>
 #include <stdio.h>
 
+#ifdef _MSC_VER
+#define SODIUM_STATIC
+#endif // #ifdef _MSC_VER
+
+#include <sodium.h>
+
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
     || defined(_M_X64)  || defined(__x86_64__)                    \
@@ -299,15 +305,16 @@ int netcode_init()
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     WSADATA WsaData;         
-    int result = WSAStartup( MAKEWORD(2,2), &WsaData ) == NO_ERROR;
-#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    int result = 1;
+    if ( WSAStartup( MAKEWORD(2,2), &WsaData ) != NO_ERROR )
+        return 0;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    if ( result )
-        netcode.initialized = 1;
+    if ( sodium_init() == -1 )
+        return 0;
 
-    return result;
+    netcode.initialized = 1;
+
+    return 1;
 }
 
 void netcode_term()
@@ -717,13 +724,17 @@ void netcode_read_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
     }
 }
 
+void netcode_print_bytes( const char * label, const uint8_t * data, int data_bytes )
+{
+    printf( "%s: ", label );
+    for ( int i = 0; i < data_bytes; ++i )
+    {
+        printf( "0x%02x,", (int) data[i] );
+    }
+    printf( " (%d bytes)\n", data_bytes );
+}
+
 // ----------------------------------------------------------------
-
-#ifdef _MSC_VER
-#define SODIUM_STATIC
-#endif // #ifdef _MSC_VER
-
-#include <sodium.h>
 
 #if SODIUM_LIBRARY_VERSION_MAJOR > 7 || ( SODIUM_LIBRARY_VERSION_MAJOR && SODIUM_LIBRARY_VERSION_MINOR >= 3 )
 #define SODIUM_SUPPORTS_OVERLAPPING_BUFFERS 1
@@ -974,6 +985,8 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
         netcode_write_uint64( &p, sequence );
     }
 
+    netcode_print_bytes( "additional data", additional_data, sizeof( additional_data ) );
+
     if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
         return 0;
 
@@ -999,6 +1012,8 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
         uint8_t * p = nonce;
         netcode_write_uint64( &p, sequence );
     }
+
+    netcode_print_bytes( "additional data", additional_data, sizeof( additional_data ) );
 
     if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
         return 0;
@@ -1494,10 +1509,6 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 		uint64_t packet_connect_token_sequence = netcode_read_uint64( &buffer );
 
 		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 );
-
-        printf( "version info: '%s'\n", version_info );
-        printf( "packet connect token expire timestamp %d\n", (int) packet_connect_token_expire_timestamp );
-        printf( "packet connect token sequence %d\n", (int) packet_connect_token_sequence );
 
 		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
         {
@@ -2710,7 +2721,7 @@ void netcode_server_update( struct netcode_server_t * server, double time )
 
 // ----------------------------------------------------------------
 
-int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint8_t * private_key, uint8_t * output_buffer )
+int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
 {
     assert( num_server_addresses > 0 );
     assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
@@ -2745,14 +2756,17 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
 
     // encrypt the buffer
 
-    uint64_t sequence = 1000;
     uint64_t create_timestamp = time( NULL );
     uint64_t expire_timestamp = create_timestamp + expire_seconds;
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
 
+    printf( "expire timestamp = %d\n", (int) expire_timestamp );
+
     if ( !netcode_encrypt_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, sequence, key ) )
         return 0;
+
+    netcode_print_bytes( "encrypted connect token", (uint8_t*) connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
 
     // wrap a server info around the connect token
 

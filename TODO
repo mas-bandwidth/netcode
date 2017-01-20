@@ -18,8 +18,23 @@ DONE
 
     What's wrong? Sequence # wrong? Different private key?
 
-TODO
+    Debugging why connect token is not decrypting...
 
+    probably need to bring across helper "print bytes" function to see what's going on.
+
+    Brought across print bytes but I can't see it.
+
+    encrypted data looks same.
+
+    key looks same.
+
+    nonce looks same.
+
+    additional data looks same...
+
+    what's going on?!
+
+TODO
 
     -----------------
     

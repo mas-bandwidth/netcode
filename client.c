@@ -72,7 +72,7 @@ int main( int argc, char ** argv )
 
     uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
 
-    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, server_info ) )
+    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
     {
         printf( "error: failed to generate server info\n" );
         return 1;
