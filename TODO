@@ -4,9 +4,11 @@ DONE
 
     Setup correct allowed packet types for server.
 
+    Rename netcode_packet_context_t to netcode_context_t
+
 TODO
 
-    Rename netcode_packet_context_t to netcode_context_t and remove the extra stuff from it (aside from encryption keys)
+    Remove the extra stuff from the context leaving only the encryption keys.
 
     -----------------
 

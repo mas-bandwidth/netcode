@@ -1249,8 +1249,7 @@ struct netcode_connection_payload_packet_t * netcode_create_payload_packet( int 
     return packet;
 }
 
-// todo: consider renaming just to "netcode_context_t"
-struct netcode_packet_context_t
+struct netcode_context_t
 {
     uint64_t protocol_id;                                       // todo: don't duplicate per-context. pass into read packet fn.
     uint64_t current_timestamp;                                 // todo: similarly, no need to duplicate this per-context.
@@ -1272,7 +1271,7 @@ int netcode_sequence_number_bytes_required( uint64_t sequence )
     return 8 - i;
 }
 
-int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, uint64_t sequence, struct netcode_packet_context_t * context )
+int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, uint64_t sequence, struct netcode_context_t * context )
 {
     (void) context;
 
@@ -1422,7 +1421,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     }
 }
 
-void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, struct netcode_packet_context_t * context, uint8_t * allowed_packets )
+void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, struct netcode_context_t * context, uint8_t * allowed_packets )
 {
     assert( context );
 	assert( sequence );
@@ -1937,7 +1936,7 @@ struct netcode_client_t
     struct netcode_address_t server_address;
     struct netcode_server_info_t server_info;
     struct netcode_socket_t socket;
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     struct netcode_packet_queue_t packet_receive_queue;
     uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
@@ -1984,7 +1983,7 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
     client->challenge_token_sequence = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
-    memset( &client->context, 0, sizeof( struct netcode_packet_context_t ) );
+    memset( &client->context, 0, sizeof( struct netcode_context_t ) );
     memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 
     netcode_packet_queue_init( &client->packet_receive_queue );
@@ -2031,7 +2030,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     client->server_address_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
-    memset( &client->context, 0, sizeof( struct netcode_packet_context_t ) );
+    memset( &client->context, 0, sizeof( struct netcode_context_t ) );
 
     netcode_client_set_state( client, client_state );
 
@@ -2631,7 +2630,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
     // todo: setup global context and per-client context and pending client contexts
 //    server->context.current_timestamp = (uint64_t) time( NULL );
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memcpy( context.connect_token_key, server->private_key, NETCODE_KEY_BYTES );
 
     while ( 1 )
@@ -3326,7 +3325,7 @@ static void test_connection_request_packet()
 
     uint8_t buffer[2048];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
 	context.protocol_id = TEST_PROTOCOL_ID;
 	context.current_timestamp = (uint64_t) time( NULL );
@@ -3369,9 +3368,9 @@ void test_connection_denied_packet()
 
 	// write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
 	context.protocol_id = TEST_PROTOCOL_ID;
 	netcode_generate_key( context.write_packet_key );
@@ -3411,9 +3410,9 @@ void test_connection_challenge_packet()
 
 	// write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
 	context.protocol_id = TEST_PROTOCOL_ID;
 	netcode_generate_key( context.write_packet_key );
@@ -3455,9 +3454,9 @@ void test_connection_response_packet()
 
     // write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
     context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
@@ -3498,9 +3497,9 @@ void test_connection_confirm_packet()
 
     // write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
     context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
@@ -3542,9 +3541,9 @@ void test_connection_payload_packet()
     
     // write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
     context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
@@ -3585,9 +3584,9 @@ void test_connection_disconnect_packet()
 
     // write the packet to a buffer
 
-    uint8_t buffer[2048];
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
 
-    struct netcode_packet_context_t context;
+    struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
     context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
