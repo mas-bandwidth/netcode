@@ -206,11 +206,10 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     return 0;
 }
 
-char * netcode_address_to_string( struct netcode_address_t * address, char * buffer, int buffer_size )
+char * netcode_address_to_string( struct netcode_address_t * address, char * buffer )
 {
     assert( address );
     assert( buffer );
-    assert( buffer_size >= NETCODE_MAX_ADDRESS_STRING_LENGTH );
 
     if ( address->type == NETCODE_ADDRESS_IPV6 )
     {
@@ -219,7 +218,7 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
             uint16_t ipv6_network_order[8];
             for ( int i = 0; i < 8; ++i )
                 ipv6_network_order[i] = htons( address->address.ipv6[i] );
-            inet_ntop( AF_INET6, (void*) ipv6_network_order, buffer, buffer_size );
+            inet_ntop( AF_INET6, (void*) ipv6_network_order, buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH );
             return buffer;
         }
         else
@@ -229,21 +228,21 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
             for ( int i = 0; i < 8; ++i )
                 ipv6_network_order[i] = htons( address->address.ipv6[i] );
             inet_ntop( AF_INET6, (void*) ipv6_network_order, address_string, INET6_ADDRSTRLEN );
-            snprintf( buffer, buffer_size, "[%s]:%d", address_string, address->port );
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "[%s]:%d", address_string, address->port );
             return buffer;
         }
     }
     else if ( address->type == NETCODE_ADDRESS_IPV4 )
     {
         if ( address->port != 0 )
-            snprintf( buffer, buffer_size, "%d.%d.%d.%d:%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3], address->port );
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d:%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3], address->port );
         else
-            snprintf( buffer, buffer_size, "%d.%d.%d.%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3] );
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3] );
         return buffer;
     }
     else
     {
-        snprintf( buffer, buffer_size, "%s", "NONE" );
+        snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%s", "NONE" );
         return buffer;
     }
 }
@@ -1250,11 +1249,12 @@ struct netcode_connection_payload_packet_t * netcode_create_payload_packet( int 
     return packet;
 }
 
+// todo: consider renaming just to "netcode_context_t"
 struct netcode_packet_context_t
 {
-    uint64_t protocol_id;
-    uint64_t current_timestamp;
-	uint8_t connect_token_key[NETCODE_KEY_BYTES];
+    uint64_t protocol_id;                                       // todo: don't duplicate per-context. pass into read packet fn.
+    uint64_t current_timestamp;                                 // todo: similarly, no need to duplicate this per-context.
+	uint8_t connect_token_key[NETCODE_KEY_BYTES];               // todo: no need to duplicate this per-context like this. pass it in to read packets function directly
 	uint8_t write_packet_key[NETCODE_KEY_BYTES];
 	uint8_t read_packet_key[NETCODE_KEY_BYTES];
 };
@@ -2058,7 +2058,7 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ) );
+    printf( "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string ) );
 
     client->context.protocol_id = client->server_info.protocol_id;
     memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
@@ -2285,7 +2285,7 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ), client->server_address_index, client->server_info.num_server_addresses );
+    printf( "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->server_info.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -2482,6 +2482,8 @@ struct netcode_server_t
     struct netcode_address_t bind_address;
     struct netcode_address_t public_address;
 	double time;
+    int running;
+    int max_clients;
     uint8_t private_key[NETCODE_KEY_BYTES];
 };
 
@@ -2526,15 +2528,15 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string, NETCODE_MAX_ADDRESS_STRING_LENGTH ) );
+    printf( "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string ) );
 
     server->socket = socket;
     server->bind_address = bind_address;
     server->public_address = public_address;
     server->time = time;
+    server->running = 0;
+    server->max_clients = 0;
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
-
-    // todo: more
 
     return server;
 }
@@ -2554,37 +2556,126 @@ void netcode_server_destroy( struct netcode_server_t * server )
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients )
 {
-	(void) server;
-	(void) max_clients;
+    assert( server );
+    assert( max_clients > 0 );
+    assert( max_clients <= NETCODE_MAX_CLIENTS );
 
-    // todo: already started? stop, then start again.
+    if ( server->running )
+        netcode_server_stop( server );
 
     printf( "server started with %d client slots\n", max_clients );
 
 	// todo: allocate clients slots
+
+    server->running = 1;
+    server->max_clients = max_clients;
 }
 
 void netcode_server_stop( struct netcode_server_t * server )
 {
-    (void) server;
+    assert( server );
 
-    // not running? ignore and return here
+    if ( !server->running )
+        return;
 
     printf( "server stopped\n" );
 
     // todo: disconnect all clients (send disconnect packets)
 
     // todo: free client slots
+
+    server->running = 0;
+    server->max_clients = 0;
+}
+
+void netcode_server_process_packet( struct netcode_server_t * client, struct netcode_address_t * from, void * packet, uint64_t sequence )
+{
+    assert( client );
+    assert( packet );
+
+    (void) from;
+    (void) sequence;
+
+    uint8_t packet_type = ( (uint8_t*) packet ) [0];
+
+    switch ( packet_type )
+    {
+        case NETCODE_CONNECTION_REQUEST_PACKET:
+        {    
+            char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+            printf( "server received connection request packet from %s\n", netcode_address_to_string( from, from_address_string ) );
+        }
+        break;
+
+        // todo: rest of client -> server packets
+
+        default:
+            break;
+    }
+
+    free( packet );    
+}
+
+void netcode_server_receive_packets( struct netcode_server_t * server )
+{
+    assert( server );
+
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 0, sizeof( allowed_packets ) );
+    allowed_packets[NETCODE_CONNECTION_REQUEST_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_RESPONSE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_KEEP_ALIVE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
+
+    // todo: setup global context and per-client context and pending client contexts
+//    server->context.current_timestamp = (uint64_t) time( NULL );
+    struct netcode_packet_context_t context;
+    memcpy( context.connect_token_key, server->private_key, NETCODE_KEY_BYTES );
+
+    while ( 1 )
+    {
+        struct netcode_address_t from;
+
+        uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+        int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
+        if ( packet_bytes == 0 )
+            break;
+
+        if ( !server->running )
+            continue;
+
+        uint64_t sequence;
+
+        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, &context, allowed_packets );
+
+        if ( !packet )
+            continue;
+
+        netcode_server_process_packet( server, &from, packet, sequence );
+    }
+}
+
+void netcode_server_send_packets( struct netcode_server_t * server )
+{
+    assert( server );
+
+    (void) server;
+
+    // ...
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )
 {
-	(void) server;
-	(void) time;
+    assert( server );
 
-    // todo: receive packets
+    server->time = time;
 
-	// todo: send packets
+    netcode_server_receive_packets( server );
+
+    netcode_server_send_packets( server );
 
     // todo: timeouts etc.
 }

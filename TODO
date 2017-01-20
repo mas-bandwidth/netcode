@@ -1,28 +1,16 @@
 DONE
 
-    Sketch out the server struct and the server program.
+    Implement code for server to receive and process packets.
 
-    Create and destroy the server socket, as is done for the client.
-
-    Added separate bind and public addresses for server create. Necessary so we can bind on any address.
-
-    Need to bring across sleep function. platform.h for test programs? 
-
-    Yes. I don't want to duplicate the sleep code across client and server.
-
-    Perhaps just put it in netcode. eg: netcode_sleep instead. Fine.
-
-    Yes. Added netcode_sleep, netcode_time.
-
-    Also bring across the signalling code for server and client, so the client and server can handle ^C and clean up properly (eg. disconnect)
+    Setup correct allowed packet types for server.
 
 TODO
 
-    Implement code for server to receive and process packets.
+    Rename netcode_packet_context_t to netcode_context_t and remove the extra stuff from it (aside from encryption keys)
 
     -----------------
 
-    Setup correct allowed packet types for server.
+    Need to implement a global context for the server.
 
     -----------------
 
