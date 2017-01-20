@@ -1437,14 +1437,25 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
     {
         // connection request packet: first byte is zero
 
+        printf( "reading connection request packet\n" );
+
         if ( !allowed_packets[0] )
+        {
+            printf( "ignored: connection request packet is not allowed\n" );
             return NULL;
+        }
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES )
+        {
+            printf( "ignored: bad connection request packet length\n" );
             return NULL;
+        }
 
         if ( !private_key )
+        {
+            printf( "ignored: no private key\n" );
             return NULL;
+        }
 
 		uint8_t version_info[NETCODE_VERSION_INFO_BYTES];
 		netcode_read_bytes( &buffer, version_info, NETCODE_VERSION_INFO_BYTES );
@@ -1462,28 +1473,45 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 			 version_info[11] != '0' ||
 			 version_info[12] != '\0' )
 		{
+            printf( "ignored: bad version info\n" );
 			return NULL;
 		}
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
         if ( packet_protocol_id != protocol_id )
+        {
+            printf( "ignored: wrong protocol id\n" );
             return NULL;
+        }
 
         uint64_t packet_connect_token_expire_timestamp = netcode_read_uint64( &buffer );
         if ( packet_connect_token_expire_timestamp <= current_timestamp )
+        {
+            printf( "ignored: connect token expired\n" );
             return NULL;
+        }
 
 		uint64_t packet_connect_token_sequence = netcode_read_uint64( &buffer );
 
 		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 );
 
+        printf( "version info: '%s'\n", version_info );
+        printf( "packet connect token expire timestamp %d\n", (int) packet_connect_token_expire_timestamp );
+        printf( "packet connect token sequence %d\n", (int) packet_connect_token_sequence );
+
 		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
+        {
+            printf( "ignored: connect token failed to decrypt\n" );
 			return NULL;
+        }
 
         struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) malloc( sizeof( struct netcode_connection_request_packet_t ) );
 
         if ( !packet )
+        {
+            printf( "ignored: failed to allocate packet\n" );
             return NULL;
+        }
 
         packet->packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
 		memcpy( packet->version_info, version_info, NETCODE_VERSION_INFO_BYTES );
@@ -2593,6 +2621,8 @@ void netcode_server_process_packet( struct netcode_server_t * client, struct net
     (void) sequence;
 
     uint8_t packet_type = ( (uint8_t*) packet ) [0];
+
+    printf( "server process packet %d\n", packet_type );
 
     switch ( packet_type )
     {

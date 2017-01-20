@@ -10,7 +10,16 @@ DONE
 
     Verify that server is receiving connection request packets from client when running.
 
+    Now, why are the connection request packets being rejected and not turning into full packets for client?
+
+    Not setting the private key properly? Different protocol id?
+
+    Connect token is failing to decrypt. This is annoying. Will be hard to track down...
+
+    What's wrong? Sequence # wrong? Different private key?
+
 TODO
+
 
     -----------------
     
