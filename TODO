@@ -14,21 +14,23 @@ DONE
 
     Yes. Added netcode_sleep, netcode_time.
 
+    Also bring across the signalling code for server and client, so the client and server can handle ^C and clean up properly (eg. disconnect)
+
 TODO
 
-    Also bring across the signalling code for server and client, so the client and server can handle ^C and clean up properly (eg. disconnect)
+    Implement code for server to receive and process packets.
 
     -----------------
 
-    Implement code to send and receive packets.
+    Setup correct allowed packet types for server.
 
-    Implement process packet, and allowed packet types.
+    -----------------
 
     Verify that server is receiving connection request packets from client when running.
 
     -----------------
 
-    Work out what is in the struct allocated per-client slot.
+    Work out what I need in the struct allocated per-client slot.
 
     -----------------
 
