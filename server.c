@@ -56,7 +56,9 @@ int main( int argc, char ** argv )
 
 	printf( "[server]\n" );
 
-    struct netcode_server_t * server = netcode_server_create( "[::]:50000", "[::1]:50000", private_key, time );
+    #define TEST_PROTOCOL_ID 0x1122334455667788
+
+    struct netcode_server_t * server = netcode_server_create( "[::]:50000", "[::1]:50000", TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {
@@ -67,7 +69,7 @@ int main( int argc, char ** argv )
     netcode_server_start( server, NETCODE_MAX_CLIENTS );
 
     signal( SIGINT, interrupt_handler );
-    
+
 	while ( !quit )
 	{
         netcode_server_update( server, time );

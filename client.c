@@ -56,7 +56,7 @@ int main( int argc, char ** argv )
 
 	printf( "[client]\n" );
 
-    struct netcode_client_t * client = netcode_client_create( "::1", time );
+    struct netcode_client_t * client = netcode_client_create( "::", time );
 
     if ( !client )
     {
@@ -68,7 +68,7 @@ int main( int argc, char ** argv )
     #define TEST_CLIENT_ID 1000
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = "[::]:50000";
+    char * server_address = "[::1]:50000";
 
     uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
 

@@ -1251,9 +1251,6 @@ struct netcode_connection_payload_packet_t * netcode_create_payload_packet( int 
 
 struct netcode_context_t
 {
-    uint64_t protocol_id;                                       // todo: don't duplicate per-context. pass into read packet fn.
-    uint64_t current_timestamp;                                 // todo: similarly, no need to duplicate this per-context.
-	uint8_t connect_token_key[NETCODE_KEY_BYTES];               // todo: no need to duplicate this per-context like this. pass it in to read packets function directly
 	uint8_t write_packet_key[NETCODE_KEY_BYTES];
 	uint8_t read_packet_key[NETCODE_KEY_BYTES];
 };
@@ -1271,7 +1268,7 @@ int netcode_sequence_number_bytes_required( uint64_t sequence )
     return 8 - i;
 }
 
-int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, uint64_t sequence, struct netcode_context_t * context )
+int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, uint64_t sequence, struct netcode_context_t * context, uint64_t protocol_id )
 {
     (void) context;
 
@@ -1400,7 +1397,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 		{
 			uint8_t * p = additional_data;
 			netcode_write_bytes( &p, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-			netcode_write_uint64( &p, context->protocol_id );
+			netcode_write_uint64( &p, protocol_id );
 			netcode_write_uint8( &p, prefix_byte );
 		}
 
@@ -1421,7 +1418,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     }
 }
 
-void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, struct netcode_context_t * context, uint8_t * allowed_packets )
+void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, struct netcode_context_t * context, uint64_t protocol_id, uint64_t current_timestamp, uint8_t * private_key, uint8_t * allowed_packets )
 {
     assert( context );
 	assert( sequence );
@@ -1446,6 +1443,9 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES )
             return NULL;
 
+        if ( !private_key )
+            return NULL;
+
 		uint8_t version_info[NETCODE_VERSION_INFO_BYTES];
 		netcode_read_bytes( &buffer, version_info, NETCODE_VERSION_INFO_BYTES );
 		if ( version_info[0]  != 'N' || 
@@ -1466,18 +1466,18 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 		}
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
-        if ( packet_protocol_id != context->protocol_id )
+        if ( packet_protocol_id != protocol_id )
             return NULL;
 
         uint64_t packet_connect_token_expire_timestamp = netcode_read_uint64( &buffer );
-        if ( packet_connect_token_expire_timestamp <= context->current_timestamp )
+        if ( packet_connect_token_expire_timestamp <= current_timestamp )
             return NULL;
 
 		uint64_t packet_connect_token_sequence = netcode_read_uint64( &buffer );
 
 		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 );
 
-		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, context->protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, context->connect_token_key ) )
+		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
 			return NULL;
 
         struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) malloc( sizeof( struct netcode_connection_request_packet_t ) );
@@ -1536,7 +1536,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 		{
 			uint8_t * p = additional_data;
 			netcode_write_bytes( &p, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-			netcode_write_uint64( &p, context->protocol_id );
+			netcode_write_uint64( &p, protocol_id );
 			netcode_write_uint8( &p, prefix_byte );
 		}
 
@@ -2059,7 +2059,6 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
 
     printf( "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string ) );
 
-    client->context.protocol_id = client->server_info.protocol_id;
     memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->server_info.client_to_server_key, NETCODE_KEY_BYTES );
 
@@ -2165,7 +2164,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
 
-    client->context.current_timestamp = (uint64_t) time( NULL );
+    uint64_t current_timestamp = (uint64_t) time( NULL );
 
     while ( 1 )
     {
@@ -2179,7 +2178,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
         uint64_t sequence;
 
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, &client->context, allowed_packets );
+        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, &client->context, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets );
 
         if ( !packet )
             continue;
@@ -2194,11 +2193,7 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-    client->context.current_timestamp = (uint64_t) time( NULL );
-
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &client->context );
-
-    printf( "packet bytes = %d\n", packet_bytes );
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, &client->context, client->server_info.protocol_id );
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
@@ -2480,13 +2475,14 @@ struct netcode_server_t
     struct netcode_socket_t socket;
     struct netcode_address_t bind_address;
     struct netcode_address_t public_address;
+    uint64_t protocol_id;
 	double time;
     int running;
     int max_clients;
     uint8_t private_key[NETCODE_KEY_BYTES];
 };
 
-struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint8_t * private_key, double time )
+struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time )
 {
     assert( netcode.initialized );
 
@@ -2532,6 +2528,7 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     server->socket = socket;
     server->bind_address = bind_address;
     server->public_address = public_address;
+    server->protocol_id = protocol_id;
     server->time = time;
     server->running = 0;
     server->max_clients = 0;
@@ -2628,10 +2625,10 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
 
-    // todo: setup global context and per-client context and pending client contexts
-//    server->context.current_timestamp = (uint64_t) time( NULL );
+    uint64_t current_timestamp = (uint64_t) time( NULL );
+
     struct netcode_context_t context;
-    memcpy( context.connect_token_key, server->private_key, NETCODE_KEY_BYTES );
+    memset( &context, 0, sizeof( context ) );
 
     while ( 1 )
     {
@@ -2646,9 +2643,11 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         if ( !server->running )
             continue;
 
+        printf( "server received packet type %d\n", packet_data[0] );
+
         uint64_t sequence;
 
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, &context, allowed_packets );
+        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, &context, server->protocol_id, current_timestamp, server->private_key, allowed_packets );
 
         if ( !packet )
             continue;
@@ -3327,11 +3326,8 @@ static void test_connection_request_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-	context.protocol_id = TEST_PROTOCOL_ID;
-	context.current_timestamp = (uint64_t) time( NULL );
-	memcpy( context.connect_token_key, connect_token_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3342,7 +3338,7 @@ static void test_connection_request_packet()
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 1, sizeof( allowed_packets ) );
 
-    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packets );
+    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), connect_token_key, allowed_packets );
 
     check( output_packet );
 
@@ -3372,11 +3368,10 @@ void test_connection_denied_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-	context.protocol_id = TEST_PROTOCOL_ID;
 	netcode_generate_key( context.write_packet_key );
 	memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3387,7 +3382,7 @@ void test_connection_denied_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
@@ -3414,11 +3409,10 @@ void test_connection_challenge_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-	context.protocol_id = TEST_PROTOCOL_ID;
 	netcode_generate_key( context.write_packet_key );
 	memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3429,7 +3423,7 @@ void test_connection_challenge_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
@@ -3458,11 +3452,10 @@ void test_connection_response_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-    context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
     memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3473,7 +3466,7 @@ void test_connection_response_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
@@ -3501,11 +3494,10 @@ void test_connection_confirm_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-    context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
     memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3516,7 +3508,7 @@ void test_connection_confirm_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
-    struct netcode_connection_confirm_packet_t * output_packet = (struct netcode_connection_confirm_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_confirm_packet_t * output_packet = (struct netcode_connection_confirm_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
@@ -3545,11 +3537,10 @@ void test_connection_payload_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-    context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
     memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3560,7 +3551,7 @@ void test_connection_payload_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
@@ -3588,11 +3579,10 @@ void test_connection_disconnect_packet()
 
     struct netcode_context_t context;
     memset( &context, 0, sizeof( context ) );
-    context.protocol_id = TEST_PROTOCOL_ID;
     netcode_generate_key( context.write_packet_key );
     memcpy( context.read_packet_key, context.write_packet_key, NETCODE_KEY_BYTES );
 
-    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context );
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), 1000, &context, TEST_PROTOCOL_ID );
 
     check( bytes_written > 0 );
 
@@ -3603,7 +3593,7 @@ void test_connection_disconnect_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, allowed_packet_types );
+    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, &context, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 

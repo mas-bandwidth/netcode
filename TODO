@@ -6,17 +6,17 @@ DONE
 
     Rename netcode_packet_context_t to netcode_context_t
 
-TODO
-
     Remove the extra stuff from the context leaving only the encryption keys.
 
-    -----------------
-
-    Need to implement a global context for the server.
-
-    -----------------
-
     Verify that server is receiving connection request packets from client when running.
+
+TODO
+
+    -----------------
+    
+    Actually, just passing in context for encryption keys is pointless.
+
+    Just pass in the key directly. Context class may still exist, but it doesn't have to passed in this form to send and receive packet fns.
 
     -----------------
 

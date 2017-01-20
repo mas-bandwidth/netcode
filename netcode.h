@@ -98,7 +98,7 @@ int netcode_client_state( struct netcode_client_t * client );
 
 int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint8_t * private_key, uint8_t * server_info );
 
-struct netcode_server_t * netcode_server_create( char * bind_address, char * public_address, uint8_t * private_key, double time );
+struct netcode_server_t * netcode_server_create( char * bind_address, char * public_address, uint64_t protocol_id, uint8_t * private_key, double time );
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients );
 
