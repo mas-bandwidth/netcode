@@ -1,10 +1,92 @@
 DONE
 
-TODO
-
     Actually, just passing in context for encryption keys is pointless.
 
     Just pass in the key directly. Context class may still exist, but it doesn't have to passed in this form to send and receive packet fns.
+
+    Next step is to work out what sort of additional checks I need to do before setting up a pending connect.
+
+    What checks are remaining to do?
+
+    1. Check if the server is full and reject
+
+    2. Check if the client is already connected (ignore)
+
+    3. Check if the server address is in the token whitelist (otherwise ignore)
+
+    IMPORTANT: If the server is full, must add encryption mapping for the pending client before replying back with connection denied response.
+
+    Or... at least, must reply back with correct packet key, so client knows... yeah I can do that instead. I like not adding a mapping for a deny.
+
+    Need a way for the server to send the packet back to the client that sent the pending connection request on deny.
+
+    Added a function to send global packets from server, with a global sequence #.
+
+    Fuck it, this split between client and server is killing me. 
+
+    Going back to client_server.c so it can be tested in one program.
+
+    Done.
+
+    Seems like global sequence # (with high bit set) is triggering an assert on sequence # bytes... debugging.
+
+    Fixed. Needed to be <= 8, not <= 7.
+
+    Server is sending connection denied packet back to client, but client is not processing it?
+
+    Debug why not. Could be an encryption problem...
+
+    Added a bunch of logs to print out for all packet types why they failed to read. Will need a "debug_printf" soon.
+
+    The connection request denied packet is failing to decrypt on the client. Is it being encoded with the correct key?
+
+    Check the send side, it's more likely to be incorrect...
+
+    The code reconstructing the sequence is incorrect. I wasn't memsetting the sequence data to 0 I think.
+
+    Fixed. I had a logic error (around casting) based in the sequence. It works now.
+
+    Disable the logging for the packet read/write.
+
+    What's the next step? Client is correctly getting the disconnect packet in.
+
+    Next step has to be to work out the sequence of steps required for the client to setup a pending connection.
+
+    First I need to bring across the concept of pending connections.
+
+    How many pending connections can be allowed at the same time? Some multiple of maximum 256*8 = 2048. That's fine.
+
+    What data is needed for each pending connection?
+
+    One thing I think I might need to do is to store the user data with the pending connection, *or* enlarge the challenge token.
+
+    If the user data is 256k, then the challenge token will be larger, perhaps 320 bytes in total. This is still < ~1/3 of the connection request packet.
+
+    I would not like to make the challenge token 512 bytes, only 1/2. I like its size being around 1/4 of the size of the connect request packet.
+
+    How big is that packet? It's around 1200, so 300 would be around 1/4. This is OK.
+
+    So I think, now I need to add the user data into the challenge token, so I can avoid storing it on the server, I don't want to store 256k multiplied by 2048 potential connecting clients.
+
+TODO
+
+    Extend challenge token to include user data.
+
+    Update tests to insert random user data and check that it matches.
+
+    Bring across data structure from yojimbo for pending client, with the real data sent back inside the challenge token.
+
+    I think it's something like, take a hash of the HMAC of the connect token and the IP address, and search for that hash and address pair quickly.
+
+    This is probably quicker than just checking for the hash, and also checking for the address. Why not combine the two? I think yojimbo checks hash, and checks address, which is unnecessarily complex. This is more important now that the # of pending clients can be much larger (2048), and must be scanned each time a connection request comes in.
+
+    -----------------
+
+    There is some logic inside:
+
+        FindOrAddConnectTokenEntry
+
+    in yojimbo that I need to study and reproduce
 
     -----------------
 

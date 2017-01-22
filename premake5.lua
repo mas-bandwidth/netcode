@@ -41,6 +41,10 @@ project "server"
     files { "server.c" }
     links { "netcode" }
 
+project "client_server"
+    files { "client_server.c" }
+    links { "netcode" }
+
 project "netcode"
     kind "StaticLib"
     files { "netcode.h", "netcode.c" }
@@ -95,6 +99,18 @@ else
             os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 server" == 0 then
                 os.execute "./bin/server"
+            end
+        end
+    }
+
+    newaction
+    {
+        trigger     = "client_server",
+        description = "Build and run the client/server testbed",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 client_server" == 0 then
+                os.execute "./bin/client_server"
             end
         end
     }
