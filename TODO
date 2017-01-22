@@ -68,7 +68,33 @@ DONE
 
     So I think, now I need to add the user data into the challenge token, so I can avoid storing it on the server, I don't want to store 256k multiplied by 2048 potential connecting clients.
 
+    Ported across netcode_server_find_or_add_connect_token_entry.
+
+    This is basically the set of "pending clients".
+
+    However, I still also need the concept of adding an "encryption mapping", eg. a context. 
+
+    This should be done after the challenge response has been constructed and fully sent.
+
+    Need to port across the encryption mapping concept. The timeout on the encryption mapping is especially important. This is needed for pending clients.
+
+    Quickest way to do this is to just port that class across without much change. There is nothing wrong with it. Get it done.
+
+    Can even eventually do the faster, OK, look for a connected client first on receive, cache the send/recv keys in the context as well.
+
+    So the idea is a context is a connected client (and remains that in netcode.io, like yojimbo)
+
+    So really, keep it like yojimbo, don't deviate too much, where it's not necessary, because the design works. Where it does improve, it does so in ways that make it more secure, or simpler to read packets and reject early than yojimbo can, but this is good, because this is a very specific solution to just one small part (not a general solution to, OK now you want *any* number of packet types, encrypted or not... and so on.)
+
 TODO
+
+    Port across encryption manager above server.
+
+    Port across context manager above server.
+
+    Add tests for both managers.
+
+    -----------------
 
     Extend challenge token to include user data.
 
