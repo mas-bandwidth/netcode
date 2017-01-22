@@ -2584,6 +2584,15 @@ int netcode_client_state( struct netcode_client_t * client )
 
 // ----------------------------------------------------------------
 
+#define NETCODE_MAX_CONNECT_TOKEN_ENTRIES NETCODE_MAX_CLIENTS * 8
+
+struct netcode_connect_token_entry_t
+{
+    double time;
+    uint8_t mac[NETCODE_MAC_BYTES];
+    struct netcode_address_t address;
+};
+
 struct netcode_server_t
 {
     struct netcode_socket_t socket;
@@ -2596,6 +2605,7 @@ struct netcode_server_t
     int num_connected_clients;
     uint64_t global_sequence;
     uint8_t private_key[NETCODE_KEY_BYTES];
+    struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
 };
 
 struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time )
@@ -2652,6 +2662,13 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     server->global_sequence = 1ULL << 63;
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
 
+    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    {
+        server->connect_token_entries[i].time = -1000.0;
+        memset( server->connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
+        memset( &server->connect_token_entries[i].address, 0, sizeof( struct netcode_address_t ) );
+    }
+
     return server;
 }
 
@@ -2702,7 +2719,69 @@ void netcode_server_stop( struct netcode_server_t * server )
     server->running = 0;
     server->max_clients = 0;
     server->num_connected_clients = 0;
+
+    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    {
+        server->connect_token_entries[i].time = -1000.0;
+        memset( server->connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
+        memset( &server->connect_token_entries[i].address, 0, sizeof( struct netcode_address_t ) );
+    }
 }
+
+// todo
+/*
+    bool Server::FindOrAddConnectTokenEntry( const Address & address, const uint8_t * mac )
+    {
+        // find the matching entry for the token mac, and the oldest token. constant time worst case. This is intentional!
+
+        const double time = GetTime();
+
+        assert( address.IsValid() );
+
+        assert( mac );
+
+        int matchingTokenIndex = -1;
+        int oldestTokenIndex = -1;
+        double oldestTokenTime = 0.0;
+        for ( int i = 0; i < MaxConnectTokenEntries; ++i )
+        {
+            if ( memcmp( mac, m_connectTokenEntries[i].mac, MacBytes ) == 0 )
+            {
+                matchingTokenIndex = i;
+            }
+
+            if ( oldestTokenIndex == -1 || m_connectTokenEntries[i].time < oldestTokenTime )
+            {
+                oldestTokenTime = m_connectTokenEntries[i].time;
+                oldestTokenIndex = i;
+            }
+        }
+
+        // if no entry is found with the mac, replace the oldest entry with this (mac,address,time) and return true
+
+        assert( oldestTokenIndex != -1 );
+
+        if ( matchingTokenIndex == -1 )
+        {
+            m_connectTokenEntries[oldestTokenIndex].time = time;
+            m_connectTokenEntries[oldestTokenIndex].address = address;
+            memcpy( m_connectTokenEntries[oldestTokenIndex].mac, mac, MacBytes );
+            return true;
+        }
+
+        // if an entry is found with the same mac *and* it has the same address, return true
+
+        assert( matchingTokenIndex >= 0 );
+        assert( matchingTokenIndex < MaxConnectTokenEntries );
+
+        if ( m_connectTokenEntries[matchingTokenIndex].address == address )
+            return true;
+
+        // otherwise an entry exists with the same mac but a different address, somebody is trying to reuse this connect token in a replay attack!
+
+        return false;
+    }
+*/
 
 void netcode_server_send_global_packet( struct netcode_server_t * server, void * packet, struct netcode_address_t * to, uint8_t * packet_key )
 {

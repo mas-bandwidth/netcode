@@ -76,9 +76,7 @@ TODO
 
     Bring across data structure from yojimbo for pending client, with the real data sent back inside the challenge token.
 
-    I think it's something like, take a hash of the HMAC of the connect token and the IP address, and search for that hash and address pair quickly.
-
-    This is probably quicker than just checking for the hash, and also checking for the address. Why not combine the two? I think yojimbo checks hash, and checks address, which is unnecessarily complex. This is more important now that the # of pending clients can be much larger (2048), and must be scanned each time a connection request comes in.
+    Actually, 
 
     -----------------
 
