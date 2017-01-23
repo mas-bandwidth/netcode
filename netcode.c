@@ -2643,17 +2643,24 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
 int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
 {
+    printf( "encryption manager %p\n", encryption_manager );
+
     assert( encryption_manager );
     assert( address );
-
-    (void) time;
 
     for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) )
         {
+            printf( "clearing address at index %d (%p)\n", i, &encryption_manager->address[i] );
+
+            netcode_print_bytes( "before clear", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
+
             encryption_manager->last_access_time[i] = -1000.0;
-            memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );            
+            memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
+
+            netcode_print_bytes( "after clear", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
+
             memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
             memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
 
@@ -2678,10 +2685,18 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
 
 int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
 {
+    printf( "encryption manager %p\n", encryption_manager );
+
     for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
         {
+            printf( "found address at index %d (%p)\n", i, &encryption_manager->address[i] );
+
+            netcode_print_bytes( "address", (uint8_t*) address, sizeof( struct netcode_address_t ) );
+
+            netcode_print_bytes( "manager address", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
+
             encryption_manager->last_access_time[i] = time;
             return i;
         }
@@ -4096,9 +4111,7 @@ void test_encryption_manager()
 
     double time = 100.0;
 
-    // todo
-    (void) time;
-    (void) encryption_manager;
+    // add some encryption mappings and make sure looking up the encryption mapping by address works
 
     for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
@@ -4129,45 +4142,49 @@ void test_encryption_manager()
         check( memcmp( receive_key, encryption_mapping[i].receive_key, NETCODE_KEY_BYTES ) == 0 );
     }
 
+    // removing an encryption mapping that doesn't exist should return 0
     {
         struct netcode_address_t address;
         address.type = NETCODE_ADDRESS_IPV6;
         address.data.ipv6[7] = 1;
         address.port = 50000;
 
+        check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &address, time ) == 0 );
     }
 
-    /*
-    check( encryptionManager.RemoveEncryptionMapping( Address( "::1", 50000 ), time ) == false );
+    // remove the first and last encryption mappings
 
-    check( encryptionManager.RemoveEncryptionMapping( encryptionMapping[0].address, time ) );
-    check( encryptionManager.RemoveEncryptionMapping( encryptionMapping[NumEncryptionMappings-1].address, time ) );
-    */
+    check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == 1 );
 
-    /*
-    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, time ) == 1 );
+
+    // iterate across all encryption mappings and make sure the ones that were removed can no longer be looked up by address
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
-        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
 
-        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
-        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+        printf( "%d: %d\n", i, encryption_index );
 
-        if ( i != 0 && i != NumEncryptionMappings -1 )
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
+
+        if ( i != 0 && i != NUM_ENCRYPTION_MAPPINGS - 1 )
         {
-            check( sendKey );
-            check( receiveKey );
+            check( send_key );
+            check( receive_key );
 
-            check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
-            check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+            check( memcmp( send_key, encryption_mapping[i].send_key, NETCODE_KEY_BYTES ) == 0 );
+            check( memcmp( receive_key, encryption_mapping[i].receive_key, NETCODE_KEY_BYTES ) == 0 );
         }
         else
         {
-            check( !sendKey );
-            check( !receiveKey );
+            check( !send_key );
+            check( !receive_key );
         }
     }
-    */
 
     /*
     check( encryptionManager.AddEncryptionMapping( encryptionMapping[0].address, encryptionMapping[0].sendKey, encryptionMapping[0].receiveKey, time, EncryptionMappingTimeout ) );

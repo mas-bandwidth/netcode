@@ -2,9 +2,11 @@ DONE
 
     Port across encryption manager above server.
 
+    Port across tests for encryption manager.
+
 TODO
 
-    Port across tests for encryption manager.
+    I'm halfway throught this, but it feels like I've hit a compiler bug. What's going on!?
 
     -----------------
 
