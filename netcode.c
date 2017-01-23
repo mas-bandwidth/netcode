@@ -126,7 +126,7 @@ struct netcode_address_t
     {
         uint8_t ipv4[4];
         uint16_t ipv6[8];
-    } address;
+    } data;
     uint16_t port;
 };
 
@@ -175,7 +175,7 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
         address->type = NETCODE_ADDRESS_IPV6;
         for ( int i = 0; i < 8; ++i )
         {
-            address->address.ipv6[i] = ntohs( ( (uint16_t*) &sockaddr6 ) [i] );
+            address->data.ipv6[i] = ntohs( ( (uint16_t*) &sockaddr6 ) [i] );
         }
         return 1;
     }
@@ -202,10 +202,10 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     if ( inet_pton( AF_INET, address_string, &sockaddr4.sin_addr ) == 1 )
     {
         address->type = NETCODE_ADDRESS_IPV4;
-        address->address.ipv4[3] = ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24;
-        address->address.ipv4[2] = ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16;
-        address->address.ipv4[1] = ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8;
-        address->address.ipv4[0] = ( sockaddr4.sin_addr.s_addr & 0x000000FF ) >> 0;
+        address->data.ipv4[3] = ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24;
+        address->data.ipv4[2] = ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16;
+        address->data.ipv4[1] = ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8;
+        address->data.ipv4[0] = ( sockaddr4.sin_addr.s_addr & 0x000000FF ) >> 0;
         return 1;
     }
 
@@ -223,7 +223,7 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
         {
             uint16_t ipv6_network_order[8];
             for ( int i = 0; i < 8; ++i )
-                ipv6_network_order[i] = htons( address->address.ipv6[i] );
+                ipv6_network_order[i] = htons( address->data.ipv6[i] );
             inet_ntop( AF_INET6, (void*) ipv6_network_order, buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH );
             return buffer;
         }
@@ -232,7 +232,7 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
             char address_string[INET6_ADDRSTRLEN];
             uint16_t ipv6_network_order[8];
             for ( int i = 0; i < 8; ++i )
-                ipv6_network_order[i] = htons( address->address.ipv6[i] );
+                ipv6_network_order[i] = htons( address->data.ipv6[i] );
             inet_ntop( AF_INET6, (void*) ipv6_network_order, address_string, INET6_ADDRSTRLEN );
             snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "[%s]:%d", address_string, address->port );
             return buffer;
@@ -241,9 +241,9 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
     else if ( address->type == NETCODE_ADDRESS_IPV4 )
     {
         if ( address->port != 0 )
-            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d:%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3], address->port );
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d:%d", address->data.ipv4[0], address->data.ipv4[1], address->data.ipv4[2], address->data.ipv4[3], address->port );
         else
-            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d", address->address.ipv4[0], address->address.ipv4[1], address->address.ipv4[2], address->address.ipv4[3] );
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d", address->data.ipv4[0], address->data.ipv4[1], address->data.ipv4[2], address->data.ipv4[3] );
         return buffer;
     }
     else
@@ -269,7 +269,7 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
         int i;
         for ( i = 0; i < 4; ++i )
         {
-            if ( a->address.ipv4[i] != b->address.ipv4[i] )
+            if ( a->data.ipv4[i] != b->data.ipv4[i] )
                 return 0;
         }
     }
@@ -278,7 +278,7 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
         int i;
         for ( i = 0; i < 8; ++i )
         {
-            if ( a->address.ipv6[i] != b->address.ipv6[i] )
+            if ( a->data.ipv6[i] != b->data.ipv6[i] )
                 return 0;
         }
     }
@@ -436,7 +436,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         sock_address.sin6_family = AF_INET6;
         for ( int i = 0; i < 8; ++i )
         {
-            ( (uint16_t*) &sock_address.sin6_addr ) [i] = htons( address->address.ipv6[i] );
+            ( (uint16_t*) &sock_address.sin6_addr ) [i] = htons( address->data.ipv6[i] );
         }
         sock_address.sin6_port = htons( address->port );
 
@@ -451,7 +451,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     {
         struct sockaddr_in sock_address;
         sock_address.sin_family = AF_INET;
-        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->address.ipv4[0] ) << 24 ) | ( ( (uint32_t) address->address.ipv4[1] ) << 16 ) | ( ( (uint32_t) address->address.ipv4[2] ) << 8 ) | ( (uint32_t) address->address.ipv4[3] );
+        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) << 24 ) | ( ( (uint32_t) address->data.ipv4[1] ) << 16 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 8 ) | ( (uint32_t) address->data.ipv4[3] );
         sock_address.sin_port = htons( address->port );
 
         if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
@@ -537,7 +537,7 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         socket_address.sin6_family = AF_INET6;
         for ( int i = 0; i < 8; ++i )
         {
-            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->address.ipv6[i] );
+            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->data.ipv6[i] );
         }
         socket_address.sin6_port = htons( to->port );
         sendto( socket->handle, (char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in6 ) );
@@ -547,7 +547,7 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         struct sockaddr_in socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin_family = AF_INET;
-        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->address.ipv4[0] ) << 24 ) | ( ( (uint32_t) to->address.ipv4[1] ) << 16 ) | ( ( (uint32_t) to->address.ipv4[2] ) << 8 ) | ( (uint32_t) to->address.ipv4[3] );
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) << 24 ) | ( ( (uint32_t) to->data.ipv4[1] ) << 16 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 8 ) | ( (uint32_t) to->data.ipv4[3] );
         socket_address.sin_port = htons( to->port );
         sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
     }
@@ -600,7 +600,7 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
         from->type = NETCODE_ADDRESS_IPV6;
         for ( int i = 0; i < 8; ++i )
         {
-            from->address.ipv6[i] = ntohs( ( (uint16_t*) &addr_ipv6->sin6_addr ) [i] );
+            from->data.ipv6[i] = ntohs( ( (uint16_t*) &addr_ipv6->sin6_addr ) [i] );
         }
         from->port = ntohs( addr_ipv6->sin6_port );
     }
@@ -608,10 +608,10 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         struct sockaddr_in * addr_ipv4 = (struct sockaddr_in*) &sockaddr_from;
         from->type = NETCODE_ADDRESS_IPV4;
-        from->address.ipv4[0] = ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24;
-        from->address.ipv4[1] = ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16;
-        from->address.ipv4[2] = ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8;
-        from->address.ipv4[3] = ( addr_ipv4->sin_addr.s_addr & 0x000000FF ) >> 0;
+        from->data.ipv4[0] = ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24;
+        from->data.ipv4[1] = ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16;
+        from->data.ipv4[2] = ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8;
+        from->data.ipv4[3] = ( addr_ipv4->sin_addr.s_addr & 0x000000FF ) >> 0;
         from->port = ntohs( addr_ipv4->sin_port );
     }
     else
@@ -937,7 +937,7 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
             for ( j = 0; j < 4; ++j )
             {
-                netcode_write_uint8( &buffer, connect_token->server_addresses[i].address.ipv4[j] );
+                netcode_write_uint8( &buffer, connect_token->server_addresses[i].data.ipv4[j] );
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
@@ -946,7 +946,7 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV6 );
             for ( j = 0; j < 8; ++j )
             {
-                netcode_write_uint16( &buffer, connect_token->server_addresses[i].address.ipv6[j] );
+                netcode_write_uint16( &buffer, connect_token->server_addresses[i].data.ipv6[j] );
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
@@ -1047,7 +1047,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
         {
             for ( j = 0; j < 4; ++j )
             {
-                connect_token->server_addresses[i].address.ipv4[j] = netcode_read_uint8( &buffer );
+                connect_token->server_addresses[i].data.ipv4[j] = netcode_read_uint8( &buffer );
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
@@ -1055,7 +1055,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
         {
             for ( j = 0; j < 8; ++j )
             {
-                connect_token->server_addresses[i].address.ipv6[j] = netcode_read_uint16( &buffer );
+                connect_token->server_addresses[i].data.ipv6[j] = netcode_read_uint16( &buffer );
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
@@ -1846,7 +1846,7 @@ void netcode_write_server_info( struct netcode_server_info_t * server_info, uint
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
             for ( j = 0; j < 4; ++j )
             {
-                netcode_write_uint8( &buffer, server_info->server_addresses[i].address.ipv4[j] );
+                netcode_write_uint8( &buffer, server_info->server_addresses[i].data.ipv4[j] );
             }
             netcode_write_uint16( &buffer, server_info->server_addresses[i].port );
         }
@@ -1855,7 +1855,7 @@ void netcode_write_server_info( struct netcode_server_info_t * server_info, uint
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV6 );
             for ( j = 0; j < 8; ++j )
             {
-                netcode_write_uint16( &buffer, server_info->server_addresses[i].address.ipv6[j] );
+                netcode_write_uint16( &buffer, server_info->server_addresses[i].data.ipv6[j] );
             }
             netcode_write_uint16( &buffer, server_info->server_addresses[i].port );
         }
@@ -1934,7 +1934,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
         {
             for ( j = 0; j < 4; ++j )
             {
-                server_info->server_addresses[i].address.ipv4[j] = netcode_read_uint8( &buffer );
+                server_info->server_addresses[i].data.ipv4[j] = netcode_read_uint8( &buffer );
             }
             server_info->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
@@ -1942,7 +1942,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
         {
             for ( j = 0; j < 8; ++j )
             {
-                server_info->server_addresses[i].address.ipv6[j] = netcode_read_uint16( &buffer );
+                server_info->server_addresses[i].data.ipv6[j] = netcode_read_uint16( &buffer );
             }
             server_info->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
@@ -2584,7 +2584,134 @@ int netcode_client_state( struct netcode_client_t * client )
 
 // ----------------------------------------------------------------
 
-#define NETCODE_MAX_CONNECT_TOKEN_ENTRIES NETCODE_MAX_CLIENTS * 8
+#define NETCODE_MAX_ENCRYPTION_MAPPINGS ( NETCODE_MAX_CLIENTS * 4 )
+
+struct netcode_encryption_manager_t
+{
+    int num_encryption_mappings;
+    double last_access_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
+    struct netcode_address_t address[NETCODE_MAX_ENCRYPTION_MAPPINGS];
+    uint8_t send_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
+    uint8_t receive_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
+};
+
+void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * encryption_manager )
+{
+    assert( encryption_manager );
+
+    encryption_manager->num_encryption_mappings = 0;
+    
+    for ( int i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
+    {
+        encryption_manager->last_access_time[i] = -1000.0;
+        memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
+    }
+    
+    memset( encryption_manager->send_key, 0, sizeof( encryption_manager->send_key ) );
+    memset( encryption_manager->receive_key, 0, sizeof( encryption_manager->receive_key ) );
+}
+
+int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, uint8_t * send_key, uint8_t * receive_key, double time )
+{
+    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    {
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
+        {
+            encryption_manager->last_access_time[i] = time;
+            memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
+            memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
+            return 1;
+        }
+    }
+
+    for ( int i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
+    {
+        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time )
+        {
+            encryption_manager->address[i] = *address;
+            encryption_manager->last_access_time[i] = time;
+            memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
+            memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
+            if ( i + 1 > encryption_manager->num_encryption_mappings )
+                encryption_manager->num_encryption_mappings = i + 1;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
+{
+    assert( encryption_manager );
+    assert( address );
+
+    (void) time;
+
+    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    {
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) )
+        {
+            encryption_manager->last_access_time[i] = -1000.0;
+            memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );            
+            memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
+            memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
+
+            if ( i + 1 == encryption_manager->num_encryption_mappings )
+            {
+                int index = i - 1;
+                while ( index >= 0 )
+                {
+                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time )
+                        break;
+                    index--;
+                }
+                encryption_manager->num_encryption_mappings = index + 1;
+            }
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
+{
+    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    {
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
+        {
+            encryption_manager->last_access_time[i] = time;
+            return i;
+        }
+    }
+    return -1;
+}
+
+uint8_t * netcode_encryption_manager_get_send_key( struct netcode_encryption_manager_t * encryption_manager, int index )
+{
+    assert( encryption_manager );
+    if ( index == -1 )
+        return NULL;
+    assert( index >= 0 );
+    assert( index < encryption_manager->num_encryption_mappings );
+    return encryption_manager->send_key + index * NETCODE_KEY_BYTES;
+}
+
+uint8_t * netcode_encryption_manager_get_receive_key( struct netcode_encryption_manager_t * encryption_manager, int index )
+{
+    assert( encryption_manager );
+    if ( index == -1 )
+        return NULL;
+    assert( index >= 0 );
+    assert( index < encryption_manager->num_encryption_mappings );
+    return encryption_manager->receive_key + index * NETCODE_KEY_BYTES;
+}
+
+// ----------------------------------------------------------------
+
+#define NETCODE_MAX_CONNECT_TOKEN_ENTRIES ( NETCODE_MAX_CLIENTS * 8 )
 
 struct netcode_connect_token_entry_t
 {
@@ -3300,10 +3427,10 @@ static void test_address()
         check( netcode_parse_address( "107.77.207.77", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV4 );
         check( address.port == 0 );
-        check( address.address.ipv4[0] == 107 );
-        check( address.address.ipv4[1] == 77 );
-        check( address.address.ipv4[2] == 207 );
-        check( address.address.ipv4[3] == 77 );
+        check( address.data.ipv4[0] == 107 );
+        check( address.data.ipv4[1] == 77 );
+        check( address.data.ipv4[2] == 207 );
+        check( address.data.ipv4[3] == 77 );
     }
 
     {
@@ -3311,10 +3438,10 @@ static void test_address()
         check( netcode_parse_address( "127.0.0.1", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV4 );
         check( address.port == 0 );
-        check( address.address.ipv4[0] == 127 );
-        check( address.address.ipv4[1] == 0 );
-        check( address.address.ipv4[2] == 0 );
-        check( address.address.ipv4[3] == 1 );
+        check( address.data.ipv4[0] == 127 );
+        check( address.data.ipv4[1] == 0 );
+        check( address.data.ipv4[2] == 0 );
+        check( address.data.ipv4[3] == 1 );
     }
 
     {
@@ -3322,10 +3449,10 @@ static void test_address()
         check( netcode_parse_address( "107.77.207.77:40000", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV4 );
         check( address.port == 40000 );
-        check( address.address.ipv4[0] == 107 );
-        check( address.address.ipv4[1] == 77 );
-        check( address.address.ipv4[2] == 207 );
-        check( address.address.ipv4[3] == 77 );
+        check( address.data.ipv4[0] == 107 );
+        check( address.data.ipv4[1] == 77 );
+        check( address.data.ipv4[2] == 207 );
+        check( address.data.ipv4[3] == 77 );
     }
 
     {
@@ -3333,10 +3460,10 @@ static void test_address()
         check( netcode_parse_address( "127.0.0.1:40000", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV4 );
         check( address.port == 40000 );
-        check( address.address.ipv4[0] == 127 );
-        check( address.address.ipv4[1] == 0 );
-        check( address.address.ipv4[2] == 0 );
-        check( address.address.ipv4[3] == 1 );
+        check( address.data.ipv4[0] == 127 );
+        check( address.data.ipv4[1] == 0 );
+        check( address.data.ipv4[2] == 0 );
+        check( address.data.ipv4[3] == 1 );
     }
 
     {
@@ -3344,14 +3471,14 @@ static void test_address()
         check( netcode_parse_address( "fe80::202:b3ff:fe1e:8329", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 0 );
-        check( address.address.ipv6[0] == 0xfe80 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0202 );
-        check( address.address.ipv6[5] == 0xb3ff );
-        check( address.address.ipv6[6] == 0xfe1e );
-        check( address.address.ipv6[7] == 0x8329 );
+        check( address.data.ipv6[0] == 0xfe80 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0202 );
+        check( address.data.ipv6[5] == 0xb3ff );
+        check( address.data.ipv6[6] == 0xfe1e );
+        check( address.data.ipv6[7] == 0x8329 );
     }
 
     {
@@ -3359,14 +3486,14 @@ static void test_address()
         check( netcode_parse_address( "::", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 0 );
-        check( address.address.ipv6[0] == 0x0000 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0000 );
-        check( address.address.ipv6[5] == 0x0000 );
-        check( address.address.ipv6[6] == 0x0000 );
-        check( address.address.ipv6[7] == 0x0000 );
+        check( address.data.ipv6[0] == 0x0000 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0000 );
+        check( address.data.ipv6[5] == 0x0000 );
+        check( address.data.ipv6[6] == 0x0000 );
+        check( address.data.ipv6[7] == 0x0000 );
     }
 
     {
@@ -3374,14 +3501,14 @@ static void test_address()
         check( netcode_parse_address( "::1", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 0 );
-        check( address.address.ipv6[0] == 0x0000 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0000 );
-        check( address.address.ipv6[5] == 0x0000 );
-        check( address.address.ipv6[6] == 0x0000 );
-        check( address.address.ipv6[7] == 0x0001 );
+        check( address.data.ipv6[0] == 0x0000 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0000 );
+        check( address.data.ipv6[5] == 0x0000 );
+        check( address.data.ipv6[6] == 0x0000 );
+        check( address.data.ipv6[7] == 0x0001 );
     }
 
     {
@@ -3389,14 +3516,14 @@ static void test_address()
         check( netcode_parse_address( "[fe80::202:b3ff:fe1e:8329]:40000", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 40000 );
-        check( address.address.ipv6[0] == 0xfe80 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0202 );
-        check( address.address.ipv6[5] == 0xb3ff );
-        check( address.address.ipv6[6] == 0xfe1e );
-        check( address.address.ipv6[7] == 0x8329 );
+        check( address.data.ipv6[0] == 0xfe80 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0202 );
+        check( address.data.ipv6[5] == 0xb3ff );
+        check( address.data.ipv6[6] == 0xfe1e );
+        check( address.data.ipv6[7] == 0x8329 );
     }
 
     {
@@ -3404,14 +3531,14 @@ static void test_address()
         check( netcode_parse_address( "[::]:40000", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 40000 );
-        check( address.address.ipv6[0] == 0x0000 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0000 );
-        check( address.address.ipv6[5] == 0x0000 );
-        check( address.address.ipv6[6] == 0x0000 );
-        check( address.address.ipv6[7] == 0x0000 );
+        check( address.data.ipv6[0] == 0x0000 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0000 );
+        check( address.data.ipv6[5] == 0x0000 );
+        check( address.data.ipv6[6] == 0x0000 );
+        check( address.data.ipv6[7] == 0x0000 );
     }
 
     {
@@ -3419,14 +3546,14 @@ static void test_address()
         check( netcode_parse_address( "[::1]:40000", &address ) );
         check( address.type == NETCODE_ADDRESS_IPV6 );
         check( address.port == 40000 );
-        check( address.address.ipv6[0] == 0x0000 );
-        check( address.address.ipv6[1] == 0x0000 );
-        check( address.address.ipv6[2] == 0x0000 );
-        check( address.address.ipv6[3] == 0x0000 );
-        check( address.address.ipv6[4] == 0x0000 );
-        check( address.address.ipv6[5] == 0x0000 );
-        check( address.address.ipv6[6] == 0x0000 );
-        check( address.address.ipv6[7] == 0x0001 );
+        check( address.data.ipv6[0] == 0x0000 );
+        check( address.data.ipv6[1] == 0x0000 );
+        check( address.data.ipv6[2] == 0x0000 );
+        check( address.data.ipv6[3] == 0x0000 );
+        check( address.data.ipv6[4] == 0x0000 );
+        check( address.data.ipv6[5] == 0x0000 );
+        check( address.data.ipv6[6] == 0x0000 );
+        check( address.data.ipv6[7] == 0x0001 );
     }
 }
 
@@ -3440,10 +3567,10 @@ static void test_connect_token()
 
     struct netcode_address_t server_address;
     server_address.type = NETCODE_ADDRESS_IPV4;
-    server_address.address.ipv4[0] = 127;
-    server_address.address.ipv4[1] = 0;
-    server_address.address.ipv4[2] = 0;
-    server_address.address.ipv4[3] = 1;
+    server_address.data.ipv4[0] = 127;
+    server_address.data.ipv4[1] = 0;
+    server_address.data.ipv4[2] = 0;
+    server_address.data.ipv4[3] = 1;
     server_address.port = TEST_SERVER_PORT;
 
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
@@ -3542,10 +3669,10 @@ static void test_connection_request_packet()
 
     struct netcode_address_t server_address;
     server_address.type = NETCODE_ADDRESS_IPV4;
-    server_address.address.ipv4[0] = 127;
-    server_address.address.ipv4[1] = 0;
-    server_address.address.ipv4[2] = 0;
-    server_address.address.ipv4[3] = 1;
+    server_address.data.ipv4[0] = 127;
+    server_address.data.ipv4[1] = 0;
+    server_address.data.ipv4[2] = 0;
+    server_address.data.ipv4[3] = 1;
     server_address.port = TEST_SERVER_PORT;
 
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
@@ -3875,10 +4002,10 @@ void test_server_info()
 
     struct netcode_address_t server_address;
     server_address.type = NETCODE_ADDRESS_IPV4;
-    server_address.address.ipv4[0] = 127;
-    server_address.address.ipv4[1] = 0;
-    server_address.address.ipv4[2] = 0;
-    server_address.address.ipv4[3] = 1;
+    server_address.data.ipv4[0] = 127;
+    server_address.data.ipv4[1] = 0;
+    server_address.data.ipv4[2] = 0;
+    server_address.data.ipv4[3] = 1;
     server_address.port = TEST_SERVER_PORT;
 
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
@@ -3952,6 +4079,151 @@ void test_server_info()
     check( output_server_info.timeout_seconds == input_server_info.timeout_seconds );
 }
 
+void test_encryption_manager()
+{
+    struct netcode_encryption_manager_t encryption_manager;
+
+    struct encryption_mapping_t
+    {
+        struct netcode_address_t address;
+        uint8_t send_key[NETCODE_KEY_BYTES];
+        uint8_t receive_key[NETCODE_KEY_BYTES];
+    };
+
+    #define NUM_ENCRYPTION_MAPPINGS 5
+
+    struct encryption_mapping_t encryption_mapping[NUM_ENCRYPTION_MAPPINGS];
+
+    double time = 100.0;
+
+    // todo
+    (void) time;
+    (void) encryption_manager;
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    {
+        encryption_mapping[i].address.type = NETCODE_ADDRESS_IPV6;
+        encryption_mapping[i].address.data.ipv6[7] = 1;
+        encryption_mapping[i].address.port = 20000 + i;
+        netcode_generate_key( encryption_mapping[i].send_key );
+        netcode_generate_key( encryption_mapping[i].receive_key );
+
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
+
+        check( encryption_index == -1 );
+
+        check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
+        check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
+
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
+
+        encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
+
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
+
+        check( send_key );
+        check( receive_key );
+
+        check( memcmp( send_key, encryption_mapping[i].send_key, NETCODE_KEY_BYTES ) == 0 );
+        check( memcmp( receive_key, encryption_mapping[i].receive_key, NETCODE_KEY_BYTES ) == 0 );
+    }
+
+    {
+        struct netcode_address_t address;
+        address.type = NETCODE_ADDRESS_IPV6;
+        address.data.ipv6[7] = 1;
+        address.port = 50000;
+
+    }
+
+    /*
+    check( encryptionManager.RemoveEncryptionMapping( Address( "::1", 50000 ), time ) == false );
+
+    check( encryptionManager.RemoveEncryptionMapping( encryptionMapping[0].address, time ) );
+    check( encryptionManager.RemoveEncryptionMapping( encryptionMapping[NumEncryptionMappings-1].address, time ) );
+    */
+
+    /*
+    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    {
+        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+
+        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
+
+        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+
+        if ( i != 0 && i != NumEncryptionMappings -1 )
+        {
+            check( sendKey );
+            check( receiveKey );
+
+            check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
+            check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+        }
+        else
+        {
+            check( !sendKey );
+            check( !receiveKey );
+        }
+    }
+    */
+
+    /*
+    check( encryptionManager.AddEncryptionMapping( encryptionMapping[0].address, encryptionMapping[0].sendKey, encryptionMapping[0].receiveKey, time, EncryptionMappingTimeout ) );
+    check( encryptionManager.AddEncryptionMapping( encryptionMapping[NumEncryptionMappings-1].address, encryptionMapping[NumEncryptionMappings-1].sendKey, encryptionMapping[NumEncryptionMappings-1].receiveKey, time, EncryptionMappingTimeout ) );
+
+    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    {
+        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+
+        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
+        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+
+        check( sendKey );
+        check( receiveKey );
+
+        check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
+        check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+    }
+
+    time += EncryptionMappingTimeout * 2;
+
+    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    {
+        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+
+        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
+        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+
+        check( !sendKey );
+        check( !receiveKey );
+    }
+
+    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    {
+        encryptionMapping[i].address = Address( "::1", 20000 + i );
+
+        GenerateKey( encryptionMapping[i].sendKey );
+        GenerateKey( encryptionMapping[i].receiveKey );
+
+        check( encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time ) == -1 );
+        check( encryptionManager.AddEncryptionMapping( encryptionMapping[i].address, encryptionMapping[i].sendKey, encryptionMapping[i].receiveKey, time, EncryptionMappingTimeout ) );
+
+        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+
+        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
+        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+
+        check( sendKey );
+        check( receiveKey );
+
+        check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
+        check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+    }
+    */
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -3976,6 +4248,7 @@ void netcode_test()
     RUN_TEST( test_connection_payload_packet );
     RUN_TEST( test_connection_disconnect_packet );
     RUN_TEST( test_server_info );
+    RUN_TEST( test_encryption_manager );
 }
 
 #endif // #if NETCODE_TEST

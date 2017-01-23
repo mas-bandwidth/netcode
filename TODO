@@ -1,98 +1,16 @@
 DONE
 
-    Actually, just passing in context for encryption keys is pointless.
-
-    Just pass in the key directly. Context class may still exist, but it doesn't have to passed in this form to send and receive packet fns.
-
-    Next step is to work out what sort of additional checks I need to do before setting up a pending connect.
-
-    What checks are remaining to do?
-
-    1. Check if the server is full and reject
-
-    2. Check if the client is already connected (ignore)
-
-    3. Check if the server address is in the token whitelist (otherwise ignore)
-
-    IMPORTANT: If the server is full, must add encryption mapping for the pending client before replying back with connection denied response.
-
-    Or... at least, must reply back with correct packet key, so client knows... yeah I can do that instead. I like not adding a mapping for a deny.
-
-    Need a way for the server to send the packet back to the client that sent the pending connection request on deny.
-
-    Added a function to send global packets from server, with a global sequence #.
-
-    Fuck it, this split between client and server is killing me. 
-
-    Going back to client_server.c so it can be tested in one program.
-
-    Done.
-
-    Seems like global sequence # (with high bit set) is triggering an assert on sequence # bytes... debugging.
-
-    Fixed. Needed to be <= 8, not <= 7.
-
-    Server is sending connection denied packet back to client, but client is not processing it?
-
-    Debug why not. Could be an encryption problem...
-
-    Added a bunch of logs to print out for all packet types why they failed to read. Will need a "debug_printf" soon.
-
-    The connection request denied packet is failing to decrypt on the client. Is it being encoded with the correct key?
-
-    Check the send side, it's more likely to be incorrect...
-
-    The code reconstructing the sequence is incorrect. I wasn't memsetting the sequence data to 0 I think.
-
-    Fixed. I had a logic error (around casting) based in the sequence. It works now.
-
-    Disable the logging for the packet read/write.
-
-    What's the next step? Client is correctly getting the disconnect packet in.
-
-    Next step has to be to work out the sequence of steps required for the client to setup a pending connection.
-
-    First I need to bring across the concept of pending connections.
-
-    How many pending connections can be allowed at the same time? Some multiple of maximum 256*8 = 2048. That's fine.
-
-    What data is needed for each pending connection?
-
-    One thing I think I might need to do is to store the user data with the pending connection, *or* enlarge the challenge token.
-
-    If the user data is 256k, then the challenge token will be larger, perhaps 320 bytes in total. This is still < ~1/3 of the connection request packet.
-
-    I would not like to make the challenge token 512 bytes, only 1/2. I like its size being around 1/4 of the size of the connect request packet.
-
-    How big is that packet? It's around 1200, so 300 would be around 1/4. This is OK.
-
-    So I think, now I need to add the user data into the challenge token, so I can avoid storing it on the server, I don't want to store 256k multiplied by 2048 potential connecting clients.
-
-    Ported across netcode_server_find_or_add_connect_token_entry.
-
-    This is basically the set of "pending clients".
-
-    However, I still also need the concept of adding an "encryption mapping", eg. a context. 
-
-    This should be done after the challenge response has been constructed and fully sent.
-
-    Need to port across the encryption mapping concept. The timeout on the encryption mapping is especially important. This is needed for pending clients.
-
-    Quickest way to do this is to just port that class across without much change. There is nothing wrong with it. Get it done.
-
-    Can even eventually do the faster, OK, look for a connected client first on receive, cache the send/recv keys in the context as well.
-
-    So the idea is a context is a connected client (and remains that in netcode.io, like yojimbo)
-
-    So really, keep it like yojimbo, don't deviate too much, where it's not necessary, because the design works. Where it does improve, it does so in ways that make it more secure, or simpler to read packets and reject early than yojimbo can, but this is good, because this is a very specific solution to just one small part (not a general solution to, OK now you want *any* number of packet types, encrypted or not... and so on.)
+    Port across encryption manager above server.
 
 TODO
 
-    Port across encryption manager above server.
+    Port across tests for encryption manager.
 
-    Port across context manager above server.
+    -----------------
 
-    Add tests for both managers.
+    Integrate encryption manager into server
+
+    Add an encryption mapping when a connection request is accepted.
 
     -----------------
 
@@ -100,17 +18,19 @@ TODO
 
     Update tests to insert random user data and check that it matches.
 
-    Bring across data structure from yojimbo for pending client, with the real data sent back inside the challenge token.
+    -----------------
 
-    Actually, 
+    Send connection challenge back to client when receiving a connection challenge.
 
     -----------------
 
-    There is some logic inside:
+    Port across context manager above server.
 
-        FindOrAddConnectTokenEntry
+    Add tests for context manager    
 
-    in yojimbo that I need to study and reproduce
+    -----------------
+
+    Implement code to process connection response packet from client and complete connection.
 
     -----------------
 
