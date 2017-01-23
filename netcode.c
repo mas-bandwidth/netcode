@@ -761,13 +761,18 @@ int netcode_encrypt( uint8_t * message, int message_length,
 {
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
+	assert( NETCODE_NONCE_BYTES < crypto_secretbox_NONCEBYTES );
 
     assert( message );
     assert( message_length > 0 );
     assert( encrypted_message );
     assert( encrypted_message_length );
 
-    if ( crypto_secretbox_easy( encrypted_message, message, message_length, nonce, key ) != 0 )
+    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    if ( crypto_secretbox_easy( encrypted_message, message, message_length, actual_nonce, key ) != 0 )
         return 0;
 
     *encrypted_message_length = message_length + NETCODE_MAC_BYTES;
@@ -782,8 +787,13 @@ int netcode_decrypt( uint8_t * encrypted_message, int encrypted_message_length,
 {
     assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
     assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
+	assert( NETCODE_NONCE_BYTES < crypto_secretbox_NONCEBYTES );
 
-    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, nonce, key ) != 0 )
+    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
+    memset( actual_nonce, 0, sizeof( actual_nonce ) );
+    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
+
+    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, actual_nonce, key ) != 0 )
         return 0;
 
     *decrypted_message_length = encrypted_message_length - NETCODE_MAC_BYTES;
@@ -1157,7 +1167,10 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	int decrypted_bytes = 0;
 
 	if ( !netcode_decrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, buffer, &decrypted_bytes, nonce, key ) )
+	{
+		printf( "netcode_decrypt returned 0\n" );
 		return 0;
+	}
 
 	assert( decrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 
@@ -1431,7 +1444,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 			netcode_write_uint8( &p, prefix_byte );
 		}
 
-        uint8_t nonce[NETCODE_NONCE_BYTES];
+        uint8_t nonce[8];
         {
             uint8_t * p = nonce;
             netcode_write_uint64( &p, sequence );
@@ -1615,7 +1628,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 			netcode_write_uint8( &p, prefix_byte );
 		}
 
-        uint8_t nonce[NETCODE_NONCE_BYTES];
+        uint8_t nonce[8];
         {
             uint8_t * p = nonce;
             netcode_write_uint64( &p, *sequence );
