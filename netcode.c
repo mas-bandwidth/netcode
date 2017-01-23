@@ -30,6 +30,7 @@
 
 #ifdef _MSC_VER
 #define SODIUM_STATIC
+#pragma warning(disable:4996)
 #endif // #ifdef _MSC_VER
 
 #include <sodium.h>
@@ -202,10 +203,10 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     if ( inet_pton( AF_INET, address_string, &sockaddr4.sin_addr ) == 1 )
     {
         address->type = NETCODE_ADDRESS_IPV4;
-        address->data.ipv4[3] = ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24;
-        address->data.ipv4[2] = ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16;
-        address->data.ipv4[1] = ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8;
-        address->data.ipv4[0] = ( sockaddr4.sin_addr.s_addr & 0x000000FF ) >> 0;
+        address->data.ipv4[3] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24 );
+        address->data.ipv4[2] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16 );
+        address->data.ipv4[1] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8  );
+        address->data.ipv4[0] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x000000FF )	     );
         return 1;
     }
 
@@ -376,7 +377,7 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
 
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
-    assert( socket );
+    assert( s );
     assert( address );
     assert( netcode.initialized );
 
@@ -506,7 +507,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 #elif YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_WINDOWS
 
     DWORD nonBlocking = 1;
-    if ( ioctlsocket( m_socket, FIONBIO, &nonBlocking ) != 0 )
+    if ( ioctlsocket( s->handle, FIONBIO, &nonBlocking ) != 0 )
     {
         netcode_socket_destroy( s );
         return NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED;
@@ -608,10 +609,10 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         struct sockaddr_in * addr_ipv4 = (struct sockaddr_in*) &sockaddr_from;
         from->type = NETCODE_ADDRESS_IPV4;
-        from->data.ipv4[0] = ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24;
-        from->data.ipv4[1] = ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16;
-        from->data.ipv4[2] = ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8;
-        from->data.ipv4[3] = ( addr_ipv4->sin_addr.s_addr & 0x000000FF ) >> 0;
+        from->data.ipv4[0] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24 );
+        from->data.ipv4[1] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16 );
+        from->data.ipv4[2] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8  );
+        from->data.ipv4[3] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x000000FF )	   );
         from->port = ntohs( addr_ipv4->sin_port );
     }
     else
@@ -924,6 +925,8 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
 
     uint8_t * start = buffer;
 
+	(void) start;
+
     netcode_write_uint64( &buffer, connect_token->client_id );
 
     netcode_write_uint32( &buffer, connect_token->num_server_addresses );
@@ -971,6 +974,8 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
     assert( key );
 
+	(void) buffer_length;
+
     uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+8];
     {
         uint8_t * p = additional_data;
@@ -996,6 +1001,8 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
 	assert( buffer );
     assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
 	assert( key );
+
+	(void) buffer_length;
 
     uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+8];
     {
@@ -1096,6 +1103,8 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
 
     uint8_t * start = buffer;
 
+	(void) start;
+
     netcode_write_uint64( &buffer, challenge_token->client_id );
 
     netcode_write_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
@@ -1112,6 +1121,8 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	assert( buffer );
 	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 	assert( key );
+
+	(void) buffer_length;
 
 	uint8_t nonce[8];
     {
@@ -1134,6 +1145,8 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	assert( buffer );
 	assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
 	assert( key );
+
+	(void) buffer_length;
 
 	uint8_t nonce[8];
     {
@@ -1162,6 +1175,8 @@ int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct ne
         return 0;
 
     uint8_t * start = buffer;
+
+	(void) start;
     
     challenge_token->client_id = netcode_read_uint64( &buffer );
 
@@ -1284,6 +1299,8 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     assert( packet );
     assert( buffer );
     assert( write_packet_key );
+
+	(void) buffer_length;
 
     uint8_t packet_type = ((uint8_t*)packet)[0];
 
@@ -1822,6 +1839,9 @@ void netcode_write_server_info( struct netcode_server_info_t * server_info, uint
     assert( buffer_length >= NETCODE_SERVER_INFO_BYTES );
 
     uint8_t * start = buffer;
+
+	(void) start;
+	(void) buffer_length;
 
     netcode_write_bytes( &buffer, server_info->version_info, NETCODE_VERSION_INFO_BYTES );
 
@@ -2412,7 +2432,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
     if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
     {
-        int connect_token_expire_seconds = ( client->server_info.connect_token_expire_timestamp - client->server_info.connect_token_create_timestamp );
+        uint64_t connect_token_expire_seconds = ( client->server_info.connect_token_expire_timestamp - client->server_info.connect_token_create_timestamp );
         
         if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
         {
@@ -3136,7 +3156,7 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
         server_info.server_addresses[i] = parsed_server_addresses[i];
     memcpy( server_info.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( server_info.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
-    server_info.timeout_seconds = NETCODE_TIMEOUT_SECONDS;
+    server_info.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
 
     // write the server info to the output buffer
 
@@ -3216,11 +3236,11 @@ double netcode_time()
 
 void netcode_sleep( double time )
 {
-    const int milliseconds = time * 1000;
+    const int milliseconds = (int) ( time * 1000 );
     Sleep( milliseconds );
 }
 
-static bool timer_initialized = false;
+static int timer_initialized = 0;
 static LARGE_INTEGER timer_frequency;
 static LARGE_INTEGER timer_start;
 
@@ -3230,11 +3250,11 @@ double netcode_time()
     {
         QueryPerformanceFrequency( &timer_frequency );
         QueryPerformanceCounter( &timer_start );
-        timer_initialized = true;
+        timer_initialized = 1;
     }
     LARGE_INTEGER now;
     QueryPerformanceCounter( &now );
-    return double( now.QuadPart - timer_start.QuadPart ) / double( timer_frequency.QuadPart );
+    return ( (double) ( now.QuadPart - timer_start.QuadPart ) ) / ( (double) ( timer_frequency.QuadPart ) );
 }
 
 #else
@@ -4050,7 +4070,7 @@ void test_server_info()
     input_server_info.server_addresses[0] = server_address;
     memcpy( input_server_info.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( input_server_info.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
-    input_server_info.timeout_seconds = NETCODE_TIMEOUT_SECONDS;
+    input_server_info.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
 
     // write the server info to a buffer
 
@@ -4102,7 +4122,7 @@ void test_encryption_manager()
     {
         encryption_mapping[i].address.type = NETCODE_ADDRESS_IPV6;
         encryption_mapping[i].address.data.ipv6[7] = 1;
-        encryption_mapping[i].address.port = 20000 + i;
+        encryption_mapping[i].address.port = ( uint16_t) ( 20000 + i );
         netcode_generate_key( encryption_mapping[i].send_key );
         netcode_generate_key( encryption_mapping[i].receive_key );
     }
