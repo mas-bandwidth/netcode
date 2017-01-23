@@ -4083,6 +4083,10 @@ void test_encryption_manager()
 {
     struct netcode_encryption_manager_t encryption_manager;
 
+    double time = 100.0;
+
+    // generate some test encryption mappings
+
     struct encryption_mapping_t
     {
         struct netcode_address_t address;
@@ -4094,10 +4098,6 @@ void test_encryption_manager()
 
     struct encryption_mapping_t encryption_mapping[NUM_ENCRYPTION_MAPPINGS];
 
-    double time = 100.0;
-
-    // add some encryption mappings and make sure looking up the encryption mapping by address works
-
     for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         encryption_mapping[i].address.type = NETCODE_ADDRESS_IPV6;
@@ -4105,7 +4105,12 @@ void test_encryption_manager()
         encryption_mapping[i].address.port = 20000 + i;
         netcode_generate_key( encryption_mapping[i].send_key );
         netcode_generate_key( encryption_mapping[i].receive_key );
+    }
 
+    // add the encryption mappings to the manager and make sure they can be looked up by address
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
         check( encryption_index == -1 );
@@ -4143,7 +4148,7 @@ void test_encryption_manager()
 
     check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, time ) == 1 );
 
-    // iterate across all encryption mappings and make sure the ones that were removed can no longer be looked up by address
+    // make sure the encryption mappings that were removed can no longer be looked up by address
 
     for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
@@ -4167,59 +4172,82 @@ void test_encryption_manager()
         }
     }
 
-    /*
-    check( encryptionManager.AddEncryptionMapping( encryptionMapping[0].address, encryptionMapping[0].sendKey, encryptionMapping[0].receiveKey, time, EncryptionMappingTimeout ) );
-    check( encryptionManager.AddEncryptionMapping( encryptionMapping[NumEncryptionMappings-1].address, encryptionMapping[NumEncryptionMappings-1].sendKey, encryptionMapping[NumEncryptionMappings-1].receiveKey, time, EncryptionMappingTimeout ) );
+    // add the encryption mappings back in
+    
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time ) );
+    
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, time ) );
 
-    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    // all encryption mappings should be able to be looked up by address again
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
-        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
-        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
-        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
 
-        check( sendKey );
-        check( receiveKey );
+        check( send_key );
+        check( receive_key );
 
-        check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
-        check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+        check( memcmp( send_key, encryption_mapping[i].send_key, NETCODE_KEY_BYTES ) == 0 );
+        check( memcmp( receive_key, encryption_mapping[i].receive_key, NETCODE_KEY_BYTES ) == 0 );
     }
 
-    time += EncryptionMappingTimeout * 2;
+    // check that encryption mappings time out properly
 
-    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    time += NETCODE_TIMEOUT_SECONDS * 2;
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
-        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
-        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
-        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
 
-        check( !sendKey );
-        check( !receiveKey );
+        check( !send_key );
+        check( !receive_key );
     }
 
-    for ( int i = 0; i < NumEncryptionMappings; ++i )
+    // add the same encryption mappings after timeout
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
-        encryptionMapping[i].address = Address( "::1", 20000 + i );
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
-        GenerateKey( encryptionMapping[i].sendKey );
-        GenerateKey( encryptionMapping[i].receiveKey );
+        check( encryption_index == -1 );
 
-        check( encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time ) == -1 );
-        check( encryptionManager.AddEncryptionMapping( encryptionMapping[i].address, encryptionMapping[i].sendKey, encryptionMapping[i].receiveKey, time, EncryptionMappingTimeout ) );
+        check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
+        check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
 
-        int encryptionIndex = encryptionManager.FindEncryptionMapping( encryptionMapping[i].address, time );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
 
-        const uint8_t * sendKey = encryptionManager.GetSendKey( encryptionIndex );
-        const uint8_t * receiveKey = encryptionManager.GetReceiveKey( encryptionIndex );
+        encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
-        check( sendKey );
-        check( receiveKey );
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
 
-        check( memcmp( sendKey, encryptionMapping[i].sendKey, KeyBytes ) == 0 );
-        check( memcmp( receiveKey, encryptionMapping[i].receiveKey, KeyBytes ) == 0 );
+        check( send_key );
+        check( receive_key );
+
+        check( memcmp( send_key, encryption_mapping[i].send_key, NETCODE_KEY_BYTES ) == 0 );
+        check( memcmp( receive_key, encryption_mapping[i].receive_key, NETCODE_KEY_BYTES ) == 0 );
     }
-    */
+
+    // reset the encryption mapping and verify that all encryption mappings have been removed
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    {
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
+
+        uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
+        uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
+
+        check( !send_key );
+        check( !receive_key );
+    }
 }
 
 #define RUN_TEST( test_function )                                           \

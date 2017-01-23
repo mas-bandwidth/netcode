@@ -4,9 +4,15 @@ DONE
 
     Port across tests for encryption manager.
 
+    I'm halfway throught this, but it feels like I've hit a compiler bug. What's going on!?
+
+    Was a cut&paste error. Moving on...
+
+    Finish porting remaining tests for encryption manager.
+
 TODO
 
-    I'm halfway throught this, but it feels like I've hit a compiler bug. What's going on!?
+    Enough work for tonight. I'm tired.
 
     -----------------
 
