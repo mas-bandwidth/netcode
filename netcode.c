@@ -2643,8 +2643,6 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
 int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
 {
-    printf( "encryption manager %p\n", encryption_manager );
-
     assert( encryption_manager );
     assert( address );
 
@@ -2652,14 +2650,9 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) )
         {
-            printf( "clearing address at index %d (%p)\n", i, &encryption_manager->address[i] );
-
-            netcode_print_bytes( "before clear", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
-
             encryption_manager->last_access_time[i] = -1000.0;
-            memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
 
-            netcode_print_bytes( "after clear", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
+            memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
 
             memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
             memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
@@ -2685,18 +2678,10 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
 
 int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
 {
-    printf( "encryption manager %p\n", encryption_manager );
-
     for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
         {
-            printf( "found address at index %d (%p)\n", i, &encryption_manager->address[i] );
-
-            netcode_print_bytes( "address", (uint8_t*) address, sizeof( struct netcode_address_t ) );
-
-            netcode_print_bytes( "manager address", (uint8_t*) &encryption_manager->address[i], sizeof( struct netcode_address_t ) );
-
             encryption_manager->last_access_time[i] = time;
             return i;
         }
@@ -4162,11 +4147,7 @@ void test_encryption_manager()
 
     for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
-        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
-
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
-
-        printf( "%d: %d\n", i, encryption_index );
 
         uint8_t * send_key = netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index );
         uint8_t * receive_key = netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index );
