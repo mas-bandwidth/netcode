@@ -12,8 +12,6 @@ DONE
 
 TODO
 
-    -----------------
-
     Extend challenge token to include user data.
 
     Update tests to insert random user data and check that it matches.

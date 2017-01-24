@@ -62,7 +62,7 @@
 #endif
 
 #define NETCODE_CONNECT_TOKEN_BYTES 1024
-#define NETCODE_CHALLENGE_TOKEN_BYTES 256
+#define NETCODE_CHALLENGE_TOKEN_BYTES 360
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 256
 #define NETCODE_MAX_PACKET_BYTES 1220
@@ -1097,6 +1097,7 @@ struct netcode_challenge_token_t
     uint8_t connect_token_mac[NETCODE_MAC_BYTES];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
 void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge_token, uint8_t * buffer, int buffer_length )
@@ -1120,6 +1121,8 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
     netcode_write_bytes( &buffer, challenge_token->client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_write_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
+
+	netcode_write_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES ); 
 
     assert( buffer - start <= NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
@@ -1165,10 +1168,7 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 	int decrypted_bytes = 0;
 
 	if ( !netcode_decrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, buffer, &decrypted_bytes, nonce, key ) )
-	{
-		printf( "netcode_decrypt returned 0\n" );
 		return 0;
-	}
 
 	assert( decrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 
