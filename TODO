@@ -6,17 +6,17 @@ DONE
 
     Add an encryption mapping when a connection request is accepted.
 
-    Add the code to call find or add connect token entry before accepting connect token.
+    Add the code to call find or add connect token entry before accepting connect tokeng.
 
     Done. To get this to work I had to remove the code that cleared the connect token mac from the decrypted connect token data, because I need this mac for the connect token entries.
 
-TODO
-
     Extend challenge token to include user data.
+
+    Increased challenge token bytes to 360 so the 256 byte user data can fit.
 
     Update tests to insert random user data and check that it matches.
 
-    -----------------
+TODO
 
     Send connection challenge back to client when receiving a connection challenge.
 

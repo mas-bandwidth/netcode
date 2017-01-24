@@ -1172,8 +1172,6 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 
 	assert( decrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 
-	memset( buffer + NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
-
 	return 1;
 }
 
@@ -1197,7 +1195,9 @@ int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct ne
 
     netcode_read_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
 
-	assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_KEY_BYTES + NETCODE_KEY_BYTES );
+    netcode_read_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES );
+
+	assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_KEY_BYTES + NETCODE_KEY_BYTES + NETCODE_USER_DATA_BYTES );
 
     return 1;
 }
@@ -3688,6 +3688,7 @@ static void test_challenge_token()
 	netcode_random_bytes( input_token.connect_token_mac, NETCODE_MAC_BYTES );
 	netcode_generate_key( input_token.client_to_server_key );
 	netcode_generate_key( input_token.server_to_client_key );
+    netcode_random_bytes( input_token.user_data, NETCODE_USER_DATA_BYTES );
 
     // write it to a buffer
 
@@ -3719,6 +3720,7 @@ static void test_challenge_token()
     check( memcmp( output_token.connect_token_mac, input_token.connect_token_mac, NETCODE_MAC_BYTES ) == 0 );
     check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
     check( memcmp( output_token.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
 }
 
 static void test_connection_request_packet()
