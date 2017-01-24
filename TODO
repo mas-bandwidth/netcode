@@ -8,6 +8,16 @@ DONE
 
 TODO
 
+    Add data structures to look up client by id, address.
+
+    Port across functions to look up client by id, address.
+
+    Extend the code to ignore connection request / connection response if the client address or id is already connected.
+
+    -----------------
+
+    Port across function to connect client
+
     -----------------
 
     Work out what the next state is for clients on connection response.

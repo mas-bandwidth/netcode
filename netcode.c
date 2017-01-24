@@ -3076,7 +3076,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     }
     */
 
-    //if ( server->num_connected_clients == server->max_clients )
+    if ( server->num_connected_clients == server->max_clients )
     {
         printf( "server denied connection response. server is full\n" );
 
