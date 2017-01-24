@@ -12,12 +12,6 @@ DONE
 
     Extend the code to ignore connection request / connection response if the client address or id is already connected.
 
-TODO
-
-    Port across function to connect client
-
-    -----------------
-
     Work out what the next state is for clients on connection response.
 
     Does the client get fully connected, with a pending flag, so the client keeps sending the keep-alive until connection is confirmed.
@@ -30,29 +24,41 @@ TODO
 
     Think over this for a while, because any deviation from how yojimbo does it needs to have a good reason.
 
-    -----------------
+    Decided to stick with the state structure from yojimbo. No good reason to deviate. Get it finished!
 
-    Port across context manager above server.
+    Port across function to connect client
 
-    Add tests for context manager    
+TODO
 
-    -----------------
+    Add data structure per-client slot for time last packet sent, time last packet received (for timeouts).
 
-    Implement code to process connection response packet from client and complete connection.
+    Clear the last packet send and receive time on connect to the current time.
 
-    -----------------
+    Send a keep alive packet back to the client when the client is connected.
 
-    Work out what I need in the struct allocated per-client slot.
+    Implement send packets function for server so that it sends a keep alive packet to the client if no packet sent in the last amount of time.
 
-    -----------------
+    Add a 'confirmed' flag per-client slot on the server. Clear it to 0 when a client slot is connected.
 
-    Work out what arrays I need for fast O(n) lookups for incoming packets (keep them separate). Hot/cold split.
-
-    -----------------
-
-    Get client connecting to server.
+    Extend the keep alive so it is sent repeatedly, even if other packets are sent from server -> client prior to confirm.
 
     -----------------
+
+    Make sure the client completes connection to the server.
+
+    -----------------
+
+    Add code in the client_server.c to make sure the client and server can exchange 
+
+    -----------------
+
+    Implement code on the server-side to disconnect the client.
+
+    -----------------
+
+    Once client and server are connected, disconnect the client.
+
+    =============================================================================
 
     Implement network simulator and shim for packets sent/received from client and server.
 

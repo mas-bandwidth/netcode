@@ -3080,6 +3080,51 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     netcode_server_send_global_packet( server, &challenge_packet, from, connect_token.server_to_client_key );
 }
 
+int netcode_server_find_free_client_index( struct netcode_server_t * server )
+{
+    assert( server );
+
+    for ( int i = 0; i < server->max_clients; ++i )
+    {
+        if ( !server->client_connected[i] )
+            return i;
+    }
+
+    return -1;
+}
+
+void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id )
+{
+    assert( server );
+    assert( server->running );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    assert( address );
+
+    server->num_connected_clients++;
+
+    assert( server->num_connected_clients <= server->max_clients );
+
+    assert( server->client_connected[client_index] == 0 );
+
+    server->client_connected[client_index] = 1;
+    server->client_id[client_index] = client_id;
+    server->client_address[client_index] = *address;
+
+    // todo: last packet send time
+
+    // todo: last packet receive time
+
+    /*
+    m_clientData[clientIndex].lastPacketSendTime = time;
+    m_clientData[clientIndex].lastPacketReceiveTime = time;
+    */
+
+    printf( "server connected client %d\n", client_index );
+
+    // todo: send a keep alive packet to the client
+}
+
 void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet, int encryption_index )
 {
     assert( server );
@@ -3107,13 +3152,13 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
     {
-        printf( "server ignored connection response. a client with this address is already connected\n" );
+//        printf( "server ignored connection response. a client with this address is already connected\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_id( server, challenge_token.client_id ) != -1 )
     {
-        printf( "server ignored connection response. a client with this id is already connected\n" );
+//        printf( "server ignored connection response. a client with this id is already connected\n" );
         return;
     }
 
@@ -3130,20 +3175,13 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
         return;
     }
 
-    printf( "*** server accepts connection ***\n" );
+    int client_index = netcode_server_find_free_client_index( server );
 
-    // todo: connect the client
-    /*
-    const int clientIndex = FindFreeClientIndex();
+    assert( client_index != -1 );
 
-    assert( clientIndex != -1 );
+    printf( "server accepted connection response\n" );
 
-    debug_printf( "challenge response accepted\n" );
-    OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_ACCEPTED, packet, address, challengeToken );
-    m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_ACCEPTED]++;
-
-    ConnectClient( clientIndex, address, challengeToken.clientId );
-    */
+    netcode_server_connect_client( server, client_index, from, challenge_token.client_id );
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence, int encryption_index )
@@ -3230,6 +3268,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 void netcode_server_send_packets( struct netcode_server_t * server )
 {
     assert( server );
+    assert( server->running );
 
     (void) server;
 
