@@ -1460,7 +1460,6 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, uint8_t * read_packet_key, uint64_t protocol_id, uint64_t current_timestamp, uint8_t * private_key, uint8_t * allowed_packets )
 {
     assert( sequence );
-    assert( read_packet_key);
     assert( allowed_packets );
 
 	*sequence = 0;
@@ -1560,6 +1559,12 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
     else
     {
         // *** encrypted packets ***
+
+        if ( !read_packet_key )
+        {
+            printf( "ignored encrypted packet. read packet key is NULL\n" );
+            return NULL;
+        }
 
         if ( buffer_length < 1 + 1 + NETCODE_MAC_BYTES )
         {
@@ -3106,10 +3111,6 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     {
         struct netcode_address_t from;
 
-        // todo: we have to work out the appropriate packet read key from the address
-        uint8_t read_packet_key[NETCODE_KEY_BYTES];
-        memset( read_packet_key, 0, NETCODE_KEY_BYTES );
-
         uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
         int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
@@ -3121,6 +3122,10 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
         uint64_t sequence;
 
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, server->time );
+        
+        uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+        
         void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets );
 
         if ( !packet )

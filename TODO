@@ -34,11 +34,11 @@ DONE
 
     So don't implement the optimization, it's not worth it.
 
-TODO
-
     Add code to get the packet receive key for the packet address, so encrypted packets can be read on the server.
 
     Verify that connection response packets are being received by the server.
+
+TODO
 
     -----------------
 
