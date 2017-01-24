@@ -2821,6 +2821,9 @@ struct netcode_server_t
     uint8_t private_key[NETCODE_KEY_BYTES];
     uint64_t challenge_sequence;
     uint8_t challenge_key[NETCODE_KEY_BYTES];
+    int client_connected[NETCODE_MAX_CLIENTS];
+    uint64_t client_id[NETCODE_MAX_CLIENTS];
+    struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
 };
@@ -2878,6 +2881,9 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     server->num_connected_clients = 0;
     server->global_sequence = 1ULL << 63;
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
+    memset( server->client_connected, 0, sizeof( server->client_connected ) );
+    memset( server->client_id, 0, sizeof( server->client_id ) );
+    memset( server->client_address, 0, sizeof( server->client_address ) );
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
@@ -2957,6 +2963,36 @@ void netcode_server_send_global_packet( struct netcode_server_t * server, void *
     netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
 
     server->global_sequence++;
+}
+
+int netcode_server_find_client_index_by_id( struct netcode_server_t * server, uint64_t client_id )
+{
+    assert( server );
+
+    for ( int i = 0; i < server->max_clients; ++i )
+    {   
+        if ( server->client_connected[i] && server->client_id[i] == client_id )
+            return i;
+    }
+
+    return -1;
+}
+
+int netcode_server_find_client_index_by_address( struct netcode_server_t * server, struct netcode_address_t * address )
+{
+    assert( server );
+    assert( address );
+
+    if ( address->type == 0 )
+        return -1;
+
+    for ( int i = 0; i < server->max_clients; ++i )
+    {   
+        if ( server->client_connected[i] && netcode_address_equal( &server->client_address[i], address ) )
+            return i;
+    }
+
+    return -1;
 }
 
 void netcode_server_process_connection_request_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_request_packet_t * packet )

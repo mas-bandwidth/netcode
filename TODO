@@ -6,11 +6,11 @@ DONE
 
     Fixed so connection denied response is processed while in sending connection response state.
 
-TODO
-
     Add data structures to look up client by id, address.
 
     Port across functions to look up client by id, address.
+
+TODO
 
     Extend the code to ignore connection request / connection response if the client address or id is already connected.
 
