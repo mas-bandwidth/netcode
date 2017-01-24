@@ -38,11 +38,17 @@ DONE
 
     Verify that connection response packets are being received by the server.
 
+    Port across code to process the connection response.
+
 TODO
 
-    -----------------
+    In progress on this, first step = decrypt the challenge token.
 
-    Port across code to process the connection response.
+    Unfortunately, challenge token is not decrypting on client. Is the challenge sequence being sent properly?
+
+    What is different on challenge token encrypt and decrypt?
+
+    Grrrrr
 
     -----------------
 

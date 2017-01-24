@@ -2362,7 +2362,6 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             printf( "client sent connection request packet\n" );
 
             struct netcode_connection_request_packet_t packet;
-
             packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
             memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
             packet.protocol_id = client->server_info.protocol_id;
@@ -2382,10 +2381,9 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             printf( "client sent connection response packet\n" );
 
             struct netcode_connection_response_packet_t packet;
-
             packet.packet_type = NETCODE_CONNECTION_RESPONSE_PACKET;
             packet.challenge_token_sequence = client->challenge_token_sequence;
-            memcpy( &packet.challenge_token_data, client->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+            memcpy( packet.challenge_token_data, client->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
 
             netcode_client_send_packet_to_server_internal( client, &packet );
         }
@@ -2399,7 +2397,6 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             printf( "client sent connection keep-alive packet\n" );
 
             struct netcode_connection_keep_alive_packet_t packet;
-
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
 
             netcode_client_send_packet_to_server_internal( client, &packet );
@@ -3021,15 +3018,13 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     struct netcode_challenge_token_t challenge_token;
     challenge_token.client_id = connect_token.client_id;
-    memcpy( &challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
-    memcpy( &challenge_token.user_data, connect_token.user_data, NETCODE_USER_DATA_BYTES );
+    memcpy( challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
+    memcpy( challenge_token.user_data, connect_token.user_data, NETCODE_USER_DATA_BYTES );
 
     struct netcode_connection_challenge_packet_t challenge_packet;
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
     challenge_packet.challenge_token_sequence = server->challenge_sequence++;
-
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
-
     if ( !netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) )
     {
         printf( "server ignored connection request packet. failed to encrypt challenge token\n" );
@@ -3051,7 +3046,60 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     (void) from;
     (void) packet;
 
+    if ( !netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) )
+    {
+        printf( "server ignored connection response packet. failed to decrypt challenge token\n" );
+        return;
+    }
+
+    printf( "challenge token decrypted OK\n" );
+
     // todo
+    /*
+    if ( FindClientIndex( address ) >= 0 )
+    {
+        debug_printf( "ignored challenge response: address already connected\n" );
+        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_IGNORED_ADDRESS_ALREADY_CONNECTED, packet, address, challengeToken );
+        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_IGNORED_ADDRESS_ALREADY_CONNECTED]++;
+        return;
+    }
+
+    if ( FindClientIndex( challengeToken.clientId ) >= 0 )
+    {
+        debug_printf( "ignored challenge response: client id already connected\n" );
+        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_IGNORED_CLIENT_ID_ALREADY_CONNECTED, packet, address, challengeToken );
+        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_IGNORED_CLIENT_ID_ALREADY_CONNECTED]++;
+        return;
+    }
+    */
+
+    /*
+    if ( m_numConnectedClients == m_maxClients )
+    {
+        debug_printf( "challenge response denied: server is full\n" );
+        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_DENIED_SERVER_IS_FULL, packet, address, challengeToken );
+        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_DENIED_SERVER_IS_FULL]++;
+
+        ConnectionDeniedPacket * connectionDeniedPacket = (ConnectionDeniedPacket*) CreateGlobalPacket( CLIENT_SERVER_PACKET_CONNECTION_DENIED );
+
+        if ( connectionDeniedPacket )
+        {
+            SendPacket( address, connectionDeniedPacket );
+        }
+
+        return;
+    }
+
+    const int clientIndex = FindFreeClientIndex();
+
+    assert( clientIndex != -1 );
+
+    debug_printf( "challenge response accepted\n" );
+    OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_ACCEPTED, packet, address, challengeToken );
+    m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_ACCEPTED]++;
+
+    ConnectClient( clientIndex, address, challengeToken.clientId );
+    */
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence )
