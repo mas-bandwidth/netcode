@@ -2228,24 +2228,19 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST && netcode_address_equal( from, &client->server_address ) )
             {
+                printf( "client received connection challenge packet from server\n" );
+
                 struct netcode_connection_challenge_packet_t * p = (struct netcode_connection_challenge_packet_t*) packet;
                 client->challenge_token_sequence = p->challenge_token_sequence;
                 memcpy( client->challenge_token_data, p->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
                 client->last_packet_receive_time = client->time;
+
+                netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE );
             }
         }
         break;
 
-        case NETCODE_CONNECTION_DISCONNECT_PACKET:
-        {
-            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
-            {
-                client->should_disconnect = 1;
-                client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
-                client->last_packet_receive_time = client->time;
-            }
-        }
-        break;
+        // todo: how does the client get from sending connection response to confirm? I think I have messed up these states
 
         case NETCODE_CONNECTION_CONFIRM_PACKET:
         {
@@ -2275,6 +2270,17 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
                 client->last_packet_receive_time = client->time;
 
                 return;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_DISCONNECT_PACKET:
+        {
+            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
+            {
+                client->should_disconnect = 1;
+                client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
+                client->last_packet_receive_time = client->time;
             }
         }
         break;
@@ -3027,7 +3033,20 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     server->challenge_sequence++;
 
-    // todo: send the challenge packet back to the from address w. the server -> client key in the connect token
+    printf( "server sent connection challenge packet\n" );
+
+    netcode_server_send_global_packet( server, &challenge_packet, from, connect_token.server_to_client_key );
+}
+
+void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet )
+{
+    assert( server );
+
+    (void) server;
+    (void) from;
+    (void) packet;
+
+    // todo
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence )
@@ -3052,7 +3071,15 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         }
         break;
 
-        // todo: rest of client -> server packets
+        case NETCODE_CONNECTION_RESPONSE_PACKET:
+        {    
+            char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+            printf( "server received connection response from %s\n", netcode_address_to_string( from, from_address_string ) );
+
+            netcode_server_process_connection_response_packet( server, from, (struct netcode_connection_response_packet_t*) packet );
+        }
+        break;
 
         default:
             break;

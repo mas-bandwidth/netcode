@@ -16,9 +16,13 @@ DONE
 
     Update tests to insert random user data and check that it matches.
 
+    Send connection challenge back to client when receiving a connection challenge.
+
+    Client should transition to sending connection response state when receives connection challenge.
+
 TODO
 
-    Send connection challenge back to client when receiving a connection challenge.
+    Now I need to write code to look up the encryption mapping from address, so the server can receive the packets sent from pending clients.
 
     -----------------
 
