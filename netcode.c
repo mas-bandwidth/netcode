@@ -1095,8 +1095,6 @@ struct netcode_challenge_token_t
 {
     uint64_t client_id;
     uint8_t connect_token_mac[NETCODE_MAC_BYTES];
-    uint8_t client_to_server_key[NETCODE_KEY_BYTES];
-    uint8_t server_to_client_key[NETCODE_KEY_BYTES];
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
@@ -1117,10 +1115,6 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
     netcode_write_uint64( &buffer, challenge_token->client_id );
 
     netcode_write_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
-
-    netcode_write_bytes( &buffer, challenge_token->client_to_server_key, NETCODE_KEY_BYTES );
-
-    netcode_write_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
 
 	netcode_write_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES ); 
 
@@ -1191,13 +1185,9 @@ int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct ne
 
     netcode_read_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
 
-	netcode_read_bytes( &buffer, challenge_token->client_to_server_key, NETCODE_KEY_BYTES );
-
-    netcode_read_bytes( &buffer, challenge_token->server_to_client_key, NETCODE_KEY_BYTES );
-
     netcode_read_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES );
 
-	assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_KEY_BYTES + NETCODE_KEY_BYTES + NETCODE_USER_DATA_BYTES );
+	assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_USER_DATA_BYTES );
 
     return 1;
 }
@@ -2794,7 +2784,6 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
         connect_token_entries[oldest_token_index].time = time;
         connect_token_entries[oldest_token_index].address = *address;
         memcpy( connect_token_entries[oldest_token_index].mac, mac, NETCODE_MAC_BYTES );
-		printf( "no entry found with this MAC\n" );
         return 1;
     }
 
@@ -2803,14 +2792,7 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
     assert( matching_token_index >= 0 );
     assert( matching_token_index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
     if ( netcode_address_equal( &connect_token_entries[matching_token_index].address, address ) )
-	{
-		printf( "already seen this connect token from the same address\n" );
         return 1;
-	}
-
-    // disallow connect tokens we have already seen from a different address.
-
-	netcode_print_bytes( "mac", mac, NETCODE_MAC_BYTES );
 
     return 0;
 }
@@ -2829,6 +2811,8 @@ struct netcode_server_t
     int num_connected_clients;
     uint64_t global_sequence;
     uint8_t private_key[NETCODE_KEY_BYTES];
+    uint64_t challenge_sequence;
+    uint8_t challenge_key[NETCODE_KEY_BYTES];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
 };
@@ -2923,6 +2907,8 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     server->running = 1;
     server->max_clients = max_clients;
     server->num_connected_clients = 0;
+    server->challenge_sequence = 0;    
+    netcode_generate_key( server->challenge_key );
 }
 
 void netcode_server_stop( struct netcode_server_t * server )
@@ -2997,8 +2983,6 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     // todo: if a client with this client id is already connected, ignore.
 
-    // todo: check if this connect token has already been used by a different address (avoid token reuse for multiple source addresses on the same server)
-
     if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
 	{
 		printf( "server ignored connection request packet. connect token has already been used\n" );
@@ -3018,27 +3002,32 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    // todo: setup a pending connection
-
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token.server_to_client_key, connect_token.client_to_server_key, server->time ) )
     {
         printf( "server ignored connection request packet. failed to add encryption mapping\n" );
         return;
     }
 
-    printf( "server accepted connection request\n" );
+    struct netcode_challenge_token_t challenge_token;
+    challenge_token.client_id = connect_token.client_id;
+    memcpy( &challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
+    memcpy( &challenge_token.user_data, connect_token.user_data, NETCODE_USER_DATA_BYTES );
 
-    /*
-    struct netcode_connect_token_t
+    struct netcode_connection_challenge_packet_t challenge_packet;
+    challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
+    challenge_packet.challenge_token_sequence = server->challenge_sequence++;
+
+    netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+    if ( !netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) )
     {
-        uint64_t client_id;
-        int num_server_addresses;
-        struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
-        uint8_t client_to_server_key[NETCODE_KEY_BYTES];
-        uint8_t server_to_client_key[NETCODE_KEY_BYTES];
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-    };
-    */
+        printf( "server ignored connection request packet. failed to encrypt challenge token\n" );
+        return;
+    }
+
+    server->challenge_sequence++;
+
+    // todo: send the challenge packet back to the from address w. the server -> client key in the connect token
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence )
@@ -3686,8 +3675,6 @@ static void test_challenge_token()
 
     input_token.client_id = TEST_CLIENT_ID;
 	netcode_random_bytes( input_token.connect_token_mac, NETCODE_MAC_BYTES );
-	netcode_generate_key( input_token.client_to_server_key );
-	netcode_generate_key( input_token.server_to_client_key );
     netcode_random_bytes( input_token.user_data, NETCODE_USER_DATA_BYTES );
 
     // write it to a buffer
@@ -3718,8 +3705,6 @@ static void test_challenge_token()
 
     check( output_token.client_id == input_token.client_id );
     check( memcmp( output_token.connect_token_mac, input_token.connect_token_mac, NETCODE_MAC_BYTES ) == 0 );
-    check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
-    check( memcmp( output_token.server_to_client_key, input_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
     check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
 }
 
