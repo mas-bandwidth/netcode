@@ -1,48 +1,16 @@
 DONE
 
-    Port across encryption manager above server.
-
-    Port across tests for encryption manager.
-
-    I'm halfway throught this, but it feels like I've hit a compiler bug. What's going on!?
-
-    Was a cut&paste error. Moving on...
-
-    Finish porting remaining tests for encryption manager.
-
-    Port to windows.
-
-    There is something wrong with the connect token decrypt with windows in release build only it's failing.
-
-    Why is it failing? This is a bit scary. Release only bug... something with the optimizer?
-
-    Luckily, it's 100% reproducible. I can turn symbols back on and maybe step through and try to see what's going on...
-
-    Interestingly, it's on the challenge token, not the connect token.
-
-    This could be an actual bug. If it was something wrong in the AEAD, then I would expect it would have broken in the connect token test, which is first.
-
-    Investigating...
-
-    It was the old "nonce" vs. "actual_nonce" that was handled in yojimbo.
-
-    The simple box has a larger nonce (24 bytes), than the AEAD primitive (8 bytes).
-
-    Fixed by copying to actual nonce, memsetting extra bytes, and copying across 8 bytes low.
-
-    Reason it was broken was uninitialized data in the high bits of the nonce in release build only (was cleared to sentinal values in debug build in VC).
-
-    Tested client/server programs and integrated client_server in one process, both worked as expected in release build.
-
-    Windows build has caught up to where MacOS is. Time to move forward.
-
-TODO
-
-    -----------------
-
     Integrate encryption manager into server
 
+    Removed cut & paste code for the connect token entry clear. It's now a single function.
+
     Add an encryption mapping when a connection request is accepted.
+
+    Add the code to call find or add connect token entry before accepting connect token.
+
+    Done. To get this to work I had to remove the code that cleared the connect token mac from the decrypted connect token data, because I need this mac for the connect token entries.
+
+TODO
 
     -----------------
 

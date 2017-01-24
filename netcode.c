@@ -1031,8 +1031,6 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
     if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
         return 0;
 
-	memset( buffer + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
-
 	return 1;
 }
 
@@ -2753,6 +2751,72 @@ struct netcode_connect_token_entry_t
     struct netcode_address_t address;
 };
 
+void netcode_connect_token_entries_reset( struct netcode_connect_token_entry_t * connect_token_entries )
+{
+    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    {
+        connect_token_entries[i].time = -1000.0;
+        memset( connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
+        memset( &connect_token_entries[i].address, 0, sizeof( struct netcode_address_t ) );
+    }
+}
+
+int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entry_t * connect_token_entries, struct netcode_address_t * address, uint8_t * mac, double time )
+{
+    assert( connect_token_entries );
+    assert( address );
+    assert( mac );
+
+    // find the matching entry for the token mac and the oldest token entry. constant time worst case. This is intentional!
+
+    int matching_token_index = -1;
+    int oldest_token_index = -1;
+    double oldest_token_time = 0.0;
+
+    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    {
+        if ( memcmp( mac, connect_token_entries[i].mac, NETCODE_MAC_BYTES ) == 0 )
+            matching_token_index = i;
+        
+        if ( oldest_token_index == -1 || connect_token_entries[i].time < oldest_token_time )
+        {
+            oldest_token_time = connect_token_entries[i].time;
+            oldest_token_index = i;
+        }
+    }
+
+    // if no entry is found with the mac, this is a new connect token. replace the oldest token entry.
+
+    assert( oldest_token_index != -1 );
+
+    if ( matching_token_index == -1 )
+    {
+        connect_token_entries[oldest_token_index].time = time;
+        connect_token_entries[oldest_token_index].address = *address;
+        memcpy( connect_token_entries[oldest_token_index].mac, mac, NETCODE_MAC_BYTES );
+		printf( "no entry found with this MAC\n" );
+        return 1;
+    }
+
+    // allow connect tokens we have already seen from the same address
+
+    assert( matching_token_index >= 0 );
+    assert( matching_token_index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
+    if ( netcode_address_equal( &connect_token_entries[matching_token_index].address, address ) )
+	{
+		printf( "already seen this connect token from the same address\n" );
+        return 1;
+	}
+
+    // disallow connect tokens we have already seen from a different address.
+
+	netcode_print_bytes( "mac", mac, NETCODE_MAC_BYTES );
+
+    return 0;
+}
+
+// ----------------------------------------------------------------
+
 struct netcode_server_t
 {
     struct netcode_socket_t socket;
@@ -2766,6 +2830,7 @@ struct netcode_server_t
     uint64_t global_sequence;
     uint8_t private_key[NETCODE_KEY_BYTES];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
+    struct netcode_encryption_manager_t encryption_manager;
 };
 
 struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time )
@@ -2822,12 +2887,9 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     server->global_sequence = 1ULL << 63;
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
 
-    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
-    {
-        server->connect_token_entries[i].time = -1000.0;
-        memset( server->connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
-        memset( &server->connect_token_entries[i].address, 0, sizeof( struct netcode_address_t ) );
-    }
+    netcode_connect_token_entries_reset( server->connect_token_entries );
+
+    netcode_encryption_manager_reset( &server->encryption_manager );
 
     return server;
 }
@@ -2880,60 +2942,9 @@ void netcode_server_stop( struct netcode_server_t * server )
     server->max_clients = 0;
     server->num_connected_clients = 0;
 
-    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
-    {
-        server->connect_token_entries[i].time = -1000.0;
-        memset( server->connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
-        memset( &server->connect_token_entries[i].address, 0, sizeof( struct netcode_address_t ) );
-    }
-}
+    netcode_connect_token_entries_reset( server->connect_token_entries );
 
-int netcode_server_find_or_add_connect_token_entry( struct netcode_server_t * server, struct netcode_address_t * address, uint8_t * mac )
-{
-    assert( server );
-    assert( address );
-    assert( mac );
-
-    // find the matching entry for the token mac and the oldest token entry. constant time worst case. This is intentional!
-
-    int matching_token_index = -1;
-    int oldest_token_index = -1;
-    double oldest_token_time = 0.0;
-
-    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
-    {
-        if ( memcmp( mac, server->connect_token_entries[i].mac, NETCODE_MAC_BYTES ) == 0 )
-            matching_token_index = i;
-        
-        if ( oldest_token_index == -1 || server->connect_token_entries[i].time < oldest_token_time )
-        {
-            oldest_token_time = server->connect_token_entries[i].time;
-            oldest_token_index = i;
-        }
-    }
-
-    // if no entry is found with the mac, this is a new connect token. replace the oldest token entry.
-
-    assert( oldest_token_index != -1 );
-
-    if ( matching_token_index == -1 )
-    {
-        server->connect_token_entries[oldest_token_index].time = server->time;
-        server->connect_token_entries[oldest_token_index].address = *address;
-        memcpy( server->connect_token_entries[oldest_token_index].mac, mac, NETCODE_MAC_BYTES );
-        return 1;
-    }
-
-    // allow connect tokens we have already seen from the same address
-
-    assert( matching_token_index >= 0 );
-    assert( matching_token_index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
-    if ( netcode_address_equal( &server->connect_token_entries[matching_token_index].address, address ) )
-        return 1;
-
-    // disallow connect tokens we have already seen from a different address.
-
-    return 0;
+    netcode_encryption_manager_reset( &server->encryption_manager );
 }
 
 void netcode_server_send_global_packet( struct netcode_server_t * server, void * packet, struct netcode_address_t * to, uint8_t * packet_key )
@@ -2982,9 +2993,17 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    // todo: if the client with this address is already connected, ignore.
+    // todo: if a client with this address is already connected, ignore.
+
+    // todo: if a client with this client id is already connected, ignore.
 
     // todo: check if this connect token has already been used by a different address (avoid token reuse for multiple source addresses on the same server)
+
+    if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
+	{
+		printf( "server ignored connection request packet. connect token has already been used\n" );
+		return;
+	}
 
     if ( server->num_connected_clients == server->max_clients )
     {
@@ -2999,9 +3018,15 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    printf( "server accepted connection request\n" );
-
     // todo: setup a pending connection
+
+    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token.server_to_client_key, connect_token.client_to_server_key, server->time ) )
+    {
+        printf( "server ignored connection request packet. failed to add encryption mapping\n" );
+        return;
+    }
+
+    printf( "server accepted connection request\n" );
 
     /*
     struct netcode_connect_token_t
@@ -3780,7 +3805,7 @@ static void test_connection_request_packet()
     check( output_packet->protocol_id == input_packet.protocol_id );
     check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
 	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );
-    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
+    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES ) == 0 );
 
     free( output_packet );
 }
