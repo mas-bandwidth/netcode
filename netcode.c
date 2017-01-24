@@ -3003,7 +3003,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     if ( !netcode_read_connect_token( packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, &connect_token ) )
     {
-        printf( "server ignored connection request packet. failed to read connect token\n" );
+        printf( "server ignored connection request. failed to read connect token\n" );
         return;
     }
 
@@ -3017,25 +3017,25 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     }
     if ( !found_server_address )
     {   
-        printf( "server ignored connection request packet. server address not in connect token whitelist\n" );
+        printf( "server ignored connection request. server address not in connect token whitelist\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
     {
-        printf( "server ignored connection request packet. a client with this address is already connected\n" );
+        printf( "server ignored connection request. a client with this address is already connected\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_id( server, connect_token.client_id ) != -1 )
     {
-        printf( "server ignored connection request packet. a client with this id is already connected\n" );
+        printf( "server ignored connection request. a client with this id is already connected\n" );
         return;
     }
 
     if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
 	{
-		printf( "server ignored connection request packet. connect token has already been used\n" );
+		printf( "server ignored connection request. connect token has already been used\n" );
 		return;
 	}
 
@@ -3054,7 +3054,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token.server_to_client_key, connect_token.client_to_server_key, server->time ) )
     {
-        printf( "server ignored connection request packet. failed to add encryption mapping\n" );
+        printf( "server ignored connection request. failed to add encryption mapping\n" );
         return;
     }
 
@@ -3069,7 +3069,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
     if ( !netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) )
     {
-        printf( "server ignored connection request packet. failed to encrypt challenge token\n" );
+        printf( "server ignored connection request. failed to encrypt challenge token\n" );
         return;
     }
 
@@ -3086,34 +3086,30 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     if ( !netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) )
     {
-        printf( "server ignored connection response packet. failed to decrypt challenge token\n" );
+        printf( "server ignored connection response. failed to decrypt challenge token\n" );
         return;
     }
+
+    // todo: read in the challenge token from the decrypted data
 
     uint8_t * packet_send_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, encryption_index );
 
     if ( !packet_send_key )
     {
-        printf( "server ignored connection response packet. no packet send key\n" );
+        printf( "server ignored connection response. no packet send key\n" );
         return;
     }
 
-    // todo: need helper functions to looking up client by index, client by address
+    if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
+    {
+        printf( "server ignored connection response. a client with this address is already connected\n" );
+        return;
+    }
 
     /*
-    if ( FindClientIndex( address ) >= 0 )
+    if ( netcode_server_find_client_index_by_id( server, challenge_token.client_id ) != -1 )
     {
-        debug_printf( "ignored challenge response: address already connected\n" );
-        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_IGNORED_ADDRESS_ALREADY_CONNECTED, packet, address, challengeToken );
-        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_IGNORED_ADDRESS_ALREADY_CONNECTED]++;
-        return;
-    }
-
-    if ( FindClientIndex( challengeToken.clientId ) >= 0 )
-    {
-        debug_printf( "ignored challenge response: client id already connected\n" );
-        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_IGNORED_CLIENT_ID_ALREADY_CONNECTED, packet, address, challengeToken );
-        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_IGNORED_CLIENT_ID_ALREADY_CONNECTED]++;
+        printf( "server ignored connection response. a client with this id is already connected\n" );
         return;
     }
     */
