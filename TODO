@@ -40,15 +40,17 @@ DONE
 
     Port across code to process the connection response.
 
-TODO
-
     In progress on this, first step = decrypt the challenge token.
 
     Unfortunately, challenge token is not decrypting on client. Is the challenge sequence being sent properly?
 
     What is different on challenge token encrypt and decrypt?
 
-    Grrrrr
+    Fixed. I screwed up the increment on the challenge token sequence and was incrementing it twice.
+
+TODO
+
+    Next step: 
 
     -----------------
 

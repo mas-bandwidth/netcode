@@ -2220,7 +2220,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     {
         case NETCODE_CONNECTION_DENIED_PACKET:
         {
-            if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST && netcode_address_equal( from, &client->server_address ) )
+            if ( ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST || client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST ) && netcode_address_equal( from, &client->server_address ) )
             {
                 client->should_disconnect = 1;
                 client->should_disconnect_state = NETCODE_CLIENT_STATE_CONNECTION_DENIED;
@@ -3023,7 +3023,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     struct netcode_connection_challenge_packet_t challenge_packet;
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
-    challenge_packet.challenge_token_sequence = server->challenge_sequence++;
+    challenge_packet.challenge_token_sequence = server->challenge_sequence;
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
     if ( !netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) )
     {
@@ -3042,9 +3042,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 {
     assert( server );
 
-    (void) server;
     (void) from;
-    (void) packet;
 
     if ( !netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) )
     {
@@ -3073,6 +3071,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     }
     */
 
+    // todo: deny the connection if the server is full
     /*
     if ( m_numConnectedClients == m_maxClients )
     {
@@ -3089,7 +3088,10 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
         return;
     }
+    */
 
+    // todo: connect the client
+    /*
     const int clientIndex = FindFreeClientIndex();
 
     assert( clientIndex != -1 );
