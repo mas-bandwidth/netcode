@@ -2916,8 +2916,6 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
 
     printf( "server started with %d client slots\n", max_clients );
 
-	// todo: allocate clients slots
-
     server->running = 1;
     server->max_clients = max_clients;
     server->num_connected_clients = 0;
@@ -3023,9 +3021,17 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    // todo: if a client with this address is already connected, ignore.
+    if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
+    {
+        printf( "server ignored connection request packet. a client with this address is already connected\n" );
+        return;
+    }
 
-    // todo: if a client with this client id is already connected, ignore.
+    if ( netcode_server_find_client_index_by_id( server, connect_token.client_id ) != -1 )
+    {
+        printf( "server ignored connection request packet. a client with this id is already connected\n" );
+        return;
+    }
 
     if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
 	{
