@@ -3090,7 +3090,12 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
         return;
     }
 
-    // todo: read in the challenge token from the decrypted data
+    struct netcode_challenge_token_t challenge_token;
+    if ( !netcode_read_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, &challenge_token ) )
+    {
+        printf( "server ignored connection response. failed to read challenge token\n" );
+        return;
+    }
 
     uint8_t * packet_send_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, encryption_index );
 
@@ -3106,13 +3111,11 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
         return;
     }
 
-    /*
     if ( netcode_server_find_client_index_by_id( server, challenge_token.client_id ) != -1 )
     {
         printf( "server ignored connection response. a client with this id is already connected\n" );
         return;
     }
-    */
 
     if ( server->num_connected_clients == server->max_clients )
     {
@@ -3126,6 +3129,8 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
         return;
     }
+
+    printf( "*** server accepts connection ***\n" );
 
     // todo: connect the client
     /*

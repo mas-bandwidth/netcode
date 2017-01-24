@@ -10,11 +10,9 @@ DONE
 
     Port across functions to look up client by id, address.
 
-TODO
-
     Extend the code to ignore connection request / connection response if the client address or id is already connected.
 
-    -----------------
+TODO
 
     Port across function to connect client
 
