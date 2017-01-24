@@ -2220,7 +2220,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     {
         case NETCODE_CONNECTION_DENIED_PACKET:
         {
-            if ( ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST || client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST ) && netcode_address_equal( from, &client->server_address ) )
+            if ( ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST || client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE ) && netcode_address_equal( from, &client->server_address ) )
             {
                 client->should_disconnect = 1;
                 client->should_disconnect_state = NETCODE_CLIENT_STATE_CONNECTION_DENIED;
@@ -3038,11 +3038,9 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     netcode_server_send_global_packet( server, &challenge_packet, from, connect_token.server_to_client_key );
 }
 
-void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet )
+void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet, int encryption_index )
 {
     assert( server );
-
-    (void) from;
 
     if ( !netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) )
     {
@@ -3050,9 +3048,16 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
         return;
     }
 
-    printf( "challenge token decrypted OK\n" );
+    uint8_t * packet_send_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, encryption_index );
 
-    // todo
+    if ( !packet_send_key )
+    {
+        printf( "server ignored connection response packet. no packet send key\n" );
+        return;
+    }
+
+    // todo: need helper functions to looking up client by index, client by address
+
     /*
     if ( FindClientIndex( address ) >= 0 )
     {
@@ -3071,24 +3076,18 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     }
     */
 
-    // todo: deny the connection if the server is full
-    /*
-    if ( m_numConnectedClients == m_maxClients )
+    //if ( server->num_connected_clients == server->max_clients )
     {
-        debug_printf( "challenge response denied: server is full\n" );
-        OnChallengeResponse( SERVER_CHALLENGE_RESPONSE_DENIED_SERVER_IS_FULL, packet, address, challengeToken );
-        m_counters[SERVER_COUNTER_CHALLENGE_RESPONSE_DENIED_SERVER_IS_FULL]++;
+        printf( "server denied connection response. server is full\n" );
 
-        ConnectionDeniedPacket * connectionDeniedPacket = (ConnectionDeniedPacket*) CreateGlobalPacket( CLIENT_SERVER_PACKET_CONNECTION_DENIED );
+        struct netcode_connection_denied_packet_t p;
+        p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+        p.reason = NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL;
 
-        if ( connectionDeniedPacket )
-        {
-            SendPacket( address, connectionDeniedPacket );
-        }
+        netcode_server_send_global_packet( server, &p, from, packet_send_key );
 
         return;
     }
-    */
 
     // todo: connect the client
     /*
@@ -3104,7 +3103,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     */
 }
 
-void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence )
+void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence, int encryption_index )
 {
     assert( server );
     assert( packet );
@@ -3132,7 +3131,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
 
             printf( "server received connection response from %s\n", netcode_address_to_string( from, from_address_string ) );
 
-            netcode_server_process_connection_response_packet( server, from, (struct netcode_connection_response_packet_t*) packet );
+            netcode_server_process_connection_response_packet( server, from, (struct netcode_connection_response_packet_t*) packet, encryption_index );
         }
         break;
 
@@ -3181,7 +3180,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         if ( !packet )
             continue;
 
-        netcode_server_process_packet( server, &from, packet, sequence );
+        netcode_server_process_packet( server, &from, packet, sequence, encryption_index );
     }
 }
 

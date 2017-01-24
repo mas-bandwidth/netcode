@@ -1,56 +1,12 @@
 DONE
 
-    Integrate encryption manager into server
+    Continue processing connection response.
 
-    Removed cut & paste code for the connect token entry clear. It's now a single function.
+    Server is now sending connection denied back to client, but client is not receiving this. Why not?
 
-    Add an encryption mapping when a connection request is accepted.
-
-    Add the code to call find or add connect token entry before accepting connect tokeng.
-
-    Done. To get this to work I had to remove the code that cleared the connect token mac from the decrypted connect token data, because I need this mac for the connect token entries.
-
-    Extend challenge token to include user data.
-
-    Increased challenge token bytes to 360 so the 256 byte user data can fit.
-
-    Update tests to insert random user data and check that it matches.
-
-    Send connection challenge back to client when receiving a connection challenge.
-
-    Client should transition to sending connection response state when receives connection challenge.
-
-    Now I need to write code to look up the encryption mapping from address, so the server can receive the packets sent from pending clients.
-
-    To do this, when a packet comes in, I need to look up given the "from" address what the encryption mapping would be, and then use that to find the correct private key to pass in.
-
-    Theoretically, I can avoid this if I know the first byte of that packet is zero.
-
-    This is probably a worthwhile optimization to make, but does it make the game any more secure?
-
-    Avoiding the O(n) cost until after the packet is validated (eg. decrypted), is not possible, you need the key to know that.
-
-    So the search for the key must be performed for any encrypted packet type received, so it would not be a valid optimization to make. An attacker would just send encrypted packet types instead of connection request packets.
-
-    So don't implement the optimization, it's not worth it.
-
-    Add code to get the packet receive key for the packet address, so encrypted packets can be read on the server.
-
-    Verify that connection response packets are being received by the server.
-
-    Port across code to process the connection response.
-
-    In progress on this, first step = decrypt the challenge token.
-
-    Unfortunately, challenge token is not decrypting on client. Is the challenge sequence being sent properly?
-
-    What is different on challenge token encrypt and decrypt?
-
-    Fixed. I screwed up the increment on the challenge token sequence and was incrementing it twice.
+    Fixed so connection denied response is processed while in sending connection response state.
 
 TODO
-
-    Next step: 
 
     -----------------
 
