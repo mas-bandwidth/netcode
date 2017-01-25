@@ -3221,10 +3221,6 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
     packet.client_index = client_index;
 
-    uint8_t * send_packet_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, encryption_index );
-
-    assert( send_packet_key );
-
     netcode_server_send_client_packet( server, &packet, client_index );
 }
 
@@ -3476,6 +3472,14 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
     packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
     packet->payload_bytes = packet_bytes;
     memcpy( packet->payload_data, packet_data, packet_bytes );
+
+    if ( server->client_confirmed[client_index] )
+    {
+        struct netcode_connection_keep_alive_packet_t keep_alive_packet;
+        keep_alive_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+        keep_alive_packet.client_index = client_index;
+        netcode_server_send_client_packet( server, &packet, client_index );
+    }
 
     netcode_server_send_client_packet( server, packet, client_index );
 }

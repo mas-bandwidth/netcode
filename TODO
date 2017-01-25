@@ -16,15 +16,13 @@ DONE
 
     Base this on the code from the client.
 
-TODO
-
-    -----------------
-
     When the server sends a payload packet to a client, if that client is not confirmed yet, send a keep alive first, so a keep-alive packet always precedes payload until confirmation is in.
 
     This is the smartest way to reduce the connection round trips, and still get the common case being that the server can send payload packets immediately to client, without waiting for confirmation.
 
     This is good. Lock it in.
+
+TODO
 
     -----------------
 
