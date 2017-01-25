@@ -36,8 +36,6 @@ DONE
 
     Clear the last packet send and receive time on connect to the current time.
 
-TODO
-
     Server needs a way to look up encryption index for packets by address.
 
     This will be used on packet send and packet receive.
@@ -49,6 +47,16 @@ TODO
     However, when packets are received the address needs to look up to client index, then client index -> read packet key.
 
     Also, should probably add checks in timeout check to make sure that encryption index for a client matches what is in the encryption manager.
+
+    Add the per-client encryption index cache. Clear it to -1 initially. Set it to the encryption index passed in on client connect.
+
+    When the client connects, set the encryption index to that passed in.
+
+TODO
+    
+    When receiving packets, look up the encryption index by address (common case) for connected clients.
+
+    If the address exists in a connected client slot, use the encryption index from that slot.
 
     -----------------
 
@@ -66,7 +74,11 @@ TODO
 
     -----------------
 
-    When the server receives a payload packet, add that 
+    When the server receives a payload packet, add that to a queue for that client slot.
+
+    -----------------
+
+    Implement the code to send and receive payload packets.
 
     -----------------
 
@@ -78,15 +90,30 @@ TODO
 
     -----------------
 
-    Once client and server are connected, disconnect the client.
-
-    =============================================================================
-
-    Implement network simulator and shim for packets sent/received from client and server.
+    Once client and server are connected and have both exchanged payload packets, disconnect the client server-side.
 
     -----------------
 
     Implement replay protection.
+
+    Support 1 second worth of replay protection @ 60HZ, eg. 60 packets per-client.
+
+    Make sure global packets are ignored (eg. high bit set in sequence).
+
+    -----------------
+
+
+
+
+
+
+
+
+
+
+    =============================================================================
+
+    Implement network simulator and shim for packets sent/received from client and server.
 
     -----------------
 

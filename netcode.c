@@ -2784,6 +2784,7 @@ struct netcode_server_t
     uint64_t challenge_sequence;
     uint8_t challenge_key[NETCODE_KEY_BYTES];
     int client_connected[NETCODE_MAX_CLIENTS];
+    int client_encryption_index[NETCODE_MAX_CLIENTS];
     uint64_t client_id[NETCODE_MAX_CLIENTS];
     double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
     double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
@@ -2844,12 +2845,16 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     server->max_clients = 0;
     server->num_connected_clients = 0;
     server->global_sequence = 1ULL << 63;
+
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
     memset( server->client_connected, 0, sizeof( server->client_connected ) );
     memset( server->client_id, 0, sizeof( server->client_id ) );
     memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
+
+    for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
+        server->client_encryption_index[i] = -1;
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
@@ -3075,12 +3080,15 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     assert( server->client_connected[client_index] == 0 );
 
     server->client_connected[client_index] = 1;
+    server->client_encryption_index[client_index] = encryption_index;
     server->client_id[client_index] = client_id;
     server->client_address[client_index] = *address;
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
 
-    printf( "server connected client %d\n", client_index );
+    char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    printf( "server accepts connection from %s in client slot %d\n", netcode_address_to_string( address, address_string ), client_index );
 
     struct netcode_connection_keep_alive_packet_t packet;
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3146,8 +3154,6 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     int client_index = netcode_server_find_free_client_index( server );
 
     assert( client_index != -1 );
-
-    printf( "server accepted connection response\n" );
 
     netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index );
 }
