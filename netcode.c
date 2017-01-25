@@ -2142,6 +2142,16 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     netcode_client_set_state( client, client_state );
 
     netcode_client_reset_before_next_connect( client );
+
+    while ( 1 )
+    {
+        void * packet = netcode_packet_queue_pop( &client->packet_receive_queue );
+        if ( !packet )
+            break;
+        free( packet );
+    }
+
+    netcode_packet_queue_clear( &client->packet_receive_queue );
 }
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
@@ -2793,6 +2803,7 @@ struct netcode_server_t
     uint64_t client_sequence[NETCODE_MAX_CLIENTS];
     double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
     double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
+    struct netcode_packet_queue_t client_packet_queue[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
@@ -2867,6 +2878,8 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
 
     netcode_encryption_manager_reset( &server->encryption_manager );
 
+    memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
+
     return server;
 }
 
@@ -2899,6 +2912,9 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     server->num_connected_clients = 0;
     server->challenge_sequence = 0;    
     netcode_generate_key( server->challenge_key );
+
+    for ( int i = 0; i < server->max_clients; ++i )
+        netcode_packet_queue_init( &server->client_packet_queue[i] );
 }
 
 void netcode_server_send_global_packet( struct netcode_server_t * server, void * packet, struct netcode_address_t * to, uint8_t * packet_key )
@@ -3021,6 +3037,19 @@ void netcode_server_stop( struct netcode_server_t * server )
     printf( "server stopped\n" );
 
     netcode_server_disconnect_all_clients( server );
+
+    for ( int i = 0; i < server->max_clients; ++i )
+    {
+        while ( 1 )
+        {
+            void * packet = netcode_packet_queue_pop( &server->client_packet_queue[i] );
+            if ( !packet )
+                break;
+            free( packet );
+        }
+
+        netcode_packet_queue_clear( &server->client_packet_queue[i] );
+    }
 
     server->running = 0;
     server->max_clients = 0;
@@ -3319,7 +3348,9 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
                     server->client_confirmed[client_index] = 1;
                 }
 
-                // todo: do the special thing with the queuing up of the payload packet and return early
+                netcode_packet_queue_push( &server->client_packet_queue[client_index], packet );
+
+                return;
             }
         }
         break;
@@ -3422,6 +3453,70 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
             return;
         }
     }
+}
+
+void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
+{
+    assert( server );
+    assert( packet_data );
+    assert( NETCODE_MAX_PACKET_SIZE == NETCODE_MAX_PAYLOAD_BYTES );
+    assert( packet_bytes >= 0 );
+    assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
+
+    if ( !server->running )
+        return;
+
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+
+    uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+
+    packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
+    packet->payload_bytes = packet_bytes;
+    memcpy( packet->payload_data, packet_data, packet_bytes );
+
+    netcode_server_send_client_packet( server, packet, client_index );
+}
+
+void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes )
+{
+    assert( server );
+    assert( packet_bytes );
+
+    if ( !server->running )
+        return NULL;
+
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &server->client_packet_queue[client_index] );
+    
+    if ( packet )
+    {
+        assert( packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
+        *packet_bytes = packet->payload_bytes;
+        assert( *packet_bytes >= 0 );
+        assert( *packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+        return &packet->payload_data;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+void netcode_server_free_packet( struct netcode_server_t * server, void * packet )
+{
+    assert( server );
+    assert( packet );
+
+    (void) server;
+
+    int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
+
+    free( ( (uint8_t*) packet ) - offset );
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )

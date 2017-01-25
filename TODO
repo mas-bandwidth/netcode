@@ -1,22 +1,24 @@
 DONE
 
-TODO
-
     Add the data structure for the per-client payload packet queue. 
 
     Stick it last in the netcode_server_t.
 
-    -----------------
-
     When the server receives a payload packet, add that to a queue for that client slot.
 
-    -----------------
+    When the server stops, pop all packets off each client packet queue and free them.
 
-    Make sure to clear the payload packet queue when a client is disconnected.
+    Do the same for the client. It's probably not doing this!
 
-    -----------------
+    Yes. It wasn't.
 
     Implement the code to send and receive payload packets on the server.
+
+    Base this on the code from the client.
+
+TODO
+
+    -----------------
 
     When the server sends a payload packet to a client, if that client is not confirmed yet, send a keep alive first, so a keep-alive packet always precedes payload until confirmation is in.
 
