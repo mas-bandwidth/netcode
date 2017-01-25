@@ -4,17 +4,19 @@ DONE
 
     If the address exists in a connected client slot, use the encryption index from that slot.
 
-TODO
-    
-    -----------------
+    Implement send packets function for server so that it sends a keep alive packet to the client if no packet was sent in the last amount of time.
 
-    Implement send packets function for server so that it sends a keep alive packet to the client if no packet sent in the last amount of time.
+    Added per-client sequence numbers, and a function to send client packets. Replaced the keepalive packet sends to be per-client, since they occur post client connection.
 
-    -----------------
+    For some reason, the server is sending just one keep alive packet and then stopping. Not sure why. Investigating...
+
+    Just some bad logic, >= rather than <= on the timeout vs. time check.
 
     Add a 'confirmed' flag per-client slot on the server. Clear it to 0 when a client slot is connected.
 
-    Extend the keep alive so it is sent repeatedly, even if other packets are sent from server -> client prior to confirm.
+    When the server receives a keep alive from the client, *or* a payload packet, set confirmed to 1, since the client will only transition to a state where it sends either of this when it receives a keep alive packet from the server.
+
+TODO
 
     -----------------
 
@@ -26,7 +28,13 @@ TODO
 
     -----------------
 
-    Implement the code to send and receive payload packets.
+    Implement the code to send and receive payload packets on the server.
+
+    When the server sends a payload packet to a client, if that client is not confirmed yet, send a keep alive first, so a keep-alive packet always precedes payload until confirmation is in.
+
+    This is the smartest way to reduce the connection round trips, and still get the common case being that the server can send payload packets immediately to client, without waiting for confirmation.
+
+    This is good. Lock it in.
 
     -----------------
 
