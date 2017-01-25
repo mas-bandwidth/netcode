@@ -73,6 +73,7 @@
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
 #define NETCODE_TIMEOUT_SECONDS 5.0
+#define NETCODE_NUM_DISCONNECT_PACKETS 10
 
 // ------------------------------------------------------------------
 
@@ -2552,9 +2553,11 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
 
     if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
     {
-        for ( int i = 0; i < 10; ++i )
+        printf( "client sending disconnect packets to server\n" );
+
+        for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
         {
-            printf( "send disconnect packet\n" );
+            printf( "client sent disconnect packet %d\n", i );
 
             struct netcode_connection_disconnect_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
@@ -2898,6 +2901,47 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     netcode_generate_key( server->challenge_key );
 }
 
+void netcode_server_send_global_packet( struct netcode_server_t * server, void * packet, struct netcode_address_t * to, uint8_t * packet_key )
+{
+    assert( server );
+    assert( packet );
+    assert( to );
+    assert( packet_key );
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, server->global_sequence, packet_key, server->protocol_id );
+
+    assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+
+    netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
+
+    server->global_sequence++;
+}
+
+void netcode_server_send_client_packet( struct netcode_server_t * server, void * packet, int client_index )
+{
+    assert( server );
+    assert( packet );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    assert( server->client_connected[client_index] );
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+    uint8_t * packet_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, server->client_encryption_index[client_index] );
+
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, server->client_sequence[client_index], packet_key, server->protocol_id );
+
+    assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+
+    netcode_socket_send_packet( &server->socket, &server->client_address[client_index], packet_data, packet_bytes );
+
+    server->client_sequence[client_index]++;
+
+    server->client_last_packet_send_time[client_index] = server->time;
+}
+
 void netcode_server_disconnect_client_internal( struct netcode_server_t * server, int client_index, int send_disconnect_packets )
 {
     assert( server );
@@ -2910,7 +2954,17 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     if ( send_disconnect_packets )
     {
-        // todo: send disconnect packets
+        printf( "server sending disconnect packets to client %d\n", client_index );
+
+        for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
+        {
+            printf( "server sent disconnect packet %d\n", i );
+
+            struct netcode_connection_disconnect_packet_t packet;
+            packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
+
+            netcode_server_send_client_packet( server, &packet, client_index );
+        }
     }
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
@@ -2975,47 +3029,6 @@ void netcode_server_stop( struct netcode_server_t * server )
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
     netcode_encryption_manager_reset( &server->encryption_manager );
-}
-
-void netcode_server_send_global_packet( struct netcode_server_t * server, void * packet, struct netcode_address_t * to, uint8_t * packet_key )
-{
-    assert( server );
-    assert( packet );
-    assert( to );
-    assert( packet_key );
-
-    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
-
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, server->global_sequence, packet_key, server->protocol_id );
-
-    assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
-
-    netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
-
-    server->global_sequence++;
-}
-
-void netcode_server_send_client_packet( struct netcode_server_t * server, void * packet, int client_index )
-{
-    assert( server );
-    assert( packet );
-    assert( client_index >= 0 );
-    assert( client_index < server->max_clients );
-    assert( server->client_connected[client_index] );
-
-    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
-
-    uint8_t * packet_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, server->client_encryption_index[client_index] );
-
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, server->client_sequence[client_index], packet_key, server->protocol_id );
-
-    assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
-
-    netcode_socket_send_packet( &server->socket, &server->client_address[client_index], packet_data, packet_bytes );
-
-    server->client_sequence[client_index]++;
-
-    server->client_last_packet_send_time[client_index] = server->time;
 }
 
 int netcode_server_find_client_index_by_id( struct netcode_server_t * server, uint64_t client_id )

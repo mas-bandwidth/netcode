@@ -92,14 +92,9 @@ int main( int argc, char ** argv )
 
     signal( SIGINT, interrupt_handler );
 
-    int iteration = 0;
-
 	while ( !quit )
 	{
-        iteration++;
-
-        if ( iteration < 20 )
-            netcode_client_update( client, time );
+        netcode_client_update( client, time );
 
         netcode_server_update( server, time );
 
