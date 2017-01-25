@@ -20,11 +20,11 @@ DONE
 
     Test server-side timeouts (loosely speaking...)
 
-TODO
-
     Add code to clear the client slot when they are disconnected.
     
     Add code to send disconnect packets to client on server-side disconnect.
+
+TODO
 
     -----------------
 
@@ -43,10 +43,6 @@ TODO
     -----------------
 
     Extend client_server to test that client and server can exchange payload packets.
-
-    -----------------
-
-    Implement code on the server-side to disconnect the client.
 
     -----------------
 
