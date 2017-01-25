@@ -3226,7 +3226,18 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
         uint64_t sequence;
 
-        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, server->time );
+        int encryption_index = -1;
+        int from_client_index = netcode_server_find_client_index_by_address( server, &from );
+        if ( from_client_index != -1 )
+        {
+            assert( from_client_index >= 0 );
+            assert( from_client_index < server->max_clients );
+            encryption_index = server->client_encryption_index[from_client_index];
+        }
+        else
+        {
+            encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, server->time );
+        }
         
         uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
         

@@ -1,63 +1,11 @@
 DONE
 
-    Continue processing connection response.
-
-    Server is now sending connection denied back to client, but client is not receiving this. Why not?
-
-    Fixed so connection denied response is processed while in sending connection response state.
-
-    Add data structures to look up client by id, address.
-
-    Port across functions to look up client by id, address.
-
-    Extend the code to ignore connection request / connection response if the client address or id is already connected.
-
-    Work out what the next state is for clients on connection response.
-
-    Does the client get fully connected, with a pending flag, so the client keeps sending the keep-alive until connection is confirmed.
-
-    Or do I extend the server-side to have a state per-slot, eg. 
-
-        CLIENT_SLOT_FREE
-        CLIENT_SLOT_PENDING
-        CLIENT_SLOT_CONNECTED
-
-    Think over this for a while, because any deviation from how yojimbo does it needs to have a good reason.
-
-    Decided to stick with the state structure from yojimbo. No good reason to deviate. Get it finished!
-
-    Port across function to connect client
-
-    Send a keep alive packet back to the client when the client is connected.
-
-    Make sure the client completes connection to the server.
-
-    Add data structure per-client slot for time last packet sent, time last packet received (for timeouts).
-
-    Clear the last packet send and receive time on connect to the current time.
-
-    Server needs a way to look up encryption index for packets by address.
-
-    This will be used on packet send and packet receive.
-
-    Ideally, each client should cache the encryption index eg. client_encryption_index[NETCODE_MAX_CLIENTS]
-
-    This way it can be quickly looked up for packet sends.
-
-    However, when packets are received the address needs to look up to client index, then client index -> read packet key.
-
-    Also, should probably add checks in timeout check to make sure that encryption index for a client matches what is in the encryption manager.
-
-    Add the per-client encryption index cache. Clear it to -1 initially. Set it to the encryption index passed in on client connect.
-
-    When the client connects, set the encryption index to that passed in.
-
-TODO
-    
     When receiving packets, look up the encryption index by address (common case) for connected clients.
 
     If the address exists in a connected client slot, use the encryption index from that slot.
 
+TODO
+    
     -----------------
 
     Implement send packets function for server so that it sends a keep alive packet to the client if no packet sent in the last amount of time.
