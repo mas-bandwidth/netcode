@@ -16,11 +16,15 @@ DONE
 
     When the server receives a keep alive from the client, *or* a payload packet, set confirmed to 1, since the client will only transition to a state where it sends either of this when it receives a keep alive packet from the server.
 
+    Implement server-side timeouts.
+
+    Test server-side timeouts (loosely speaking...)
+
 TODO
 
-    -----------------
-
-    Implement server-side timeouts.
+    Add code to clear the client slot when they are disconnected.
+    
+    Add code to send disconnect packets to client on server-side disconnect.
 
     -----------------
 

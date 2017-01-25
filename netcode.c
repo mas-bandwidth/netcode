@@ -2898,24 +2898,53 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     netcode_generate_key( server->challenge_key );
 }
 
+void netcode_server_disconnect_client_internal( struct netcode_server_t * server, int client_index, int send_disconnect_packets )
+{
+    assert( server );
+    assert( server->running );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    assert( server->client_connected[client_index] );
+
+    printf( "server disconnected client %d\n", client_index );
+
+    if ( send_disconnect_packets )
+    {
+        // todo: send disconnect packets
+    }
+
+    netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
+
+    server->client_connected[client_index] = 0;
+    server->client_confirmed[client_index] = 0;
+    server->client_id[client_index] = 0;
+    server->client_sequence[client_index] = 0;
+    server->client_last_packet_send_time[client_index] = 0.0;
+    server->client_last_packet_receive_time[client_index] = 0.0;
+    memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
+    server->client_encryption_index[client_index] = -1;
+}
+
 void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index )
 {
     assert( server );
-    assert( client_index >= 0 );
-    assert( client_index < server->max_clients );
 
     if ( !server->running )
         return;
 
-    printf( "server disconnected client %d\n", client_index );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
 
-    // todo: send disconnect packets
+    if ( !server->client_connected[client_index] )
+        return;
 
-    // todo: clear client slot
+    netcode_server_disconnect_client_internal( server, client_index, 1 );
 }
 
 void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
 {
+    printf( "server disconnect all clients\n" );
+
     assert( server );
 
     if ( !server->running )
@@ -2924,7 +2953,7 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
     for ( int i = 0; i < server->max_clients; ++i )
     {
         if ( server->client_connected[i] )
-            netcode_server_disconnect_client( server, i );
+            netcode_server_disconnect_client_internal( server, i, 1 );
     }
 }
 
@@ -3277,7 +3306,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
                     server->client_confirmed[client_index] = 1;
                 }
 
-                // todo: special thing with the queuing up of the payload packet and return early
+                // todo: do the special thing with the queuing up of the payload packet and return early
             }
         }
         break;
@@ -3371,7 +3400,15 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    // ...
+    for ( int i = 0; i < server->max_clients; ++i )
+    {
+        if ( server->client_connected[i] && ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
+        {
+            printf( "server timed out client %d\n", i );
+            netcode_server_disconnect_client_internal( server, i, 0 );
+            return;
+        }
+    }
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )
