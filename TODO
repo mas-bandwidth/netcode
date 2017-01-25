@@ -28,13 +28,15 @@ DONE
 
     Port across function to connect client
 
+    Send a keep alive packet back to the client when the client is connected.
+
+    Make sure the client completes connection to the server.
+
 TODO
 
     Add data structure per-client slot for time last packet sent, time last packet received (for timeouts).
 
     Clear the last packet send and receive time on connect to the current time.
-
-    Send a keep alive packet back to the client when the client is connected.
 
     Implement send packets function for server so that it sends a keep alive packet to the client if no packet sent in the last amount of time.
 
@@ -44,7 +46,13 @@ TODO
 
     -----------------
 
-    Make sure the client completes connection to the server.
+    When the server receives packets and the packet is a keep alive or a payload packet, look up to see which client the packet belongs to.
+
+    When either packet is received set the last time packet received to current server time.
+
+    -----------------
+
+    Implement server-side timeouts.
 
     -----------------
 

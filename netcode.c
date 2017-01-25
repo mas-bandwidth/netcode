@@ -1198,11 +1198,10 @@ int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct ne
 #define NETCODE_CONNECTION_DENIED_PACKET            1
 #define NETCODE_CONNECTION_CHALLENGE_PACKET         2
 #define NETCODE_CONNECTION_RESPONSE_PACKET          3
-#define NETCODE_CONNECTION_CONFIRM_PACKET           4
-#define NETCODE_CONNECTION_KEEP_ALIVE_PACKET        5
-#define NETCODE_CONNECTION_PAYLOAD_PACKET           6
-#define NETCODE_CONNECTION_DISCONNECT_PACKET        7
-#define NETCODE_CONNECTION_NUM_PACKETS              8
+#define NETCODE_CONNECTION_KEEP_ALIVE_PACKET        4
+#define NETCODE_CONNECTION_PAYLOAD_PACKET           5
+#define NETCODE_CONNECTION_DISCONNECT_PACKET        6
+#define NETCODE_CONNECTION_NUM_PACKETS              7
 
 struct netcode_connection_request_packet_t
 {
@@ -1236,15 +1235,10 @@ struct netcode_connection_response_packet_t
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
-struct netcode_connection_confirm_packet_t
-{
-    uint8_t packet_type;
-    uint32_t client_index;
-};
-
 struct netcode_connection_keep_alive_packet_t
 {
     uint8_t packet_type;
+    int client_index;
 };
 
 struct netcode_connection_payload_packet_t
@@ -1385,16 +1379,10 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
 			}
 			break;
 
-			case NETCODE_CONNECTION_CONFIRM_PACKET:
-			{
-                struct netcode_connection_confirm_packet_t * p = (struct netcode_connection_confirm_packet_t*) packet;
-                netcode_write_uint32( &buffer, p->client_index );
-			}
-			break;
-			
 			case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
 			{
-                // ...
+                struct netcode_connection_keep_alive_packet_t * p = (struct netcode_connection_keep_alive_packet_t*) packet;
+                netcode_write_uint32( &buffer, p->client_index );
 			}
 			break;
 
@@ -1726,51 +1714,29 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             }
             break;
 
-            case NETCODE_CONNECTION_CONFIRM_PACKET:
+            case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
             {
                 if ( decrypted_bytes != 4 )
                 {
-                    printf( "ignored connection confirm packet. decrypted packet data is wrong size\n" );
+                    printf( "ignored connection keep alive packet. decrypted packet data is wrong size\n" );
                     return NULL;
                 }
 
-                struct netcode_connection_confirm_packet_t * packet = (struct netcode_connection_confirm_packet_t*) malloc( sizeof( struct netcode_connection_confirm_packet_t ) );
+                struct netcode_connection_keep_alive_packet_t * packet = (struct netcode_connection_keep_alive_packet_t*) malloc( sizeof( struct netcode_connection_keep_alive_packet_t ) );
 
                 if ( !packet )
                 {
-                    printf( "ignored connection confirm packet. could not allocate packet struct\n" );
+                    printf( "ignored connection keep alive packet. could not allocate packet struct\n" );
                     return NULL;
                 }
                 
-                packet->packet_type = NETCODE_CONNECTION_CONFIRM_PACKET;
+                packet->packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
                 packet->client_index = netcode_read_uint32( &buffer );
                 
                 return packet;
             }
             break;
             
-            case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
-            {
-				if ( decrypted_bytes != 0 )
-                {
-                    printf( "ignored connection keep alive packet. decrypted packet data is wrong size\n" );
-					return NULL;
-                }
-
-                struct netcode_connection_keep_alive_packet_t * packet = (struct netcode_connection_keep_alive_packet_t*) malloc( sizeof( struct netcode_connection_keep_alive_packet_t ) );
-
-				if ( !packet )
-                {
-                    printf( "ignored connection keep alive packet. could not allocate packet struct\n" );
-					return NULL;
-                }
-				
-				packet->packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
-				
-				return packet;
-            }
-            break;
-
             case NETCODE_CONNECTION_PAYLOAD_PACKET:
             {
                 if ( decrypted_bytes > NETCODE_MAX_PAYLOAD_BYTES )
@@ -2245,23 +2211,20 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         }
         break;
 
-        // todo: how does the client get from sending connection response to confirm? I think I have messed up these states
-
-        case NETCODE_CONNECTION_CONFIRM_PACKET:
-        {
-            if ( client->state == NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM && netcode_address_equal( from, &client->server_address ) )
-            {
-                netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
-                client->last_packet_receive_time = client->time;
-            }
-        }
-        break;
-
         case NETCODE_CONNECTION_KEEP_ALIVE_PACKET:
         {
-            if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
+            if ( netcode_address_equal( from, &client->server_address ) )
             {
-                client->last_packet_receive_time = client->time;
+                if ( client->state == NETCODE_CLIENT_STATE_CONNECTED )
+                {
+                    client->last_packet_receive_time = client->time;
+                }
+                else if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE )
+                {
+                    client->last_packet_receive_time = client->time;
+
+                    netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
+                }
             }
         }
         break;
@@ -2305,7 +2268,6 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
     memset( allowed_packets, 0, sizeof( allowed_packets ) );
     allowed_packets[NETCODE_CONNECTION_DENIED_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_CHALLENGE_PACKET] = 1;
-    allowed_packets[NETCODE_CONNECTION_CONFIRM_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_KEEP_ALIVE_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
@@ -3093,13 +3055,14 @@ int netcode_server_find_free_client_index( struct netcode_server_t * server )
     return -1;
 }
 
-void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id )
+void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id, int encryption_index )
 {
     assert( server );
     assert( server->running );
     assert( client_index >= 0 );
     assert( client_index < server->max_clients );
     assert( address );
+    assert( encryption_index != -1 );
 
     server->num_connected_clients++;
 
@@ -3111,18 +3074,23 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     server->client_id[client_index] = client_id;
     server->client_address[client_index] = *address;
 
-    // todo: last packet send time
-
-    // todo: last packet receive time
-
+    // todo
     /*
-    m_clientData[clientIndex].lastPacketSendTime = time;
-    m_clientData[clientIndex].lastPacketReceiveTime = time;
+    server->client_last_packet_send_time[client_index] = server->time;
+    server->client_last_packet_receive_time[client_index] = server->time;
     */
 
     printf( "server connected client %d\n", client_index );
 
-    // todo: send a keep alive packet to the client
+    struct netcode_connection_keep_alive_packet_t packet;
+    packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+    packet.client_index = client_index;
+
+    uint8_t * send_packet_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, encryption_index );
+
+    assert( send_packet_key );
+
+    netcode_server_send_global_packet( server, &packet, address, send_packet_key );
 }
 
 void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet, int encryption_index )
@@ -3181,7 +3149,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     printf( "server accepted connection response\n" );
 
-    netcode_server_connect_client( server, client_index, from, challenge_token.client_id );
+    netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index );
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence, int encryption_index )
@@ -4082,13 +4050,13 @@ void test_connection_response_packet()
     free( output_packet );
 }
 
-void test_connection_confirm_packet()
+void test_connection_keep_alive_packet()
 {
-    // setup a connection confirm packet
+    // setup a connection keep alive packet
 
-    struct netcode_connection_confirm_packet_t input_packet;
+    struct netcode_connection_keep_alive_packet_t input_packet;
 
-    input_packet.packet_type = NETCODE_CONNECTION_CONFIRM_PACKET;
+    input_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
     input_packet.client_index = 10;
 
     // write the packet to a buffer
@@ -4110,13 +4078,13 @@ void test_connection_confirm_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
-    struct netcode_connection_confirm_packet_t * output_packet = (struct netcode_connection_confirm_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
 
     check( output_packet );
 
     // make sure the read packet matches what was written
     
-    check( output_packet->packet_type == NETCODE_CONNECTION_CONFIRM_PACKET );
+    check( output_packet->packet_type == NETCODE_CONNECTION_KEEP_ALIVE_PACKET );
     check( output_packet->client_index == input_packet.client_index );
 
     free( output_packet );
@@ -4478,7 +4446,6 @@ void netcode_test()
     RUN_TEST( test_connection_denied_packet );
     RUN_TEST( test_connection_challenge_packet );
     RUN_TEST( test_connection_response_packet );
-    RUN_TEST( test_connection_confirm_packet );
     RUN_TEST( test_connection_payload_packet );
     RUN_TEST( test_connection_disconnect_packet );
     RUN_TEST( test_server_info );
