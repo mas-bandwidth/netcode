@@ -1,34 +1,18 @@
 DONE
 
-    When receiving packets, look up the encryption index by address (common case) for connected clients.
-
-    If the address exists in a connected client slot, use the encryption index from that slot.
-
-    Implement send packets function for server so that it sends a keep alive packet to the client if no packet was sent in the last amount of time.
-
-    Added per-client sequence numbers, and a function to send client packets. Replaced the keepalive packet sends to be per-client, since they occur post client connection.
-
-    For some reason, the server is sending just one keep alive packet and then stopping. Not sure why. Investigating...
-
-    Just some bad logic, >= rather than <= on the timeout vs. time check.
-
-    Add a 'confirmed' flag per-client slot on the server. Clear it to 0 when a client slot is connected.
-
-    When the server receives a keep alive from the client, *or* a payload packet, set confirmed to 1, since the client will only transition to a state where it sends either of this when it receives a keep alive packet from the server.
-
-    Implement server-side timeouts.
-
-    Test server-side timeouts (loosely speaking...)
-
-    Add code to clear the client slot when they are disconnected.
-    
-    Add code to send disconnect packets to client on server-side disconnect.
-
 TODO
+
+    Add the data structure for the per-client payload packet queue. 
+
+    Stick it last in the netcode_server_t.
 
     -----------------
 
     When the server receives a payload packet, add that to a queue for that client slot.
+
+    -----------------
+
+    Make sure to clear the payload packet queue when a client is disconnected.
 
     -----------------
 
