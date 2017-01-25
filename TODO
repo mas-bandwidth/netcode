@@ -56,7 +56,11 @@ TODO
 
     -----------------
 
-    Add code in the client_server.c to make sure the client and server can exchange 
+    When the server receives a payload packet, add that 
+
+    -----------------
+
+    Extend client_server to test that client and server can exchange payload packets.
 
     -----------------
 

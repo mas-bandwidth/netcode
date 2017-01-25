@@ -2785,6 +2785,8 @@ struct netcode_server_t
     uint8_t challenge_key[NETCODE_KEY_BYTES];
     int client_connected[NETCODE_MAX_CLIENTS];
     uint64_t client_id[NETCODE_MAX_CLIENTS];
+    double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
+    double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
@@ -2845,6 +2847,8 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
     memset( server->client_connected, 0, sizeof( server->client_connected ) );
     memset( server->client_id, 0, sizeof( server->client_id ) );
+    memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
+    memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
@@ -3073,12 +3077,8 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     server->client_connected[client_index] = 1;
     server->client_id[client_index] = client_id;
     server->client_address[client_index] = *address;
-
-    // todo
-    /*
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
-    */
 
     printf( "server connected client %d\n", client_index );
 
