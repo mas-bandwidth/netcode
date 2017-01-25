@@ -3236,9 +3236,19 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 void netcode_server_send_packets( struct netcode_server_t * server )
 {
     assert( server );
-    assert( server->running );
 
-    (void) server;
+    if ( !server->running )
+        return;
+
+    // ...
+}
+
+void netcode_server_check_for_timeouts( struct netcode_server_t * server )
+{
+    assert( server );
+
+    if ( !server->running )
+        return;
 
     // ...
 }
@@ -3253,7 +3263,7 @@ void netcode_server_update( struct netcode_server_t * server, double time )
 
     netcode_server_send_packets( server );
 
-    // todo: timeouts etc.
+    netcode_server_check_for_timeouts( server );
 }
 
 // ----------------------------------------------------------------

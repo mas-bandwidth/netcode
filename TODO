@@ -32,23 +32,33 @@ DONE
 
     Make sure the client completes connection to the server.
 
-TODO
-
     Add data structure per-client slot for time last packet sent, time last packet received (for timeouts).
 
     Clear the last packet send and receive time on connect to the current time.
 
+TODO
+
+    Server needs a way to look up encryption index for packets by address.
+
+    This will be used on packet send and packet receive.
+
+    Ideally, each client should cache the encryption index eg. client_encryption_index[NETCODE_MAX_CLIENTS]
+
+    This way it can be quickly looked up for packet sends.
+
+    However, when packets are received the address needs to look up to client index, then client index -> read packet key.
+
+    Also, should probably add checks in timeout check to make sure that encryption index for a client matches what is in the encryption manager.
+
+    -----------------
+
     Implement send packets function for server so that it sends a keep alive packet to the client if no packet sent in the last amount of time.
+
+    -----------------
 
     Add a 'confirmed' flag per-client slot on the server. Clear it to 0 when a client slot is connected.
 
     Extend the keep alive so it is sent repeatedly, even if other packets are sent from server -> client prior to confirm.
-
-    -----------------
-
-    When the server receives packets and the packet is a keep alive or a payload packet, look up to see which client the packet belongs to.
-
-    When either packet is received set the last time packet received to current server time.
 
     -----------------
 
