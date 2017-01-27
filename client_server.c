@@ -24,6 +24,7 @@
 
 #include <netcode.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <signal.h>
 
@@ -92,10 +93,8 @@ int main( int argc, char ** argv )
 
     signal( SIGINT, interrupt_handler );
 
-    /*
-    int server_received_packet = 0;
-    int client_received_packet = 0;
-    */
+    int server_num_packets_received = 0;
+    int client_num_packets_received = 0;
 
     uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
     for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
@@ -115,6 +114,39 @@ int main( int argc, char ** argv )
         if ( netcode_server_client_connected( server, 0 ) )
         {
             netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes );
+            if ( !packet )
+                break;
+            assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            client_num_packets_received++;
+            netcode_client_free_packet( client, packet );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes );
+            if ( !packet )
+                break;
+            assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            server_num_packets_received++;
+            netcode_server_free_packet( server, packet );
+        }
+
+        if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
+        {
+            if ( netcode_server_client_connected( server, 0 ) )
+            {
+                netcode_server_disconnect_client( server, 0 );
+            }
+
         }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )

@@ -40,13 +40,13 @@ DONE
 
     Fixed. Inverted logic.
 
-TODO
-
-    -----------------
+    Add code for client and server to receive packets.
 
     Once client and server are connected and have both exchanged payload packets, disconnect the client server-side.
 
-    Then wait until both client and server are fully disconnected before quitting.
+    Then wait until client disconnects before quitting. Done.
+
+TODO
 
     -----------------
 

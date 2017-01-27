@@ -1551,6 +1551,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( !read_packet_key )
         {
+            assert( 0 );
             printf( "ignored encrypted packet. read packet key is NULL\n" );
             return NULL;
         }
@@ -3325,7 +3326,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {
             if ( client_index != -1 )
             {
-                printf( "server received keep alive packet from client %d\n", client_index );
+                printf( "server received connection keep alive packet from client %d\n", client_index );
 
                 server->client_last_packet_receive_time[client_index] = server->time;
 
@@ -3342,7 +3343,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {
             if ( client_index != -1 )
             {
-                printf( "server received payload packet from client %d\n", client_index );
+                printf( "server received connection payload packet from client %d\n", client_index );
 
                 server->client_last_packet_receive_time[client_index] = server->time;
 
