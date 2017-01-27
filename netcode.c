@@ -3451,6 +3451,19 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     }
 }
 
+int netcode_server_client_connected( struct netcode_server_t * server, int client_index )
+{
+    assert( server );
+
+    if ( !server->running )
+        return 0;
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return 0;
+
+    return server->client_connected[client_index];
+}
+
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
 {
     assert( server );

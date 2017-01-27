@@ -56,7 +56,7 @@ int main( int argc, char ** argv )
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
     double time = 0.0;
-	double delta_time = 0.1f;
+	double delta_time = 1.0 / 60.0;
 
 	printf( "[client]\n" );
 
@@ -76,7 +76,7 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    netcode_server_start( server, NETCODE_MAX_CLIENTS );
+    netcode_server_start( server, 1 );
 
     char * server_address = "[::1]:50000";
 
@@ -92,11 +92,30 @@ int main( int argc, char ** argv )
 
     signal( SIGINT, interrupt_handler );
 
+    /*
+    int server_received_packet = 0;
+    int client_received_packet = 0;
+    */
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+        packet_data[i] = (uint8_t) i;
+
 	while ( !quit )
 	{
         netcode_client_update( client, time );
 
         netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+        {
+            netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+        }
+
+        if ( netcode_server_client_connected( server, 0 ) )
+        {
+            netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+        }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;

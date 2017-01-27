@@ -22,11 +22,17 @@ DONE
 
     This is good. Lock it in.
 
+    Extend client_server to test that client and server can exchange payload packets.
+
+    First step I notice that after a while client seems be sending both keepalive packets and payload packets. 
+
+    Instead, it should stop sending keepalives once payloads are sent. Debugging...
+
+    Fixed by updating send rate to 60HZ. My guess is that with framerate @ 10HZ, and keep alive at 10HZ, it's too close for comfort (eg. off by one frame)
+
 TODO
 
-    -----------------
-
-    Extend client_server to test that client and server can exchange payload packets.
+    Now need a function to check if client is connected on server.
 
     -----------------
 

@@ -108,6 +108,8 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients );
 
 void netcode_server_update( struct netcode_server_t * client, double time );
 
+int netcode_server_client_connected( struct netcode_server_t * server, int client_index );
+
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
 
 void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes );
