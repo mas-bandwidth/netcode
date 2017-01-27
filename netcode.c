@@ -2228,10 +2228,14 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
             {
                 if ( client->state == NETCODE_CLIENT_STATE_CONNECTED )
                 {
+                    printf( "client received connection keep alive packet from server\n" );
+
                     client->last_packet_receive_time = client->time;
                 }
                 else if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE )
                 {
+                    printf( "client received connection keep alive packet from server\n" );
+
                     client->last_packet_receive_time = client->time;
 
                     netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
@@ -2244,6 +2248,8 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
             {
+                printf( "client received connection payload packet from server\n" );
+
                 netcode_packet_queue_push( &client->packet_receive_queue, packet );
 
                 client->last_packet_receive_time = client->time;
@@ -2257,6 +2263,8 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
             {
+                printf( "client received disconnect packet from server\n" );
+
                 client->should_disconnect = 1;
                 client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
                 client->last_packet_receive_time = client->time;
@@ -3486,12 +3494,12 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
     packet->payload_bytes = packet_bytes;
     memcpy( packet->payload_data, packet_data, packet_bytes );
 
-    if ( server->client_confirmed[client_index] )
+    if ( !server->client_confirmed[client_index] )
     {
         struct netcode_connection_keep_alive_packet_t keep_alive_packet;
         keep_alive_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
         keep_alive_packet.client_index = client_index;
-        netcode_server_send_client_packet( server, &packet, client_index );
+        netcode_server_send_client_packet( server, &keep_alive_packet, client_index );
     }
 
     netcode_server_send_client_packet( server, packet, client_index );

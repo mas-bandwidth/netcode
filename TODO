@@ -30,13 +30,31 @@ DONE
 
     Fixed by updating send rate to 60HZ. My guess is that with framerate @ 10HZ, and keep alive at 10HZ, it's too close for comfort (eg. off by one frame)
 
-TODO
-
     Now need a function to check if client is connected on server.
+
+    Done. Now payload packets sent in both directions.
+
+    Logs show that the server is sending both payload packets and keep alives to client.
+
+    Should only send payloads, not keep alive once confirmed.
+
+    Fixed. Inverted logic.
+
+TODO
 
     -----------------
 
     Once client and server are connected and have both exchanged payload packets, disconnect the client server-side.
+
+    Then wait until both client and server are fully disconnected before quitting.
+
+    -----------------
+
+    Extend separate client/server to exchange payload packets.
+
+    -----------------
+
+    Implement stress test that connects 256 clients and exchanges payload packets.
 
     -----------------
 
@@ -74,10 +92,6 @@ TODO
     Port across code for matcher. Keep it blocking. Doesn't matter for now.
 
     Convert client to get server info from web server.
-
-    -----------------
-
-    Implement stress that connects 256 clients.
 
     -----------------
 
