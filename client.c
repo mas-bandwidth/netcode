@@ -25,7 +25,9 @@
 #include <netcode.h>
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 #include <signal.h>
+#include <inttypes.h>
 
 static volatile int quit = 0;
 
@@ -51,8 +53,10 @@ int main( int argc, char ** argv )
         return 1;
     }
 
+    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
+
     double time = 0.0;
-	double delta_time = 0.1f;
+	double delta_time = 1.0 / 60.0;
 
 	printf( "[client]\n" );
 
@@ -65,14 +69,17 @@ int main( int argc, char ** argv )
     }
 
     #define TEST_CONNECT_TOKEN_EXPIRY 30
-    #define TEST_CLIENT_ID 1000
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = "[::1]:50000";
+    char * server_address = "[::1]:40000";
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+    printf( "client id is %.16" PRIx64 "\n", client_id );
 
     uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
 
-    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
+    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
     {
         printf( "error: failed to generate server info\n" );
         return 1;
@@ -82,9 +89,29 @@ int main( int argc, char ** argv )
 
     signal( SIGINT, interrupt_handler );
 
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+        packet_data[i] = (uint8_t) i;
+
 	while ( !quit )
 	{
         netcode_client_update( client, time );
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+        {
+            netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes );
+            if ( !packet )
+                break;
+            assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            netcode_client_free_packet( client, packet );
+        }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;

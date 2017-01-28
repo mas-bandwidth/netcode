@@ -115,6 +115,20 @@ else
         end
     }
 
+    newaction
+    {
+        trigger     = "stress",
+        description = "Launch 256 client instances to stress test the server",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 client" == 0 then
+                for i = 0, 255 do
+                    os.execute "./bin/client &"
+                end
+            end
+        end
+    }
+
 end
 
 newaction

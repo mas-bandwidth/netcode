@@ -46,15 +46,39 @@ DONE
 
     Then wait until client disconnects before quitting. Done.
 
-TODO
-
-    -----------------
-
     Extend separate client/server to exchange payload packets.
 
-    -----------------
+    Updated separate client/server programs to also run at 60HZ
+
+    When client breaks out with CTRL-C, the server doesn't seem to receive the disconnect packets.
+
+    However, the client definitely thinks that it has sent them.
+
+    What's going on?!
+
+    Server didn't have code to properly handle disconnect packet. Fixed.
 
     Implement stress test that connects 256 clients and exchanges payload packets.
+
+    This may be too spammy in terms of TTY to be useful.
+
+    Time to wind back the logging? debug_printf?
+
+    Ended up adding log levels, which really helped me tame it. Very nice.
+
+    Updated standalone client/server to use minimal info level logs. Very nice X2.
+
+    Implement stress test that connects 256 standalone clients to the server.
+
+    Clients past the first one don't seem to be connecting. What's going wrong?
+
+    Try it with two clients.
+
+    I think it's because the clients have the same client id. Yes...
+
+    Yeah. Just a client id issue. Fixed by randomizing the client id. All 256 clients connect sucessfully!
+
+TODO
 
     -----------------
 

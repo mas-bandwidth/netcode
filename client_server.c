@@ -52,6 +52,8 @@ int main( int argc, char ** argv )
         return 1;
     }
 
+    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
+
     #define TEST_CONNECT_TOKEN_EXPIRY 30
     #define TEST_CLIENT_ID 1000
     #define TEST_PROTOCOL_ID 0x1122334455667788
@@ -59,7 +61,7 @@ int main( int argc, char ** argv )
     double time = 0.0;
 	double delta_time = 1.0 / 60.0;
 
-	printf( "[client]\n" );
+	printf( "[client/server]\n" );
 
     struct netcode_client_t * client = netcode_client_create( "::", time );
 
@@ -69,7 +71,7 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    struct netcode_server_t * server = netcode_server_create( "[::]:50000", "[::1]:50000", TEST_PROTOCOL_ID, private_key, time );
+    struct netcode_server_t * server = netcode_server_create( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {
@@ -79,7 +81,7 @@ int main( int argc, char ** argv )
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:50000";
+    char * server_address = "[::1]:40000";
 
     uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
 
@@ -144,9 +146,10 @@ int main( int argc, char ** argv )
         {
             if ( netcode_server_client_connected( server, 0 ) )
             {
+                printf( "client and server successfully exchanged packets\n" );
+
                 netcode_server_disconnect_client( server, 0 );
             }
-
         }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )

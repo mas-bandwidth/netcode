@@ -27,6 +27,8 @@
 #include <assert.h>
 #include <memory.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <inttypes.h>
 
 #ifdef _MSC_VER
 #define SODIUM_STATIC
@@ -74,6 +76,39 @@
 #define NETCODE_PACKET_SEND_RATE 10.0
 #define NETCODE_TIMEOUT_SECONDS 5.0
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
+
+#define NETCODE_ENABLE_LOGGING 1
+
+// ------------------------------------------------------------------
+
+static int log_level = 0;
+
+void netcode_log_level( int level )
+{
+    log_level = level;
+}
+
+#if NETCODE_ENABLE_LOGGING
+
+void netcode_printf( int level, const char * format, ... ) 
+{
+    if ( level > log_level )
+        return;
+    va_list args;
+    va_start( args, format );
+    vprintf( format, args );
+    va_end( args );
+}
+
+#else // #if NETCODE_ENABLE_LOGGING
+
+void netcode_printf( int level, const char * format, ... ) 
+{
+    (void) level;
+    (void) format;
+}
+
+#endif // #if NETCODE_ENABLE_LOGGING
 
 // ------------------------------------------------------------------
 
@@ -396,7 +431,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     if ( s->handle <= 0 )
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     {
-        printf( "error: failed to create socket\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to create socket\n" );
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
@@ -407,7 +442,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         int yes = 1;
         if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&yes, sizeof(yes) ) != 0 )
         {
-            printf( "error: failed to set socket ipv6 only\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to set socket ipv6 only\n" );
             netcode_socket_destroy( s );
             return NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED;
         }
@@ -417,14 +452,14 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     if ( setsockopt( s->handle, SOL_SOCKET, SO_SNDBUF, (char*)&send_buffer_size, sizeof(int) ) != 0 )
     {
-        printf( "error: failed to set socket send buffer size\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to set socket send buffer size\n" );
         netcode_socket_destroy( s );
         return NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED;
     }
 
     if ( setsockopt( s->handle, SOL_SOCKET, SO_RCVBUF, (char*)&receive_buffer_size, sizeof(int) ) != 0 )
     {
-        printf( "error: failed to set socket receive buffer size\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to set socket receive buffer size\n" );
         netcode_socket_destroy( s );
         return NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED;
     }
@@ -444,7 +479,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
         if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
         {
-            printf( "error: failed to bind socket (ipv6)\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to bind socket (ipv6)\n" );
             netcode_socket_destroy( s );
             return NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED;
         }
@@ -458,7 +493,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
         if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
         {
-            printf( "error: failed to bind socket (ipv4)\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to bind socket (ipv4)\n" );
             netcode_socket_destroy( s );
             return NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED;
         }
@@ -474,7 +509,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             socklen_t len = sizeof( sin );
             if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
             {
-                printf( "error: failed to get socket port (ipv6)\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket port (ipv6)\n" );
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED;
             }
@@ -486,7 +521,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             socklen_t len = sizeof( sin );
             if ( getsockname( s->handle, (struct sockaddr*)&sin, &len ) == -1 )
             {
-                printf( "error: failed to get socket port (ipv4)\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket port (ipv4)\n" );
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED;
             }
@@ -580,7 +615,7 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
         if ( error == WSAEWOULDBLOCK )
             return 0;
 
-        printf( "recvfrom failed with error %d\n", error );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
 
         return 0;
     }
@@ -590,7 +625,7 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
         if ( errno == EAGAIN )
             return 0;
 
-        printf( "recvfrom failed with error %d\n", errno );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
 
         return 0;
     }
@@ -724,16 +759,6 @@ void netcode_read_bytes( uint8_t ** p, uint8_t * byte_array, int num_bytes )
     {
         byte_array[i] = netcode_read_uint8( p );
     }
-}
-
-void netcode_print_bytes( const char * label, const uint8_t * data, int data_bytes )
-{
-    printf( "%s: ", label );
-    for ( int i = 0; i < data_bytes; ++i )
-    {
-        printf( "0x%02x,", (int) data[i] );
-    }
-    printf( " (%d bytes)\n", data_bytes );
 }
 
 // ----------------------------------------------------------------
@@ -1427,14 +1452,6 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
             netcode_write_uint64( &p, sequence );
         }
 
-        /*
-        netcode_print_bytes( "write packet key", write_packet_key, NETCODE_KEY_BYTES );
-
-        netcode_print_bytes( "write packet nonce", nonce, NETCODE_NONCE_BYTES );
-
-        netcode_print_bytes( "write packet additional", additional_data, sizeof( additional_data ) );
-        */
-
         if ( !netcode_encrypt_aead( encrypted_start, encrypted_finish - encrypted_start, additional_data, sizeof( additional_data ), nonce, write_packet_key ) )
             return 0;
 
@@ -1466,19 +1483,19 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( !allowed_packets[0] )
         {
-            printf( "ignored connection request packet. packet type is not allowed\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. packet type is not allowed\n" );
             return NULL;
         }
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES )
         {
-            printf( "ignored connection request packet. bad packet length\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length\n" );
             return NULL;
         }
 
         if ( !private_key )
         {
-            printf( "ignored connection request packet. no private key\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. no private key\n" );
             return NULL;
         }
 
@@ -1498,21 +1515,21 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 			 version_info[11] != '0' ||
 			 version_info[12] != '\0' )
 		{
-            printf( "ignored connection request packet. bad version info\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad version info\n" );
 			return NULL;
 		}
 
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
         if ( packet_protocol_id != protocol_id )
         {
-            printf( "ignored connection request packet. wrong protocol id\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. wrong protocol id\n" );
             return NULL;
         }
 
         uint64_t packet_connect_token_expire_timestamp = netcode_read_uint64( &buffer );
         if ( packet_connect_token_expire_timestamp <= current_timestamp )
         {
-            printf( "ignored connection request packet. connect token expired\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token expired\n" );
             return NULL;
         }
 
@@ -1522,7 +1539,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
         {
-            printf( "ignored connection request packet. connect token failed to decrypt\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token failed to decrypt\n" );
 			return NULL;
         }
 
@@ -1530,7 +1547,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( !packet )
         {
-            printf( "ignored connection request packet. failed to allocate packet\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. failed to allocate packet\n" );
             return NULL;
         }
 
@@ -1551,14 +1568,13 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( !read_packet_key )
         {
-            assert( 0 );
-            printf( "ignored encrypted packet. read packet key is NULL\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. read packet key is NULL\n" );
             return NULL;
         }
 
         if ( buffer_length < 1 + 1 + NETCODE_MAC_BYTES )
         {
-            printf( "ignored encrypted packet. packet is too small to be valid\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. packet is too small to be valid\n" );
             return NULL;
         }
 
@@ -1568,13 +1584,13 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( packet_type >= NETCODE_CONNECTION_NUM_PACKETS )
         {
-            printf( "ignored encrypted packet. packet type %d is invalid\n", packet_type );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. packet type %d is invalid\n", packet_type );
             return NULL;
         }
 
         if ( !allowed_packets[packet_type] )
         {
-            printf( "ignored encrypted packet. packet type %d is not allowed\n", packet_type );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. packet type %d is not allowed\n", packet_type );
             return NULL;
         }
 
@@ -1582,13 +1598,13 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( sequence_bytes < 1 || sequence_bytes > 8 )
         {
-            printf( "ignored encrypted packet. sequence bytes %d is out of range [1,8]\n", sequence_bytes );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. sequence bytes %d is out of range [1,8]\n", sequence_bytes );
             return NULL;
         }
 
         if ( buffer_length < 1 + sequence_bytes + NETCODE_MAC_BYTES )
         {
-            printf( "ignored encrypted packet. buffer is too small for sequence bytes + encryption mac\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. buffer is too small for sequence bytes + encryption mac\n" );
             return NULL;
         }
 
@@ -1617,25 +1633,17 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             netcode_write_uint64( &p, *sequence );
         }
 
-        /*
-        netcode_print_bytes( "read packet key", read_packet_key, NETCODE_KEY_BYTES );
-
-        netcode_print_bytes( "read packet nonce", nonce, NETCODE_NONCE_BYTES );
-
-        netcode_print_bytes( "read packet additional", additional_data, sizeof( additional_data ) );
-        */
-
 		int encrypted_bytes = (int) ( buffer_length - ( buffer - start ) );
 
         if ( encrypted_bytes < NETCODE_MAC_BYTES )
         {
-            printf( "ignored encrypted packet. encrypted payload is too small\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. encrypted payload is too small\n" );
             return NULL;
         }
 
         if ( !netcode_decrypt_aead( buffer, encrypted_bytes, additional_data, sizeof( additional_data ), nonce, read_packet_key ) )
         {
-            printf( "ignored encrypted packet. failed to decrypt\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. failed to decrypt\n" );
             return NULL;
         }
 
@@ -1649,7 +1657,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
 				if ( decrypted_bytes != 4 )
                 {
-                    printf( "ignored connection denied packet. decrypted packet data is wrong size\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection denied packet. decrypted packet data is wrong size\n" );
 					return NULL;
                 }
 
@@ -1657,7 +1665,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 				if ( !packet )
                 {
-                    printf( "ignored connection denied packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection denied packet. could not allocate packet struct\n" );
 					return NULL;
                 }
 				
@@ -1672,7 +1680,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
 				if ( decrypted_bytes != 8 + NETCODE_CHALLENGE_TOKEN_BYTES )
                 {
-                    printf( "ignored connection challenge packet. decrypted packet data is wrong size\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection challenge packet. decrypted packet data is wrong size\n" );
 					return NULL;
                 }
 
@@ -1680,7 +1688,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 				if ( !packet )
                 {
-                    printf( "ignored connection challenge packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection challenge packet. could not allocate packet struct\n" );
 					return NULL;
                 }
 				
@@ -1696,7 +1704,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
                 if ( decrypted_bytes != 8 + NETCODE_CHALLENGE_TOKEN_BYTES )
                 {
-                    printf( "ignored connection response packet. decrypted packet data is wrong size\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection response packet. decrypted packet data is wrong size\n" );
                     return NULL;
                 }
 
@@ -1704,7 +1712,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
                 if ( !packet )
                 {
-                    printf( "ignored connection response packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection response packet. could not allocate packet struct\n" );
                     return NULL;
                 }
                 
@@ -1720,7 +1728,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
                 if ( decrypted_bytes != 4 )
                 {
-                    printf( "ignored connection keep alive packet. decrypted packet data is wrong size\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection keep alive packet. decrypted packet data is wrong size\n" );
                     return NULL;
                 }
 
@@ -1728,7 +1736,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
                 if ( !packet )
                 {
-                    printf( "ignored connection keep alive packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection keep alive packet. could not allocate packet struct\n" );
                     return NULL;
                 }
                 
@@ -1743,7 +1751,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
                 if ( decrypted_bytes > NETCODE_MAX_PAYLOAD_BYTES )
                 {
-                    printf( "ignored connection payload packet. payload is too large\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. payload is too large\n" );
                     return NULL;
                 }
 
@@ -1751,7 +1759,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
                 if ( !packet )
                 {
-                    printf( "ignored connection payload packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. could not allocate packet struct\n" );
                     return NULL;
                 }
                 
@@ -1765,7 +1773,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             {
 				if ( decrypted_bytes != 0 )
                 {
-                    printf( "ignored connection disconnect packet. decrypted packet data is wrong size\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection disconnect packet. decrypted packet data is wrong size\n" );
 					return NULL;
                 }
 
@@ -1773,7 +1781,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 				if ( !packet )
                 {
-                    printf( "ignored connection disconnect packet. could not allocate packet struct\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection disconnect packet. could not allocate packet struct\n" );
 					return NULL;
                 }
 				
@@ -1877,7 +1885,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
 
     if ( buffer_length != NETCODE_SERVER_INFO_BYTES )
     {
-        printf( "read connect data: bad buffer length (%d)\n", buffer_length );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad buffer length (%d)\n", buffer_length );
         return 0;
     }
 
@@ -1896,7 +1904,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
          server_info->version_info[11] != '0' ||
          server_info->version_info[12] != '\0' )
     {
-        printf( "read connect data: bad version info\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info\n" );
         return 0;
     }
 
@@ -1914,7 +1922,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
 
     if ( server_info->num_server_addresses <= 0 || server_info->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
     {
-        printf( "read connect data: bad num server addresses (%d)\n", server_info->num_server_addresses );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad num server addresses (%d)\n", server_info->num_server_addresses );
         return 0;
     }
 
@@ -1942,7 +1950,7 @@ int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcod
         }
         else
         {
-            printf( "read connect data: bad address type (%d)\n", server_info->server_addresses[i].type );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad address type (%d)\n", server_info->server_addresses[i].type );
             return 0;
         }
     }
@@ -2057,7 +2065,7 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
     struct netcode_address_t address;
     if ( !netcode_parse_address( address_string, &address ) )
     {
-        printf( "error: failed to parse client address\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse client address\n" );
         return NULL;
     }
 
@@ -2075,7 +2083,7 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
         return NULL;
     }
 
-    printf( "client started on port %d\n", socket.address.port );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d\n", socket.address.port );
 
     client->socket = socket;
 	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
@@ -2114,7 +2122,8 @@ void netcode_client_destroy( struct netcode_client_t * client )
 
 void netcode_client_set_state( struct netcode_client_t * client, int client_state )
 {
-    printf( "client state change: %s -> %s\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client state change: %s -> %s\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+
     client->state = client_state;
 }
 
@@ -2175,7 +2184,7 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string ) );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string ) );
 
     memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->server_info.client_to_server_key, NETCODE_KEY_BYTES );
@@ -2211,7 +2220,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST && netcode_address_equal( from, &client->server_address ) )
             {
-                printf( "client received connection challenge packet from server\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection challenge packet from server\n" );
 
                 struct netcode_connection_challenge_packet_t * p = (struct netcode_connection_challenge_packet_t*) packet;
                 client->challenge_token_sequence = p->challenge_token_sequence;
@@ -2229,17 +2238,19 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
             {
                 if ( client->state == NETCODE_CLIENT_STATE_CONNECTED )
                 {
-                    printf( "client received connection keep alive packet from server\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection keep alive packet from server\n" );
 
                     client->last_packet_receive_time = client->time;
                 }
                 else if ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE )
                 {
-                    printf( "client received connection keep alive packet from server\n" );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection keep alive packet from server\n" );
 
                     client->last_packet_receive_time = client->time;
 
                     netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
+
+                    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server\n" );
                 }
             }
         }
@@ -2249,7 +2260,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
             {
-                printf( "client received connection payload packet from server\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection payload packet from server\n" );
 
                 netcode_packet_queue_push( &client->packet_receive_queue, packet );
 
@@ -2264,7 +2275,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
         {
             if ( client->state == NETCODE_CLIENT_STATE_CONNECTED && netcode_address_equal( from, &client->server_address ) )
             {
-                printf( "client received disconnect packet from server\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received disconnect packet from server\n" );
 
                 client->should_disconnect = 1;
                 client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
@@ -2341,7 +2352,7 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) >= client->time )
                 return;
 
-            printf( "client sent connection request packet to server\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent connection request packet to server\n" );
 
             struct netcode_connection_request_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
@@ -2360,7 +2371,7 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) >= client->time )
                 return;
 
-            printf( "client sent connection response packet to server\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent connection response packet to server\n" );
 
             struct netcode_connection_response_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_RESPONSE_PACKET;
@@ -2376,7 +2387,7 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) >= client->time )
                 return;
 
-            printf( "client sent connection keep-alive packet to server\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent connection keep-alive packet to server\n" );
 
             struct netcode_connection_keep_alive_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -2404,7 +2415,7 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->server_info.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->server_info.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -2427,7 +2438,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         
         if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
         {
-            printf( "client connect failed. connect token expired\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connect token expired\n" );
             netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED, 0 );
             return;
         }
@@ -2435,7 +2446,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
     if ( client->should_disconnect )
     {
-        printf( "client should disconnect -> %s\n", netcode_client_state_name( client->should_disconnect_state ) );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client should disconnect -> %s\n", netcode_client_state_name( client->should_disconnect_state ) );
         if ( netcode_client_connect_to_next_server( client) )
             return;
         netcode_client_disconnect_internal( client, client->should_disconnect_state, 0 );
@@ -2448,7 +2459,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         {
             if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
             {
-                printf( "client connect failed. connection request timed out\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection request timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
                     return;
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT, 0 );
@@ -2461,7 +2472,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         {
             if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
             {
-                printf( "client connect failed. connection response timed out\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection response timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
                     return;
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT, 0 );
@@ -2474,7 +2485,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         {
             if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
             {
-                printf( "client connect failed. connection confirm timed out\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection confirm timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
                     return;
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT, 0 );
@@ -2487,7 +2498,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
         {
             if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
             {
-                printf( "client connection timed out\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connection timed out\n" );
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT, 0 );
                 return;
             }
@@ -2568,15 +2579,15 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     if ( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED || client->state == destination_state )
         return;
 
-    printf( "client disconnected\n" );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client disconnected\n" );
 
     if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
     {
-        printf( "client sending disconnect packets to server\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent disconnect packets to server\n" );
 
         for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
         {
-            printf( "client sent disconnect packet %d\n", i );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent disconnect packet %d\n", i );
 
             struct netcode_connection_disconnect_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
@@ -2859,7 +2870,7 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string ) );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string ) );
 
     server->socket = socket;
     server->bind_address = bind_address;
@@ -2914,7 +2925,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     if ( server->running )
         netcode_server_stop( server );
 
-    printf( "server started with %d client slots\n", max_clients );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server started with %d client slots\n", max_clients );
 
     server->running = 1;
     server->max_clients = max_clients;
@@ -2975,15 +2986,15 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     assert( client_index < server->max_clients );
     assert( server->client_connected[client_index] );
 
-    printf( "server disconnected client %d\n", client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected client %d\n", client_index );
 
     if ( send_disconnect_packets )
     {
-        printf( "server sending disconnect packets to client %d\n", client_index );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packets to client %d\n", client_index );
 
         for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
         {
-            printf( "server sent disconnect packet %d\n", i );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packet %d\n", i );
 
             struct netcode_connection_disconnect_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_DISCONNECT_PACKET;
@@ -3022,8 +3033,6 @@ void netcode_server_disconnect_client( struct netcode_server_t * server, int cli
 
 void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
 {
-    printf( "server disconnect all clients\n" );
-
     assert( server );
 
     if ( !server->running )
@@ -3043,7 +3052,7 @@ void netcode_server_stop( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    printf( "server stopped\n" );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server stopped\n" );
 
     netcode_server_disconnect_all_clients( server );
 
@@ -3109,7 +3118,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     if ( !netcode_read_connect_token( packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, &connect_token ) )
     {
-        printf( "server ignored connection request. failed to read connect token\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to read connect token\n" );
         return;
     }
 
@@ -3123,31 +3132,31 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     }
     if ( !found_server_address )
     {   
-        printf( "server ignored connection request. server address not in connect token whitelist\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. server address not in connect token whitelist\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
     {
-        printf( "server ignored connection request. a client with this address is already connected\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. a client with this address is already connected\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_id( server, connect_token.client_id ) != -1 )
     {
-        printf( "server ignored connection request. a client with this id is already connected\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. a client with this id is already connected\n" );
         return;
     }
 
     if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
 	{
-		printf( "server ignored connection request. connect token has already been used\n" );
+		netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. connect token has already been used\n" );
 		return;
 	}
 
     if ( server->num_connected_clients == server->max_clients )
     {
-        printf( "server denied connection request. server is full\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server denied connection request. server is full\n" );
 
         struct netcode_connection_denied_packet_t p;
         p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
@@ -3160,7 +3169,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token.server_to_client_key, connect_token.client_to_server_key, server->time ) )
     {
-        printf( "server ignored connection request. failed to add encryption mapping\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
     }
 
@@ -3175,13 +3184,13 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
     if ( !netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) )
     {
-        printf( "server ignored connection request. failed to encrypt challenge token\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to encrypt challenge token\n" );
         return;
     }
 
     server->challenge_sequence++;
 
-    printf( "server sent connection challenge packet\n" );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent connection challenge packet\n" );
 
     netcode_server_send_global_packet( server, &challenge_packet, from, connect_token.server_to_client_key );
 }
@@ -3224,7 +3233,8 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
 
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    printf( "server accepts connection from %s in client slot %d\n", netcode_address_to_string( address, address_string ), client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %.16" PRIx64 " %s in slot %d\n", client_id, netcode_address_to_string( address, address_string ), client_index );
+
 
     struct netcode_connection_keep_alive_packet_t packet;
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3239,14 +3249,14 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     if ( !netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) )
     {
-        printf( "server ignored connection response. failed to decrypt challenge token\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. failed to decrypt challenge token\n" );
         return;
     }
 
     struct netcode_challenge_token_t challenge_token;
     if ( !netcode_read_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, &challenge_token ) )
     {
-        printf( "server ignored connection response. failed to read challenge token\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. failed to read challenge token\n" );
         return;
     }
 
@@ -3254,25 +3264,25 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     if ( !packet_send_key )
     {
-        printf( "server ignored connection response. no packet send key\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. no packet send key\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
     {
-//        printf( "server ignored connection response. a client with this address is already connected\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. a client with this address is already connected\n" );
         return;
     }
 
     if ( netcode_server_find_client_index_by_id( server, challenge_token.client_id ) != -1 )
     {
-//        printf( "server ignored connection response. a client with this id is already connected\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. a client with this id is already connected\n" );
         return;
     }
 
     if ( server->num_connected_clients == server->max_clients )
     {
-        printf( "server denied connection response. server is full\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server denied connection response. server is full\n" );
 
         struct netcode_connection_denied_packet_t p;
         p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
@@ -3306,7 +3316,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {    
             char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-            printf( "server received connection request from %s\n", netcode_address_to_string( from, from_address_string ) );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection request from %s\n", netcode_address_to_string( from, from_address_string ) );
 
             netcode_server_process_connection_request_packet( server, from, (struct netcode_connection_request_packet_t*) packet );
         }
@@ -3316,7 +3326,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {    
             char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-            printf( "server received connection response from %s\n", netcode_address_to_string( from, from_address_string ) );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection response from %s\n", netcode_address_to_string( from, from_address_string ) );
 
             netcode_server_process_connection_response_packet( server, from, (struct netcode_connection_response_packet_t*) packet, encryption_index );
         }
@@ -3326,13 +3336,13 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {
             if ( client_index != -1 )
             {
-                printf( "server received connection keep alive packet from client %d\n", client_index );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection keep alive packet from client %d\n", client_index );
 
                 server->client_last_packet_receive_time[client_index] = server->time;
 
                 if ( !server->client_confirmed[client_index] )
                 {
-                    printf( "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
             }
@@ -3343,17 +3353,30 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
         {
             if ( client_index != -1 )
             {
-                printf( "server received connection payload packet from client %d\n", client_index );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection payload packet from client %d\n", client_index );
 
                 server->client_last_packet_receive_time[client_index] = server->time;
 
                 if ( !server->client_confirmed[client_index] )
                 {
-                    printf( "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
 
                 netcode_packet_queue_push( &server->client_packet_queue[client_index], packet );
+
+                return;
+            }
+        }
+        break;
+
+        case NETCODE_CONNECTION_DISCONNECT_PACKET:
+        {
+            if ( client_index != -1 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received disconnect packet from client %d\n", client_index );
+
+                netcode_server_disconnect_client_internal( server, client_index, 0 );
 
                 return;
             }
@@ -3431,7 +3454,7 @@ void netcode_server_send_packets( struct netcode_server_t * server )
     {
         if ( server->client_connected[i] && server->client_last_packet_send_time[i] + ( 1.0 / NETCODE_PACKET_SEND_RATE ) <= server->time )
         {
-            printf( "server sent connection keep alive packet to client %d\n", i );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent connection keep alive packet to client %d\n", i );
 
             struct netcode_connection_keep_alive_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3453,7 +3476,7 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     {
         if ( server->client_connected[i] && ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
         {
-            printf( "server timed out client %d\n", i );
+            netcode_printf( NETCODE_LOG_LEVEL_INFO, "server timed out client %d\n", i );
             netcode_server_disconnect_client_internal( server, i, 0 );
             return;
         }

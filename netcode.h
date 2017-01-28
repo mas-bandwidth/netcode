@@ -78,9 +78,18 @@
 #define NETCODE_MAX_CLIENTS         256
 #define NETCODE_MAX_PACKET_SIZE     1200
 
+#define NETCODE_LOG_LEVEL_NONE      0
+#define NETCODE_LOG_LEVEL_INFO      1
+#define NETCODE_LOG_LEVEL_ERROR     2
+#define NETCODE_LOG_LEVEL_DEBUG     3
+
 int netcode_init();
 
 void netcode_term();
+
+void netcode_log_level( int level );
+
+void netcode_random_bytes( uint8_t * data, int bytes );
 
 struct netcode_client_t * netcode_client_create( char * address, double time );
 
