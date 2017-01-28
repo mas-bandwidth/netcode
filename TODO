@@ -2,7 +2,9 @@ DONE
 
 TODO
 
-    Implement network simulator and shim for packets sent/received from client and server.
+    Port across network simulator.
+
+    Find a way to shim packets between client and server through the network simulator.
 
     -----------------
 
@@ -20,11 +22,15 @@ TODO
 
     -----------------
 
-    Write article describing technique
+    Write secure dedicated servers article (probably derived from white paper? Perhaps it's the same thing?)
 
     -----------------
 
-    Finish 
+    Write post announcing netcode.io and queue it up at GDC 2017.
+
+    -----------------
+
+    Finish porting rest of gafferongames.com to the new hugo website.
 
     -----------------
 
