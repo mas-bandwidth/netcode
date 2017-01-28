@@ -71,6 +71,7 @@
 #define NETCODE_MAX_PAYLOAD_BYTES 1200
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 #define NETCODE_PACKET_QUEUE_SIZE 256
+#define NETCODE_REPLAY_PROTECTION_BUFFER_SIZE 256
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -1463,7 +1464,49 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     }
 }
 
-void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, uint8_t * read_packet_key, uint64_t protocol_id, uint64_t current_timestamp, uint8_t * private_key, uint8_t * allowed_packets )
+struct netcode_replay_protection_t
+{
+    uint64_t most_recent_sequence;
+    uint64_t received_packet[NETCODE_REPLAY_PROTECTION_BUFFER_SIZE];
+};
+
+void netcode_replay_protection_reset( struct netcode_replay_protection_t * replay_protection )
+{
+    assert( replay_protection );
+    replay_protection->most_recent_sequence = 0;
+    memset( replay_protection->received_packet, 0xFF, sizeof( replay_protection->received_packet ) );
+}
+
+int netcode_replay_protection_packet_already_received( struct netcode_replay_protection_t * replay_protection, uint64_t sequence )
+{
+    assert( replay_protection );
+
+    if ( sequence & ( 1LL << 63 ) )
+        return 0;
+
+    if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
+        return 1;
+    
+    if ( sequence > replay_protection->most_recent_sequence )
+        replay_protection->most_recent_sequence = sequence;
+
+    const int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
+
+    if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
+    {
+        replay_protection->received_packet[index] = sequence;
+        return 0;
+    }
+
+    if ( replay_protection->received_packet[index] >= sequence )
+        return 1;
+    
+    replay_protection->received_packet[index] = sequence;
+
+    return 0;
+}
+
+void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, uint8_t * read_packet_key, uint64_t protocol_id, uint64_t current_timestamp, uint8_t * private_key, uint8_t * allowed_packets, struct netcode_replay_protection_t * replay_protection )
 {
     assert( sequence );
     assert( allowed_packets );
@@ -1615,6 +1658,17 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         {
 			uint8_t value = netcode_read_uint8( &buffer );
             (*sequence) |= ( ( (uint64_t) value ) << ( 8 * i ) );
+        }
+
+        // replay protection (optional)
+
+        if ( replay_protection && packet_type >= NETCODE_CONNECTION_KEEP_ALIVE_PACKET )
+        {
+            if ( netcode_replay_protection_packet_already_received( replay_protection, *sequence ) )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. sequence %.16" PRIx64 " already received (replay protection)\n", *sequence );
+                return NULL;
+            }
         }
 
         // decrypt the per-packet type data
@@ -2053,6 +2107,7 @@ struct netcode_client_t
     struct netcode_server_info_t server_info;
     struct netcode_socket_t socket;
     struct netcode_context_t context;
+    struct netcode_replay_protection_t replay_protection;
     struct netcode_packet_queue_t packet_receive_queue;
     uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
@@ -2104,6 +2159,8 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
 
     netcode_packet_queue_init( &client->packet_receive_queue );
 
+    netcode_replay_protection_reset( &client->replay_protection );
+
 	return client;
 }
 
@@ -2134,7 +2191,10 @@ void netcode_client_reset_before_next_connect( struct netcode_client_t * client 
     client->should_disconnect = 0;
     client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->challenge_token_sequence = 0;
+
     memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+    netcode_replay_protection_reset( &client->replay_protection );
 }
 
 void netcode_client_reset_connection_data( struct netcode_client_t * client, int client_state )
@@ -2317,7 +2377,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
         uint64_t sequence;
 
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets );
+        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
 
         if ( !packet )
             continue;
@@ -2339,6 +2399,8 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
     netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
 
     client->last_packet_send_time = client->time;
+
+    client->sequence++;
 }
 
 void netcode_client_send_packets( struct netcode_client_t * client )
@@ -2823,6 +2885,7 @@ struct netcode_server_t
     uint64_t client_sequence[NETCODE_MAX_CLIENTS];
     double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
     double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
+    struct netcode_replay_protection_t client_replay_protection[NETCODE_MAX_CLIENTS];
     struct netcode_packet_queue_t client_packet_queue[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
@@ -2897,6 +2960,9 @@ struct netcode_server_t * netcode_server_create( char * bind_address_string, cha
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
     netcode_encryption_manager_reset( &server->encryption_manager );
+
+    for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
+        netcode_replay_protection_reset( &server->client_replay_protection[i] );
 
     memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
 
@@ -3003,6 +3069,8 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
         }
     }
 
+    netcode_replay_protection_reset( &server->client_replay_protection[client_index] );
+
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
 
     server->client_connected[client_index] = 0;
@@ -3067,6 +3135,8 @@ void netcode_server_stop( struct netcode_server_t * server )
         }
 
         netcode_packet_queue_clear( &server->client_packet_queue[i] );
+
+        netcode_replay_protection_reset( &server->client_replay_protection[i] );
     }
 
     server->running = 0;
@@ -3234,7 +3304,6 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %.16" PRIx64 " %s in slot %d\n", client_id, netcode_address_to_string( address, address_string ), client_index );
-
 
     struct netcode_connection_keep_alive_packet_t packet;
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3434,7 +3503,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         
         uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
         
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets );
+        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, &server->client_replay_protection[client_index] );
 
         if ( !packet )
             continue;
@@ -4237,7 +4306,7 @@ static void test_connection_request_packet()
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 1, sizeof( allowed_packets ) );
 
-    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), connect_token_key, allowed_packets );
+    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), connect_token_key, allowed_packets, NULL );
 
     check( output_packet );
 
@@ -4280,7 +4349,7 @@ void test_connection_denied_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4320,7 +4389,7 @@ void test_connection_challenge_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4362,7 +4431,7 @@ void test_connection_response_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4403,7 +4472,7 @@ void test_connection_keep_alive_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
-    struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4445,7 +4514,7 @@ void test_connection_payload_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4486,7 +4555,7 @@ void test_connection_disconnect_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types );
+    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL );
 
     check( output_packet );
 
@@ -4751,6 +4820,55 @@ void test_encryption_manager()
     }
 }
 
+void test_replay_protection()
+{
+    struct netcode_replay_protection_t replay_protection;
+
+    for ( int i = 0; i < 2; ++i )
+    {
+        netcode_replay_protection_reset( &replay_protection );
+
+        check( replay_protection.most_recent_sequence == 0 );
+
+        // sequence numbers with high bit set should be ignored
+
+        check( netcode_replay_protection_packet_already_received( &replay_protection, 1ULL<<63 ) == 0 );
+
+        check( replay_protection.most_recent_sequence == 0 );
+
+        // the first time we receive packets, they should not be already received
+
+        #define MAX_SEQUENCE ( NETCODE_REPLAY_PROTECTION_BUFFER_SIZE * 4 )
+
+        for ( uint64_t sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
+        {
+            check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 0 );
+        }
+
+        // old packets outside buffer should be considered already received
+
+        check( netcode_replay_protection_packet_already_received( &replay_protection, 0 ) == 1 );
+
+        // packets received a second time should be flagged already received
+
+        for ( uint64_t sequence = MAX_SEQUENCE - 10; sequence < MAX_SEQUENCE; ++sequence )
+        {
+            check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 1 );
+        }
+
+        // jumping ahead to a much higher sequence should be considered not already received
+
+        check( netcode_replay_protection_packet_already_received( &replay_protection, MAX_SEQUENCE + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 0 );
+
+        // old packets should be considered already received
+
+        for ( uint64_t sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
+        {
+            check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 1 );
+        }
+    }
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -4775,6 +4893,7 @@ void netcode_test()
     RUN_TEST( test_connection_disconnect_packet );
     RUN_TEST( test_server_info );
     RUN_TEST( test_encryption_manager );
+    RUN_TEST( test_replay_protection );
 }
 
 #endif // #if NETCODE_TEST

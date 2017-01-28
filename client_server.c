@@ -27,6 +27,7 @@
 #include <string.h>
 #include <assert.h>
 #include <signal.h>
+#include <inttypes.h>
 
 static volatile int quit = 0;
 
@@ -55,7 +56,6 @@ int main( int argc, char ** argv )
     netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
     #define TEST_CONNECT_TOKEN_EXPIRY 30
-    #define TEST_CLIENT_ID 1000
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
     double time = 0.0;
@@ -85,7 +85,11 @@ int main( int argc, char ** argv )
 
     uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
 
-    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+    printf( "client id is %.16" PRIx64 "\n", client_id );
+
+    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
     {
         printf( "error: failed to generate server info\n" );
         return 1;

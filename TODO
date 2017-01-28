@@ -1,105 +1,40 @@
 DONE
 
-    Add the data structure for the per-client payload packet queue. 
+    Port across replay protection before client and server.
 
-    Stick it last in the netcode_server_t.
+    Port across tests for replay protection.
 
-    When the server receives a payload packet, add that to a queue for that client slot.
+    Integrate the replay protection into the read packet function. Optional. Pass it in but it can be NULL.
 
-    When the server stops, pop all packets off each client packet queue and free them.
+    Integrate the replay protection into the client.
 
-    Do the same for the client. It's probably not doing this!
+    Seems like sequence number is not getting encoded properly across packet sends? Weird?
 
-    Yes. It wasn't.
+    I'm seeing sequence number 0 on the other side, despite it properly incrementing on send.
 
-    Implement the code to send and receive payload packets on the server.
+    Debugging...
 
-    Base this on the code from the client.
+    Just had a bug in order, was running replay protection logic before I read the sequence # from the packet.
 
-    When the server sends a payload packet to a client, if that client is not confirmed yet, send a keep alive first, so a keep-alive packet always precedes payload until confirmation is in.
+    Client stress test passes with 256 clients.
 
-    This is the smartest way to reduce the connection round trips, and still get the common case being that the server can send payload packets immediately to client, without waiting for confirmation.
+    Integrate the replay protection into the server.
 
-    This is good. Lock it in.
+    Integrated the replay protection with the server, but the server is not seeing any connections anymore. What's going on?
 
-    Extend client_server to test that client and server can exchange payload packets.
+    Adding debug logs...
 
-    First step I notice that after a while client seems be sending both keepalive packets and payload packets. 
+    Client was not increasing sequence # on packet send. o_O - Fixed.
 
-    Instead, it should stop sending keepalives once payloads are sent. Debugging...
+    Make sure client stress test still passes with 256 clients.
 
-    Fixed by updating send rate to 60HZ. My guess is that with framerate @ 10HZ, and keep alive at 10HZ, it's too close for comfort (eg. off by one frame)
+    Clients do the thing where they stall out and slow connect. I'm not sure what is going on here, but it looks a lot like the problem I had with global sequence # not having the high bit set and causing old packet sequence #s from clients to get ignored.
 
-    Now need a function to check if client is connected on server.
+    I think it's more like, I need to ignore the packet sequence # for client connect packets, except for the payload packets.
 
-    Done. Now payload packets sent in both directions.
-
-    Logs show that the server is sending both payload packets and keep alives to client.
-
-    Should only send payloads, not keep alive once confirmed.
-
-    Fixed. Inverted logic.
-
-    Add code for client and server to receive packets.
-
-    Once client and server are connected and have both exchanged payload packets, disconnect the client server-side.
-
-    Then wait until client disconnects before quitting. Done.
-
-    Extend separate client/server to exchange payload packets.
-
-    Updated separate client/server programs to also run at 60HZ
-
-    When client breaks out with CTRL-C, the server doesn't seem to receive the disconnect packets.
-
-    However, the client definitely thinks that it has sent them.
-
-    What's going on?!
-
-    Server didn't have code to properly handle disconnect packet. Fixed.
-
-    Implement stress test that connects 256 clients and exchanges payload packets.
-
-    This may be too spammy in terms of TTY to be useful.
-
-    Time to wind back the logging? debug_printf?
-
-    Ended up adding log levels, which really helped me tame it. Very nice.
-
-    Updated standalone client/server to use minimal info level logs. Very nice X2.
-
-    Implement stress test that connects 256 standalone clients to the server.
-
-    Clients past the first one don't seem to be connecting. What's going wrong?
-
-    Try it with two clients.
-
-    I think it's because the clients have the same client id. Yes...
-
-    Yeah. Just a client id issue. Fixed by randomizing the client id. All 256 clients connect sucessfully!
+    This is it. Do it.
 
 TODO
-
-    -----------------
-
-    Implement replay protection.
-
-    Support 1 second worth of replay protection @ 60HZ, eg. 60 packets per-client.
-
-    Make sure global packets are ignored (eg. high bit set in sequence).
-
-    -----------------
-
-
-
-
-
-
-
-
-
-
-    =============================================================================
 
     Implement network simulator and shim for packets sent/received from client and server.
 

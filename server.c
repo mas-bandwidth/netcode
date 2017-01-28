@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <string.h>
 #include <signal.h>
+#include <inttypes.h>
 
 static volatile int quit = 0;
 
