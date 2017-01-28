@@ -1,39 +1,5 @@
 DONE
 
-    Port across replay protection before client and server.
-
-    Port across tests for replay protection.
-
-    Integrate the replay protection into the read packet function. Optional. Pass it in but it can be NULL.
-
-    Integrate the replay protection into the client.
-
-    Seems like sequence number is not getting encoded properly across packet sends? Weird?
-
-    I'm seeing sequence number 0 on the other side, despite it properly incrementing on send.
-
-    Debugging...
-
-    Just had a bug in order, was running replay protection logic before I read the sequence # from the packet.
-
-    Client stress test passes with 256 clients.
-
-    Integrate the replay protection into the server.
-
-    Integrated the replay protection with the server, but the server is not seeing any connections anymore. What's going on?
-
-    Adding debug logs...
-
-    Client was not increasing sequence # on packet send. o_O - Fixed.
-
-    Make sure client stress test still passes with 256 clients.
-
-    Clients do the thing where they stall out and slow connect. I'm not sure what is going on here, but it looks a lot like the problem I had with global sequence # not having the high bit set and causing old packet sequence #s from clients to get ignored.
-
-    I think it's more like, I need to ignore the packet sequence # for client connect packets, except for the payload packets.
-
-    This is it. Do it.
-
 TODO
 
     Implement network simulator and shim for packets sent/received from client and server.
