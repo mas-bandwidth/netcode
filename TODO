@@ -6,20 +6,28 @@ TODO
 
     -----------------
 
-    Implement functional tests for client connect connection functionality.
+    Port across functional tests for client connect connection functionality.
+
+    It's important that the implementation is fully tested before I write the write paper, in case there are errors!
 
     -----------------
 
-    Bring across matcher in golang and port to binary format connect tokens.
-
-    Integrate mbedtls library.
-
-    Port across code for matcher. Keep it blocking. Doesn't matter for now.
-
-    Convert client to get server info from web server.
+    Write white paper for patent.
 
     -----------------
 
-    Write white paper.
+    Integrate mbedtls and update client to get connect token from matcher.
+
+    -----------------
+
+    Write article describing technique
+
+    -----------------
+
+    Finish 
+
+    -----------------
+
+    GDC 2017
 
     -----------------
