@@ -79,6 +79,7 @@
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
 
 #define NETCODE_ENABLE_LOGGING 1
+#define NETCODE_ENABLE_TESTS 1
 
 // ------------------------------------------------------------------
 
@@ -2068,6 +2069,66 @@ void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue )
 }
 
 // ----------------------------------------------------------------
+
+#if NETCODE_ENABLE_TESTS
+
+#define NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES 4 * 1024
+#define NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS 1024
+
+struct netcode_network_simulator_packet_entry_t
+{
+    struct netcode_address_t from;
+    struct netcode_address_t to;
+    double delivery_time;
+    uint8_t * packet_data;
+    int packet_bytes;
+};
+
+struct netcode_network_simulator_t
+{
+    float latency;
+    float jitter;
+    float packet_loss_percent;
+    float duplicate_packet_percent;
+    double time;
+    int current_index;
+    int num_pending_receive_packets;
+    struct netcode_network_simulator_packet_entry_t packet_entries[NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES];
+    struct netcode_network_simulator_packet_entry_t pending_receive_packets[NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS];
+};
+
+void netcode_network_simulator_clear( struct netcode_network_simulator_t * network_simulator )
+{
+    assert( network_simulator );
+    memset( network_simulator, 0, sizeof( struct netcode_network_simulator_t ) );
+}
+
+void netcode_network_simulator_free( struct netcode_network_simulator_t * network_simulator )
+{
+    assert( network_simulator );
+
+    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    {
+        if ( network_simulator->packet_entries[i].packet_data )
+        {
+            free( network_simulator->packet_entries[i].packet_data );
+        }
+    }
+
+    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    {
+        if ( network_simulator->pending_receive_packets[i].packet_data )
+        {
+            free( network_simulator->pending_receive_packets[i].packet_data );
+        }
+    }
+
+    netcode_network_simulator_clear( network_simulator );
+}
+
+#endif // #if NETCODE_ENABLE_TESTS
+
+// ----------------------------------------------------------------
     
 char * netcode_client_state_name( int client_state )
 {
@@ -3817,9 +3878,7 @@ double netcode_time()
 
 // ---------------------------------------------------------------
 
-#define NETCODE_TEST 1
-
-#if NETCODE_TEST
+#if NETCODE_ENABLE_TESTS
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -4896,4 +4955,4 @@ void netcode_test()
     RUN_TEST( test_replay_protection );
 }
 
-#endif // #if NETCODE_TEST
+#endif // #if NETCODE_ENABLE_TESTS

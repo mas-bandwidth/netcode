@@ -1,10 +1,18 @@
 DONE
 
-TODO
-
     Port across network simulator.
 
-    Find a way to shim packets between client and server through the network simulator.
+    Ported across data structure and clear/free functions for simulator.
+
+    Wrapped the simulator with code so it is only compiled in when tests are enabled (it's not a real part of the implementation).
+
+TODO
+
+    Port across rest of network simulator.
+
+    -----------------
+
+    Find a way to shim packets between client and server through the network simulator instead of sockets.
 
     -----------------
 
