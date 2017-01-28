@@ -2265,8 +2265,6 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
     }
 }
 
-
-
 #endif // #if NETCODE_ENABLE_TESTS
 
 // ----------------------------------------------------------------

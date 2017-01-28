@@ -6,9 +6,17 @@ DONE
 
     Wrapped the simulator with code so it is only compiled in when tests are enabled (it's not a real part of the implementation).
 
+    Port across rest of network simulator.
+
 TODO
 
-    Port across rest of network simulator.
+    Port across the receive packet from address.
+
+    Is there anything else to port?
+
+    I probably need the discard packets, and possibly discard packets from address for my tests (eg. reconnect and so on).
+
+    Anything else?
 
     -----------------
 
