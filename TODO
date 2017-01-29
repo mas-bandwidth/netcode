@@ -32,9 +32,19 @@ DONE
 
     Sketched out internal client init with optional simulator. Added network simulator to client.
 
+    Next step, update all parts of code that interact with the socket to have a preference to use the simulator, if it's set instead.
+
+    Implement code for the client to receive packets from simulator.
+
+    Implement code for the client to send packets via the simulator.
+
 TODO
 
-    Next step, update all parts of code that interact with the socket to have a preference to use the simulator, if it's set instead.
+    Setup internal server create function w. network simulator passed in.
+
+    Setup server to write packets via simulator.
+
+    Setup server to read packets via simulator.
 
     -----------------
 
