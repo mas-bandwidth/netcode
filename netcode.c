@@ -3784,6 +3784,36 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
     free( packet );    
 }
 
+void netcode_server_read_and_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes, uint64_t current_timestamp, uint8_t * allowed_packets )
+{
+    if ( !server->running )
+        return;
+
+    uint64_t sequence;
+
+    int encryption_index = -1;
+    int client_index = netcode_server_find_client_index_by_address( server, from );
+    if ( client_index != -1 )
+    {
+        assert( client_index >= 0 );
+        assert( client_index < server->max_clients );
+        encryption_index = server->client_encryption_index[client_index];
+    }
+    else
+    {
+        encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, from, server->time );
+    }
+    
+    uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+    
+    void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, &server->client_replay_protection[client_index] );
+
+    if ( !packet )
+        return;
+
+    netcode_server_process_packet( server, from, packet, sequence, encryption_index, client_index );
+}
+
 void netcode_server_receive_packets( struct netcode_server_t * server )
 {
     assert( server );
@@ -3798,42 +3828,39 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
     uint64_t current_timestamp = (uint64_t) time( NULL );
 
-    while ( 1 )
+    if ( server->network_simulator )
     {
-        struct netcode_address_t from;
+        // process packets received from network simulator
 
-        uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+        #define NETCODE_SERVER_MAX_RECEIVE_PACKETS 64 * NETCODE_MAX_CLIENTS
 
-        int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
-        if ( packet_bytes == 0 )
-            break;
+        uint8_t * packet_data[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
+        int packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
+        struct netcode_address_t from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
 
-        if ( !server->running )
-            continue;
+        int num_packets_received = netcode_network_simulator_receive_packets_sent_to_address( server->network_simulator, &server->public_address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, packet_data, packet_bytes, from );
 
-        uint64_t sequence;
-
-        int encryption_index = -1;
-        int client_index = netcode_server_find_client_index_by_address( server, &from );
-        if ( client_index != -1 )
+        for ( int i = 0; i < num_packets_received; ++i )
         {
-            assert( client_index >= 0 );
-            assert( client_index < server->max_clients );
-            encryption_index = server->client_encryption_index[client_index];
+            netcode_server_read_and_process_packet( server, &from[i], packet_data[i], packet_bytes[i], current_timestamp, allowed_packets );
         }
-        else
+    }
+    else
+    {
+        // process packets received from socket
+
+        while ( 1 )
         {
-            encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, server->time );
+            struct netcode_address_t from;
+
+            uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+            int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
+            if ( packet_bytes == 0 )
+                break;
+
+            netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
-        
-        uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
-        
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, &server->client_replay_protection[client_index] );
-
-        if ( !packet )
-            continue;
-
-        netcode_server_process_packet( server, &from, packet, sequence, encryption_index, client_index );
     }
 }
 

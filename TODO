@@ -38,13 +38,17 @@ DONE
 
     Implement code for the client to send packets via the simulator.
 
-TODO
-
     Setup internal server create function w. network simulator passed in.
 
     Setup server to write packets via simulator.
 
     Setup server to read packets via simulator.
+
+TODO
+
+    Setup a simple test for client/server connect.
+
+    Not only will this be the first client/server test, it will also check that the network simulator is working correctly.
 
     -----------------
 
@@ -57,6 +61,42 @@ TODO
     Write white paper for patent.
 
     -----------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    =======================================================================================
 
     Integrate mbedtls and update client to get connect token from matcher.
 
