@@ -2072,8 +2072,8 @@ void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue )
 
 #if NETCODE_ENABLE_TESTS
 
-#define NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES 4 * 1024
-#define NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS 1024
+#define NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES 16 * 1024
+#define NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS 4 * 1024
 
 struct netcode_network_simulator_packet_entry_t
 {
@@ -2340,6 +2340,7 @@ struct netcode_client_t
     int server_address_index;
     struct netcode_address_t server_address;
     struct netcode_server_info_t server_info;
+    struct netcode_network_simulator_t * network_simulator;
     struct netcode_socket_t socket;
     struct netcode_context_t context;
     struct netcode_replay_protection_t replay_protection;
@@ -2348,7 +2349,7 @@ struct netcode_client_t
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
 };
 
-struct netcode_client_t * netcode_client_create( char * address_string, double time )
+struct netcode_client_t * netcode_client_create_internal( char * address_string, double time, struct netcode_network_simulator_t * network_simulator )
 {
     assert( netcode.initialized );
 
@@ -2360,12 +2361,17 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
     }
 
     struct netcode_socket_t socket;
-    if ( netcode_socket_create( &socket, &address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+    memset( &socket, 0, sizeof( struct netcode_socket_t ) );
+
+    if ( !network_simulator )
     {
-        return NULL;
+        if ( netcode_socket_create( &socket, &address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+        {
+            return NULL;
+        }
     }
 
-	struct netcode_client_t * client = (struct netcode_client_t*) malloc( sizeof( struct netcode_client_t ) );
+    struct netcode_client_t * client = (struct netcode_client_t*) malloc( sizeof( struct netcode_client_t ) );
 
     if ( !client )
     {
@@ -2373,17 +2379,25 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
         return NULL;
     }
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d\n", socket.address.port );
+    if ( !network_simulator )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d\n", socket.address.port );
+    }
+    else
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d (network simulator)\n", address.port );
+    }
 
     client->socket = socket;
-	client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->network_simulator = network_simulator;
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;
     client->connect_start_time = 0.0;
     client->last_packet_send_time = -1000.0;
     client->last_packet_receive_time = -1000.0;
     client->should_disconnect = 0;
     client->should_disconnect_state = NETCODE_CLIENT_STATE_DISCONNECTED;
-	client->sequence = 0;
+    client->sequence = 0;
     client->client_index = 0;
     client->server_address_index = 0;
     client->challenge_token_sequence = 0;
@@ -2396,7 +2410,12 @@ struct netcode_client_t * netcode_client_create( char * address_string, double t
 
     netcode_replay_protection_reset( &client->replay_protection );
 
-	return client;
+    return client;
+}
+
+struct netcode_client_t * netcode_client_create( char * address_string, double time )
+{
+    return netcode_client_create_internal( address_string, time, NULL );
 }
 
 void netcode_client_destroy( struct netcode_client_t * client )
@@ -2600,24 +2619,35 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
     uint64_t current_timestamp = (uint64_t) time( NULL );
 
-    while ( 1 )
+    if ( client->network_simulator )
     {
-        struct netcode_address_t from;
+        // receive packets from network simulator
 
-        uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+        // todo: alternative path for simulator
+    }
+    else
+    {
+        // receive packets from socket
 
-        int packet_bytes = netcode_socket_receive_packet( &client->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
-        if ( packet_bytes == 0 )
-            break;
+        while ( 1 )
+        {
+            struct netcode_address_t from;
 
-        uint64_t sequence;
+            uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-        void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+            int packet_bytes = netcode_socket_receive_packet( &client->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
+            if ( packet_bytes == 0 )
+                break;
 
-        if ( !packet )
-            continue;
+            uint64_t sequence;
 
-        netcode_client_process_packet( client, &from, packet, sequence );
+            void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+
+            if ( !packet )
+                continue;
+
+            netcode_client_process_packet( client, &from, packet, sequence );
+        }
     }
 }
 
@@ -2631,7 +2661,14 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-    netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
+    if ( client->network_simulator )
+    {
+        // todo: send packet via simulator
+    }
+    else
+    {
+        netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
+    }
 
     client->last_packet_send_time = client->time;
 

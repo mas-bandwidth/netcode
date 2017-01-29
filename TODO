@@ -12,8 +12,6 @@ DONE
 
     Port across discard packets, discard packets from address functions.
 
-TODO
-
     Find a way to shim packets between client and server through the network simulator instead of sockets.
 
     I'm not sure the best way to do this...
@@ -29,6 +27,14 @@ TODO
     This will be somewhat tricky because I want the simulator class to only exist if NETCODE_ENABLE_TESTS 1.
 
     Thinking through. I reckon I just have to get it working first, then worry about how to cut it down when tests are off second.
+
+    Yes. Confirmed. Get it working first, then work out how to elegantly disable the simulator related functionality if test is off.
+
+    Sketched out internal client init with optional simulator. Added network simulator to client.
+
+TODO
+
+    Next step, update all parts of code that interact with the socket to have a preference to use the simulator, if it's set instead.
 
     -----------------
 
