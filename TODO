@@ -14,9 +14,21 @@ DONE
 
 TODO
 
-    -----------------
-
     Find a way to shim packets between client and server through the network simulator instead of sockets.
+
+    I'm not sure the best way to do this...
+
+    Requirements, I don't want to actually create a socket for a server created with a simulator, because that socket is not used, and may break automated tests (like travis...)
+
+    So it seems that I have to create an internal function to create a client and server, one that has a flag that determines whether or not to create a socket.
+
+    Then I can extend the client and server to redirect their socket send/recv to go through a simulator pointer passed to it.
+
+    Effectively, the simulator passed in should override the creation of sockets...
+
+    This will be somewhat tricky because I want the simulator class to only exist if NETCODE_ENABLE_TESTS 1.
+
+    Thinking through. I reckon I just have to get it working first, then worry about how to cut it down when tests are off second.
 
     -----------------
 
