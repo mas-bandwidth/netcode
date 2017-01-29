@@ -8,15 +8,11 @@ DONE
 
     Port across rest of network simulator.
 
-TODO
-
     Port across the receive packet from address.
 
-    Is there anything else to port?
+    Port across discard packets, discard packets from address functions.
 
-    I probably need the discard packets, and possibly discard packets from address for my tests (eg. reconnect and so on).
-
-    Anything else?
+TODO
 
     -----------------
 

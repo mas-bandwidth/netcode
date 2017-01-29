@@ -2103,23 +2103,6 @@ void netcode_network_simulator_clear( struct netcode_network_simulator_t * netwo
     memset( network_simulator, 0, sizeof( struct netcode_network_simulator_t ) );
 }
 
-void netcode_network_simulator_free( struct netcode_network_simulator_t * network_simulator )
-{
-    assert( network_simulator );
-
-    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
-    {
-        free( network_simulator->packet_entries[i].packet_data );
-    }
-
-    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
-    {
-        free( network_simulator->pending_receive_packets[i].packet_data );
-    }
-
-    netcode_network_simulator_clear( network_simulator );
-}
-
 float netcode_random_float( float a, float b )
 {
     assert( a < b );
@@ -2205,31 +2188,39 @@ int netcode_network_simulator_receive_packets( struct netcode_network_simulator_
     return num_packets;
 }
 
-/*
-    int NetworkSimulator::ReceivePacketsSentToAddress( int maxPackets, const Address & to, uint8_t * packetData[], int packetSize[], Address from[] )
+int netcode_network_simulator_receive_packets_sent_to_address( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * to, int max_packets, uint8_t ** packet_data, int * packet_bytes, struct netcode_address_t * from )
+{
+    assert( network_simulator );
+    assert( max_packets >= 0 );
+    assert( packet_data );
+    assert( packet_bytes );
+    assert( from );
+    assert( to );
+
+    int num_packets = 0;
+
+    if ( max_packets > network_simulator->num_pending_receive_packets )
+        max_packets = network_simulator->num_pending_receive_packets;
+
+    for ( int i = 0; i < num_packets; ++i )
     {
-        int numPackets = 0;
+        if ( !network_simulator->pending_receive_packets[i].packet_data )
+            continue;
 
-        for ( int i = 0; i < min( maxPackets, m_numPendingReceivePackets ); ++i )
-        {
-            if ( !m_pendingReceivePackets[i].packetData )
-                continue;
+        if ( !netcode_address_equal( &network_simulator->pending_receive_packets[i].to, to ) )
+            continue;
 
-            if ( m_pendingReceivePackets[i].to != to )
-                continue;
+        packet_data[num_packets] = network_simulator->pending_receive_packets[i].packet_data;
+        packet_bytes[num_packets] = network_simulator->pending_receive_packets[i].packet_bytes;
+        from[num_packets] = network_simulator->pending_receive_packets[i].from;
 
-            packetData[numPackets] = m_pendingReceivePackets[i].packetData;
-            packetSize[numPackets] = m_pendingReceivePackets[i].packetSize;
-            from[numPackets] = m_pendingReceivePackets[i].from;
+        network_simulator->pending_receive_packets[i].packet_data = NULL;
 
-            m_pendingReceivePackets[i].packetData = NULL;
-
-            numPackets++;
-        }
-
-        return numPackets;
+        num_packets++;
     }
-*/
+
+    return num_packets;
+}
 
 void netcode_network_simulator_update( struct netcode_network_simulator_t * network_simulator, double time )
 {   
@@ -2256,13 +2247,57 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
         if ( network_simulator->num_pending_receive_packets == NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS )
             break;
 
-        if ( network_simulator->packet_entries[i].delivery_time <= time )
+        if ( network_simulator->packet_entries[i].packet_data && network_simulator->packet_entries[i].delivery_time < time )
         {
             network_simulator->pending_receive_packets[network_simulator->num_pending_receive_packets] = network_simulator->packet_entries[i];
             network_simulator->num_pending_receive_packets++;
             network_simulator->packet_entries[i].packet_data = NULL;
         }
     }
+}
+
+void netcode_network_simulator_discard_packets( struct netcode_network_simulator_t * network_simulator )
+{
+    assert( network_simulator );
+
+    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    {
+        free( network_simulator->packet_entries[i].packet_data );
+        network_simulator->packet_entries[i].packet_data = NULL;
+    }
+
+    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    {
+        free( network_simulator->pending_receive_packets[i].packet_data );
+    }
+
+    netcode_network_simulator_clear( network_simulator );
+}
+
+void netcode_network_simulator_discard_packets_from_address( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * from )
+{
+    assert( network_simulator );
+    assert( from );
+
+    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    {
+        if ( !netcode_address_equal( &network_simulator->packet_entries[i].from, from ) )
+            continue;
+
+        free( network_simulator->packet_entries[i].packet_data );
+
+        network_simulator->packet_entries[i].packet_data = NULL;
+    }
+
+    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    {
+        if ( !netcode_address_equal( &network_simulator->pending_receive_packets[i].from, from ) )
+            continue;
+
+        free( network_simulator->pending_receive_packets[i].packet_data );
+    }
+
+    netcode_network_simulator_clear( network_simulator );
 }
 
 #endif // #if NETCODE_ENABLE_TESTS
