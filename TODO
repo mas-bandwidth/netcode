@@ -1,10 +1,53 @@
 DONE
 
-TODO
+    Setup a simple test for client/server connect derived from standalone client_server.c
 
-    Setup a simple test for client/server connect.
+    Test passes with client/server using sockets.
+
+    Convert this test to use the network simulator. Make sure it still passes.
 
     Not only will this be the first client/server test, it will also check that the network simulator is working correctly.
+
+    Wow. It passed second time. All I had to do was fix the client address to bind to a non-zero port. Wow!
+
+    What other tests need to be brought across?
+
+    At minimum, I need tests to reproduce all the error states on client connect.
+
+    Start with this...
+
+    #define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -7
+    #define NETCODE_CLIENT_STATE_INVALID_SERVER_INFO                -6
+    #define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT               -5
+    #define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT         -4
+    #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT        -3
+    #define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT         -2
+    #define NETCODE_CLIENT_STATE_CONNECTION_DENIED                  -1
+    #define NETCODE_CLIENT_STATE_DISCONNECTED                       0
+    #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST         1
+    #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE        2
+    #define NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM     3
+    #define NETCODE_CLIENT_STATE_CONNECTED                          4
+
+    Added test for client connect token expired state.
+
+    Trying invalid server info test now... passes.
+
+    Connection timed out test next. To do this, must establish connection, and then stop updating the server (without clean disconenct).
+
+    Pretty easy...
+
+    Not working. 
+
+    Client connect to server was not actually working, it was timing out, but the test exited. Improve the test so it checks the client actually connected.
+
+TODO
+    
+    Need to debug why the network simulator is not working.
+
+    -----------------
+
+    At minimum, need tests for all the cases where a client connect can be rejected, eg. stale token, whitelist etc, random data etc.
 
     -----------------
 
