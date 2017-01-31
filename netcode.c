@@ -2114,7 +2114,8 @@ void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t 
     memcpy( network_simulator->packet_entries[network_simulator->current_index].packet_data, packet_data, packet_bytes );
     network_simulator->packet_entries[network_simulator->current_index].packet_bytes = packet_bytes;
     network_simulator->packet_entries[network_simulator->current_index].delivery_time = network_simulator->time + delay;
-    network_simulator->current_index = ( network_simulator->current_index + 1 ) % NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES;
+    network_simulator->current_index++;
+    network_simulator->current_index %= NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES;
 }
 
 void netcode_network_simulator_send_packet( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * from, struct netcode_address_t * to, uint8_t * packet_data, int packet_bytes )
@@ -2196,7 +2197,7 @@ int netcode_network_simulator_receive_packets_sent_to_address( struct netcode_ne
     if ( max_packets > network_simulator->num_pending_receive_packets )
         max_packets = network_simulator->num_pending_receive_packets;
 
-    for ( int i = 0; i < num_packets; ++i )
+    for ( int i = 0; i < max_packets; ++i )
     {
         if ( !network_simulator->pending_receive_packets[i].packet_data )
             continue;
@@ -2241,7 +2242,7 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
         if ( network_simulator->num_pending_receive_packets == NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS )
             break;
 
-        if ( network_simulator->packet_entries[i].packet_data && network_simulator->packet_entries[i].delivery_time < time )
+        if ( network_simulator->packet_entries[i].packet_data && network_simulator->packet_entries[i].delivery_time <= time )
         {
             network_simulator->pending_receive_packets[network_simulator->num_pending_receive_packets] = network_simulator->packet_entries[i];
             network_simulator->num_pending_receive_packets++;
@@ -2640,6 +2641,8 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             uint64_t sequence;
 
             void * packet = netcode_read_packet( packet_data[i], packet_bytes[i], &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+
+            free( packet_data[i] );
 
             if ( !packet )
                 continue;
@@ -3844,6 +3847,8 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         for ( int i = 0; i < num_packets_received; ++i )
         {
             netcode_server_read_and_process_packet( server, &from[i], packet_data[i], packet_bytes[i], current_timestamp, allowed_packets );
+
+            free( packet_data[i] );
         }
     }
     else
@@ -3931,6 +3936,8 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 
     assert( client_index >= 0 );
     assert( client_index < server->max_clients );
+    if ( !server->client_connected[client_index] )
+        return;
 
     uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
 
@@ -5493,14 +5500,10 @@ void netcode_test()
     RUN_TEST( test_server_info );
     RUN_TEST( test_encryption_manager );
     RUN_TEST( test_replay_protection );
-    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );
     RUN_TEST( test_client_server_connect );
-
-    /*
     RUN_TEST( test_client_error_connect_token_expired );
     RUN_TEST( test_client_error_invalid_server_info );
     RUN_TEST( test_client_error_connection_timed_out );
-    */
 }
 
 #endif // #if NETCODE_ENABLE_TESTS

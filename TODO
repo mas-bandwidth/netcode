@@ -41,9 +41,17 @@ DONE
 
     Client connect to server was not actually working, it was timing out, but the test exited. Improve the test so it checks the client actually connected.
 
-TODO
-    
     Need to debug why the network simulator is not working.
+
+    Seems that simulator is not receiving packets properly.
+
+    Packets moved to pending receive seems to be working properly. Is pending receive working properly?
+
+    Small logic error. Seems to be working now. all tests pass w. simulator.
+
+TODO
+
+    Unblocked to continue client error state tests.
 
     -----------------
 
