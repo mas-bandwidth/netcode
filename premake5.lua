@@ -30,24 +30,19 @@ solution "netcode"
         links { release_libs }
         
 project "test"
-    files { "test.c" }
-    links { "netcode" }
+    files { "test.c", "netcode.c" }
 
 project "client"
-    files { "client.c" }
-    links { "netcode" }
+    files { "client.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
 
 project "server"
-    files { "server.c" }
-    links { "netcode" }
+    files { "server.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
 
 project "client_server"
-    files { "client_server.c" }
-    links { "netcode" }
-
-project "netcode"
-    kind "StaticLib"
-    files { "netcode.h", "netcode.c" }
+    files { "client_server.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
 
 if os.is "windows" then
 
