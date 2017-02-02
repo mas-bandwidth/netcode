@@ -1,20 +1,55 @@
 DONE
 
-    Update code to build test.c with custom netcode.c and with NETCODE_ENABLE_TESTS 1 defined.
+    Unblocked to continue client error state tests.
 
-    For other instances, disable tests, but leave it enabled by default in the code (standalone) so editors don't fuck up the test code.
+    To test the next states, need to add a concept of "server flags"
 
-    Done. Adjusted netcode.c to comment out parts related to simulator. All tests pass. Client/server standalone tests work fine, and don't include test code.
+    Server flags need to be added to:
 
-    Make sure client and server don't maintain pointer to network simulator when tests are off, just to be sure.
+        ignore connection request packets
 
-    Client done.
+        ignore connection response packets
+
+        disable keep alive packets
+
+    Adding this now.
+
+    Added server flags. Testing the client error states should be easy now.
+
+    These are the states to test:
+
+    #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT        -3
+    #define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT         -2
+    #define NETCODE_CLIENT_STATE_CONNECTION_DENIED                  -1
+    #define NETCODE_CLIENT_STATE_DISCONNECTED                       0
+
+    Getting started with connection_confirm_timeout.
+
+    Added request time out as well.
+
+    Found that connection confirm timeout state was redundant, so it's been removed.
+
+    Thing to test now is connection denied. I can force a connection denied with a flag, but it would be much better to have a second client try to connect to a server with 1 slot, vs. testing an artificial codepath.
+
+    connection denied test is working.
 
 TODO
 
+    client side disconnect
+
+    server side disconnect
+
+    client reconnect
+
+    keep alive
+
+    multiple clients
+
+    stop/start
+
     -----------------
 
-    Unblocked to continue client error state tests.
+    test server cases that should be rejected, eg. invalid connect token, stale connect token, same client id already connected.
 
     -----------------
 

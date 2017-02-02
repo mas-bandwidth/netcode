@@ -59,18 +59,16 @@
 #define NETCODE_NONCE_BYTES 8
 #define NETCODE_MAX_SERVERS_PER_CONNECT 16
 
-#define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -7
-#define NETCODE_CLIENT_STATE_INVALID_SERVER_INFO                -6
-#define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT               -5
-#define NETCODE_CLIENT_STATE_CONNECTION_CONFIRM_TIMEOUT         -4
+#define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -6
+#define NETCODE_CLIENT_STATE_INVALID_SERVER_INFO                -5
+#define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT               -4
 #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT        -3
 #define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT         -2
 #define NETCODE_CLIENT_STATE_CONNECTION_DENIED                  -1
 #define NETCODE_CLIENT_STATE_DISCONNECTED                       0
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST         1
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE        2
-#define NETCODE_CLIENT_STATE_WAITING_FOR_CONNECTION_CONFIRM     3
-#define NETCODE_CLIENT_STATE_CONNECTED                          4
+#define NETCODE_CLIENT_STATE_CONNECTED                          3
 
 #define NETCODE_SOCKET_IPV6         1
 #define NETCODE_SOCKET_IPV4         2
@@ -108,6 +106,8 @@ void netcode_client_free_packet( struct netcode_client_t * client, void * packet
 void netcode_client_disconnect( struct netcode_client_t * client );
 
 int netcode_client_state( struct netcode_client_t * client );
+
+int netcode_client_index( struct netcode_client_t * client );
 
 int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * server_info );
 
