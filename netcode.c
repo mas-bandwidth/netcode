@@ -3440,6 +3440,10 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->client_last_packet_receive_time[client_index] = 0.0;
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
+
+    server->num_connected_clients--;
+
+    assert( server->num_connected_clients >= 0 );
 }
 
 void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index )
@@ -4039,6 +4043,13 @@ void netcode_server_free_packet( struct netcode_server_t * server, void * packet
     int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
 
     free( ( (uint8_t*) packet ) - offset );
+}
+
+int netcode_server_num_clients_connected( struct netcode_server_t * server )
+{
+    assert( server );
+
+    return server->num_connected_clients;
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )
@@ -5289,7 +5300,7 @@ void test_client_server_connect()
     network_simulator.duplicate_packet_percent = 10;
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
 
@@ -5331,6 +5342,8 @@ void test_client_server_connect()
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     int server_num_packets_received = 0;
     int client_num_packets_received = 0;
@@ -5473,7 +5486,7 @@ void test_client_error_connection_timed_out()
     network_simulator.duplicate_packet_percent = 10;
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     // connect a client to the server
 
@@ -5517,6 +5530,8 @@ void test_client_error_connection_timed_out()
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // now disable updating the server and verify that the client times out
 
@@ -5551,7 +5566,7 @@ void test_client_error_connection_response_timeout()
     network_simulator.duplicate_packet_percent = 10;
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
 
@@ -5675,7 +5690,7 @@ void test_client_error_connection_denied()
     // start a server and connect one client
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
 
@@ -5716,6 +5731,9 @@ void test_client_error_connection_denied()
     }
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // now attempt to connect a second client. the connection should be denied.
 
@@ -5753,6 +5771,8 @@ void test_client_error_connection_denied()
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_state( client2 ) == NETCODE_CLIENT_STATE_CONNECTION_DENIED );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     netcode_server_destroy( server );
 
@@ -5770,7 +5790,7 @@ void test_client_side_disconnect()
     // start a server and connect one client
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
 
@@ -5811,6 +5831,9 @@ void test_client_side_disconnect()
     }
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // disconnect client side and verify that the server sees that client disconnect cleanly, rather than timing out.
 
@@ -5831,6 +5854,7 @@ void test_client_side_disconnect()
     }
 
     check( netcode_server_client_connected( server, 0 ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
 
     netcode_server_destroy( server );
 
@@ -5846,7 +5870,7 @@ void test_server_side_disconnect()
     // start a server and connect one client
 
     double time = 0.0;
-    double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 10.0;
 
     struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
 
@@ -5887,6 +5911,9 @@ void test_server_side_disconnect()
     }
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // disconnect server side and verify that the client disconnects cleanly, rather than timing out.
 
@@ -5900,13 +5927,124 @@ void test_server_side_disconnect()
 
         netcode_server_update( server, time );
 
-        if ( netcode_server_client_connected( server, 0 ) == 0 )
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED )
             break;
 
         time += delta_time;
     }
 
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
     check( netcode_server_client_connected( server, 0 ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+}
+
+void test_client_reconnect()
+{
+    struct netcode_network_simulator_t network_simulator;
+
+    memset( &network_simulator, 0, sizeof( network_simulator ) );
+
+    // start a server and connect one client
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+
+    check( client );
+
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    char * server_address = "[::1]:40000";
+
+    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+
+    netcode_client_connect( client, server_info );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( &network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
+
+    // disconnect client on the server-side and wait until client sees the disconnect
+
+    netcode_server_disconnect_client( server, 0 );
+
+    for ( int i = 0; i < 10; ++i )
+    {
+        netcode_network_simulator_update( &network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
+    check( netcode_server_client_connected( server, 0 ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
+
+    // now reconnect the client and verify they connect
+
+    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+
+    netcode_client_connect( client, server_info );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( &network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     netcode_server_destroy( server );
 
@@ -5949,6 +6087,7 @@ void netcode_test()
         RUN_TEST( test_client_error_connection_denied );
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
+        RUN_TEST( test_client_reconnect );
     }
 }
 

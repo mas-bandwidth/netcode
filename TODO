@@ -33,33 +33,29 @@ DONE
 
     connection denied test is working.
 
-TODO
-
     client side disconnect
 
     server side disconnect
 
     client reconnect
 
+    ^--- found and fixed a bug where server was not decreasing "num connected clients" on the server when a client was disconnected.
+
+    Add function netcode_server_num_connected_clients( server ), because otherwise the client has to O(n) to find this out, and that's dumb.
+
+TODO
+
     keep alive
 
     multiple clients
+
+    client connect to multiple servers, first few servers will fail, make sure client is able to connect to last one.
 
     stop/start
 
     -----------------
 
     test server cases that should be rejected, eg. invalid connect token, stale connect token, same client id already connected.
-
-    -----------------
-
-    At minimum, need tests for all the cases where a client connect can be rejected, eg. stale token, whitelist etc, random data etc.
-
-    -----------------
-
-    Port across functional tests for client connect connection functionality.
-
-    It's important that the implementation is fully tested before I write the write paper, in case there are errors!
 
     -----------------
 
