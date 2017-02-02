@@ -1,51 +1,8 @@
 DONE
 
-    Unblocked to continue client error state tests.
-
-    To test the next states, need to add a concept of "server flags"
-
-    Server flags need to be added to:
-
-        ignore connection request packets
-
-        ignore connection response packets
-
-        disable keep alive packets
-
-    Adding this now.
-
-    Added server flags. Testing the client error states should be easy now.
-
-    These are the states to test:
-
-    #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT        -3
-    #define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT         -2
-    #define NETCODE_CLIENT_STATE_CONNECTION_DENIED                  -1
-    #define NETCODE_CLIENT_STATE_DISCONNECTED                       0
-
-    Getting started with connection_confirm_timeout.
-
-    Added request time out as well.
-
-    Found that connection confirm timeout state was redundant, so it's been removed.
-
-    Thing to test now is connection denied. I can force a connection denied with a flag, but it would be much better to have a second client try to connect to a server with 1 slot, vs. testing an artificial codepath.
-
-    connection denied test is working.
-
-    client side disconnect
-
-    server side disconnect
-
-    client reconnect
-
-    ^--- found and fixed a bug where server was not decreasing "num connected clients" on the server when a client was disconnected.
-
-    Add function netcode_server_num_connected_clients( server ), because otherwise the client has to O(n) to find this out, and that's dumb.
+    keep alive
 
 TODO
-
-    keep alive
 
     multiple clients
 
@@ -97,21 +54,13 @@ TODO
 
 
 
-    =======================================================================================
-
-    Integrate mbedtls and update client to get connect token from matcher.
-
     -----------------
 
-    Write secure dedicated servers article (probably derived from white paper? Perhaps it's the same thing?)
+    Finish porting rest of gafferongames.com to the new hugo website.
 
     -----------------
 
     Write post announcing netcode.io and queue it up at GDC 2017.
-
-    -----------------
-
-    Finish porting rest of gafferongames.com to the new hugo website.
 
     -----------------
 

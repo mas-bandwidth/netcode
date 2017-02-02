@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <math.h>
 
 #ifdef _MSC_VER
 #define SODIUM_STATIC
@@ -5409,6 +5410,93 @@ void test_client_server_connect()
     netcode_client_destroy( client );
 }
 
+void test_client_server_keep_alive()
+{
+    struct netcode_network_simulator_t network_simulator;
+
+    memset( &network_simulator, 0, sizeof( network_simulator ) );
+
+    network_simulator.latency_milliseconds = 250;
+    network_simulator.jitter_milliseconds = 250;
+    network_simulator.packet_loss_percent = 5;
+    network_simulator.duplicate_packet_percent = 10;
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    // connect client to server
+
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+
+    check( client );
+
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    char * server_address = "[::1]:40000";
+
+    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+
+    netcode_client_connect( client, server_info );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( &network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
+
+    // pump the client and server long enough that they would timeout without keep alive packets
+
+    int num_iterations = (int) ceil( 1.25f * NETCODE_TIMEOUT_SECONDS / delta_time );
+
+    for ( int i = 0; i < num_iterations; ++i )
+    {
+        netcode_network_simulator_update( &network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+}
+
 void test_client_error_connect_token_expired()
 {
     struct netcode_network_simulator_t network_simulator;
@@ -6079,6 +6167,7 @@ void netcode_test()
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_client_server_connect );
+        RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_error_connect_token_expired );
         RUN_TEST( test_client_error_invalid_server_info );
         RUN_TEST( test_client_error_connection_timed_out );
