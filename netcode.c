@@ -2074,8 +2074,6 @@ void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue )
 
 // ----------------------------------------------------------------
 
-#if NETCODE_ENABLE_TESTS
-
 #define NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES ( NETCODE_MAX_CLIENTS * 256 )
 #define NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS ( NETCODE_MAX_CLIENTS * 64 )
 
@@ -2115,6 +2113,7 @@ void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t 
     network_simulator->packet_entries[network_simulator->current_index].from = *from;
     network_simulator->packet_entries[network_simulator->current_index].to = *to;
     network_simulator->packet_entries[network_simulator->current_index].packet_data = (uint8_t*) malloc( packet_bytes );
+    printf( "simulator packet data = %p\n", network_simulator->packet_entries[network_simulator->current_index].packet_data );
     memcpy( network_simulator->packet_entries[network_simulator->current_index].packet_data, packet_data, packet_bytes );
     network_simulator->packet_entries[network_simulator->current_index].packet_bytes = packet_bytes;
     network_simulator->packet_entries[network_simulator->current_index].delivery_time = network_simulator->time + delay;
@@ -2232,6 +2231,7 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
     for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
         free( network_simulator->pending_receive_packets[i].packet_data );
+        network_simulator->pending_receive_packets[i].packet_data = NULL;
     }
 
     network_simulator->num_pending_receive_packets = 0;
@@ -2248,6 +2248,9 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
 
         if ( network_simulator->packet_entries[i].packet_data && network_simulator->packet_entries[i].delivery_time <= time )
         {
+            // todo
+            printf( "pending packet receive = %p (%d bytes)\n", network_simulator->packet_entries[i].packet_data, network_simulator->packet_entries[i].packet_bytes );
+
             network_simulator->pending_receive_packets[network_simulator->num_pending_receive_packets] = network_simulator->packet_entries[i];
             network_simulator->num_pending_receive_packets++;
             network_simulator->packet_entries[i].packet_data = NULL;
@@ -2259,6 +2262,8 @@ void netcode_network_simulator_discard_packets( struct netcode_network_simulator
 {
     assert( network_simulator );
 
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "network simulator discard packets\n" );
+
     for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
     {
         free( network_simulator->packet_entries[i].packet_data );
@@ -2268,7 +2273,10 @@ void netcode_network_simulator_discard_packets( struct netcode_network_simulator
     for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
         free( network_simulator->pending_receive_packets[i].packet_data );
+        network_simulator->pending_receive_packets[i].packet_data = NULL;
     }
+
+    network_simulator->num_pending_receive_packets = 0;
 
     memset( network_simulator, 0, sizeof( struct netcode_network_simulator_t ) );
 }
@@ -2278,8 +2286,17 @@ void netcode_network_simulator_discard_packets_from_address( struct netcode_netw
     assert( network_simulator );
     assert( from );
 
+    char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    netcode_address_to_string( from, address_string );
+
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "network simulator discard packets from address %s\n", address_string );
+
     for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
     {
+        if ( !network_simulator->packet_entries[i].packet_data )
+            continue;
+
         if ( !netcode_address_equal( &network_simulator->packet_entries[i].from, from ) )
             continue;
 
@@ -2290,20 +2307,17 @@ void netcode_network_simulator_discard_packets_from_address( struct netcode_netw
 
     for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
+        if ( !network_simulator->pending_receive_packets[i].packet_data )
+            continue;
+
         if ( !netcode_address_equal( &network_simulator->pending_receive_packets[i].from, from ) )
             continue;
 
         free( network_simulator->pending_receive_packets[i].packet_data );
+
+        network_simulator->pending_receive_packets[i].packet_data = NULL;
     }
-
-    memset( network_simulator, 0, sizeof( struct netcode_network_simulator_t ) );
 }
-
-#else // #if NETCODE_ENABLE_TESTS
-
-struct netcode_network_simulator_t;
-
-#endif // #if NETCODE_ENABLE_TESTS
 
 // ----------------------------------------------------------------
     
@@ -2342,9 +2356,7 @@ struct netcode_client_t
     struct netcode_address_t address;
     struct netcode_address_t server_address;
     struct netcode_server_info_t server_info;
-#if NETCODE_ENABLE_TESTS
     struct netcode_network_simulator_t * network_simulator;
-#endif // #if NETCODE_ENABLE_TESTS
     struct netcode_socket_t socket;
     struct netcode_context_t context;
     struct netcode_replay_protection_t replay_protection;
@@ -2374,7 +2386,6 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
             return NULL;
         }
     }
-#if NETCODE_ENABLE_TESTS
     else
     {
         if ( address.port == 0 )
@@ -2383,7 +2394,6 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
             return NULL;
         }
     }
-#endif // #if NETCODE_ENABLE_TESTS
 
     struct netcode_client_t * client = (struct netcode_client_t*) malloc( sizeof( struct netcode_client_t ) );
 
@@ -2397,18 +2407,14 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
     {
         netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d\n", socket.address.port );
     }
-#if NETCODE_ENABLE_TESTS
     else
     {
         netcode_printf( NETCODE_LOG_LEVEL_INFO, "client started on port %d (network simulator)\n", address.port );
     }
-#endif // #if NETCODE_ENABLE_TESTS
 
     client->socket = socket;
     client->address = network_simulator ? address : socket.address;
-#if NETCODE_ENABLE_TESTS
     client->network_simulator = network_simulator;
-#endif // #if NETCODE_ENABLE_TESTS
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;
     client->connect_start_time = 0.0;
@@ -2638,9 +2644,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
     uint64_t current_timestamp = (uint64_t) time( NULL );
 
-#if NETCODE_ENABLE_TESTS
     if ( !client->network_simulator )
-#endif // #if NETCODE_ENABLE_TESTS
     {
         // process packets received from socket
 
@@ -2664,7 +2668,6 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             netcode_client_process_packet( client, &from, packet, sequence );
         }
     }
-#if NETCODE_ENABLE_TESTS
     else
     {
         // process packets received from network simulator
@@ -2691,7 +2694,6 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             netcode_client_process_packet( client, &from[i], packet, sequence );
         }
     }
-#endif // #if NETCODE_ENABLE_TESTS
 }
 
 void netcode_client_send_packet_to_server_internal( struct netcode_client_t * client, void * packet )
@@ -2704,13 +2706,16 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-#if NETCODE_ENABLE_TESTS
     if ( client->network_simulator )
     {
+        // todo
+        printf( "client send packet to server (simulator)\n" );
+
         netcode_network_simulator_send_packet( client->network_simulator, &client->address, &client->server_address, packet_data, packet_bytes );
+
+        printf( "client send packet to server (after)\n" );
     }
     else
-#endif // #if NETCODE_ENABLE_TESTS
     {
         netcode_socket_send_packet( &client->socket, &client->server_address, packet_data, packet_bytes );
     }
@@ -3175,20 +3180,16 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
 
 // ----------------------------------------------------------------
 
-#if NETCODE_ENABLE_TESTS
 #define NETCODE_SERVER_FLAG_IGNORE_CONNECTION_REQUEST_PACKETS       1
 #define NETCODE_SERVER_FLAG_IGNORE_CONNECTION_RESPONSE_PACKETS      (1<<1)
-#endif // #if NETCODE_ENABLE_TESTS
 
 struct netcode_server_t
 {
     struct netcode_socket_t socket;
     struct netcode_address_t bind_address;
     struct netcode_address_t public_address;
-#if NETCODE_ENABLE_TESTS
     struct netcode_network_simulator_t * network_simulator;
     uint32_t flags;
-#endif // #if NETCODE_ENABLE_TESTS
     uint64_t protocol_id;
 	double time;
     int running;
@@ -3261,20 +3262,16 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     {
         netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string ) );
     }
-#if NETCODE_ENABLE_TESTS
     else
     {
         netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s (network simulator)\n", netcode_address_to_string( &public_address, server_address_string ) );
     }
-#endif // #if NETCODE_ENABLE_TESTS
 
     server->socket = socket;
     server->bind_address = bind_address;
     server->public_address = public_address;
-#if NETCODE_ENABLE_TESTS
     server->network_simulator = network_simulator;
     server->flags = 0;
-#endif // #if NETCODE_ENABLE_TESTS
     server->protocol_id = protocol_id;
     server->time = time;
     server->running = 0;
@@ -3358,13 +3355,11 @@ void netcode_server_send_global_packet( struct netcode_server_t * server, void *
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-#if NETCODE_ENABLE_TESTS
     if ( server->network_simulator )
     {
         netcode_network_simulator_send_packet( server->network_simulator, &server->public_address, to, packet_data, packet_bytes );
     }
     else
-#endif // #if NETCODE_ENABLE_TESTS
     {
         netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
     }
@@ -3388,13 +3383,11 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-#if NETCODE_ENABLE_TESTS
     if ( server->network_simulator )
     {
         netcode_network_simulator_send_packet( server->network_simulator, &server->public_address, &server->client_address[client_index], packet_data, packet_bytes );
     }
     else
-#endif // #if NETCODE_ENABLE_TESTS
     {
         netcode_socket_send_packet( &server->socket, &server->client_address[client_index], packet_data, packet_bytes );
     }
@@ -3506,6 +3499,10 @@ void netcode_server_stop( struct netcode_server_t * server )
     server->running = 0;
     server->max_clients = 0;
     server->num_connected_clients = 0;
+
+    server->global_sequence = 0;
+    server->challenge_sequence = 0;
+    memset( server->challenge_key, 0, NETCODE_KEY_BYTES );
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
@@ -3747,9 +3744,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
     {
         case NETCODE_CONNECTION_REQUEST_PACKET:
         {    
-#if NETCODE_ENABLE_TESTS
             if ( ( server->flags & NETCODE_SERVER_FLAG_IGNORE_CONNECTION_REQUEST_PACKETS ) == 0 )
-#endif // #if NETCODE_ENABLE_TESTS
             {
                 char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
@@ -3762,9 +3757,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
 
         case NETCODE_CONNECTION_RESPONSE_PACKET:
         {    
-#if NETCODE_ENABLE_TESTS
             if ( ( server->flags & NETCODE_SERVER_FLAG_IGNORE_CONNECTION_RESPONSE_PACKETS ) == 0 )
-#endif // #if NETCODE_ENABLE_TESTS
             {
                 char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
@@ -3854,6 +3847,8 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server, s
     }
     
     uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+
+    printf( "packet_data = %p, packet_bytes = %d\n", packet_data, packet_bytes );
     
     void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, &server->client_replay_protection[client_index] );
 
@@ -3877,9 +3872,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
     uint64_t current_timestamp = (uint64_t) time( NULL );
 
-#if NETCODE_ENABLE_TESTS
     if ( !server->network_simulator )
-#endif // #if NETCODE_ENABLE_TESTS
     {
         // process packets received from socket
 
@@ -3896,7 +3889,6 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
     }
-#if NETCODE_ENABLE_TESTS
     else
     {
         // process packets received from network simulator
@@ -3916,7 +3908,6 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
             free( packet_data[i] );
         }
     }
-#endif // #if NETCODE_ENABLE_TESTS
 }
 
 void netcode_server_send_packets( struct netcode_server_t * server )
@@ -5497,6 +5488,226 @@ void test_client_server_keep_alive()
     netcode_client_destroy( client );
 }
 
+void test_client_server_multiple_clients()
+{
+    #define NUM_START_STOP_ITERATIONS 2
+
+    int max_clients[NUM_START_STOP_ITERATIONS] = { 1, 1 }; //{ 2, 32, 5, 256 };
+
+/*
+    struct netcode_network_simulator_t network_simulator;
+
+    memset( &network_simulator, 0, sizeof( network_simulator ) );
+
+    network_simulator.latency_milliseconds = 250;
+    network_simulator.jitter_milliseconds = 250;
+    network_simulator.packet_loss_percent = 5;
+    network_simulator.duplicate_packet_percent = 10;
+    */
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, NULL );//&network_simulator );
+
+    check( server );
+
+    uint64_t token_sequence = 0;
+
+    for ( int i = 0; i < NUM_START_STOP_ITERATIONS; ++i )
+    {
+        printf( "iteration %d\n", i );
+
+        // start the server with max # of clients for this iteration
+
+        printf( "start server (%d clients)\n", max_clients[i] );
+
+        netcode_server_start( server, max_clients[i] );
+
+        // create # of client objects for this iteration and connect to server
+
+        printf( "connect clients\n" );
+
+        struct netcode_client_t ** client = malloc( sizeof( struct netcode_client_t* ) * max_clients[i] );
+
+        check( client );
+
+        for ( int j = 0; j < max_clients[i]; ++j )
+        {
+            char client_address[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+            sprintf( client_address, "[::]:%d", 50000 + j );
+
+            client[j] = netcode_client_create_internal( client_address, time, NULL );//&network_simulator );
+
+            check( client[j] );
+
+            uint64_t client_id = j;
+            netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+            char * server_address = "[::1]:40000";
+
+            uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+
+            check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, token_sequence++, private_key, server_info ) );
+
+            netcode_client_connect( client[j], server_info );
+        }
+
+        // make sure all clients can connect
+
+        while ( 1 )
+        {
+//            netcode_network_simulator_update( &network_simulator, time );
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                netcode_client_update( client[j], time );
+            }
+
+            netcode_server_update( server, time );
+
+            int num_connected_clients = 0;
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                if ( netcode_client_state( client[j] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+                    break;
+
+                if ( netcode_client_state( client[j] ) == NETCODE_CLIENT_STATE_CONNECTED )
+                    num_connected_clients++;
+            }
+
+            if ( num_connected_clients == max_clients[i] )
+                break;
+
+            time += delta_time;
+
+            netcode_sleep( delta_time );
+        }
+
+        check( netcode_server_num_clients_connected( server ) == max_clients[i] );
+
+        for ( int j = 0; j < max_clients[i]; ++j )
+        {
+            check( netcode_client_state( client[j] ) == NETCODE_CLIENT_STATE_CONNECTED );
+            check( netcode_server_client_connected( server, j ) == 1 );
+        }
+
+        // make sure all clients can exchange packets with the server
+
+        printf( "all clients are connected\n" );
+
+        int * server_num_packets_received = malloc( sizeof(int) * max_clients[i] );
+        int * client_num_packets_received = malloc( sizeof(int) * max_clients[i] );
+
+        memset( server_num_packets_received, 0, sizeof(int) * max_clients[i] );
+        memset( client_num_packets_received, 0, sizeof(int) * max_clients[i] );
+
+        uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+        for ( int j = 0; j < NETCODE_MAX_PACKET_SIZE; ++j )
+            packet_data[j] = (uint8_t) j;
+
+        while ( 1 )
+        {
+//            netcode_network_simulator_update( &network_simulator, time );
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                netcode_client_update( client[j], time );
+            }
+
+            netcode_server_update( server, time );
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                netcode_client_send_packet( client[j], packet_data, NETCODE_MAX_PACKET_SIZE );
+            }
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                netcode_server_send_packet( server, j, packet_data, NETCODE_MAX_PACKET_SIZE );
+            }
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                while ( 1 )             
+                {
+                    int packet_bytes;
+                    void * packet = netcode_client_receive_packet( client[j], &packet_bytes );
+                    if ( !packet )
+                        break;
+                    assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+                    assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+                    client_num_packets_received[j]++;
+                    netcode_client_free_packet( client[j], packet );
+                }
+            }
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                while ( 1 )             
+                {
+                    int packet_bytes;
+                    void * packet = netcode_server_receive_packet( server, j, &packet_bytes );
+                    if ( !packet )
+                        break;
+                    assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+                    assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+                    server_num_packets_received[j]++;
+                    netcode_server_free_packet( server, packet );
+                }
+            }
+
+            int num_clients_ready = 0;
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                if ( client_num_packets_received[j] >= 10 && server_num_packets_received[j] >= 10 )
+                {
+                    num_clients_ready++;
+                }
+            }
+
+            printf( "num_clients_ready = %d/%d\n", num_clients_ready, max_clients[i] );
+
+            if ( num_clients_ready == max_clients[i] )
+                break;
+
+            for ( int j = 0; j < max_clients[i]; ++j )
+            {
+                if ( netcode_client_state( client[j] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+                    break;
+            }
+
+            time += delta_time;
+
+            netcode_sleep( delta_time );
+        }
+
+        free( server_num_packets_received );
+        free( client_num_packets_received );
+        
+        /*
+        check( client_num_packets_received >= 10 && server_num_packets_received >= 10 );
+        */
+
+        //netcode_network_simulator_discard_packets( &network_simulator );
+
+        for ( int j = 0; j < max_clients[i]; ++j )
+        {
+            netcode_client_destroy( client[j] );
+        }
+
+        free( client );
+
+        netcode_server_stop( server );
+
+        printf( "end iteration\n" );
+    }
+
+    netcode_server_destroy( server );
+}
+
 void test_client_error_connect_token_expired()
 {
     struct netcode_network_simulator_t network_simulator;
@@ -6151,6 +6362,7 @@ void netcode_test()
 {
 //    while ( 1 )
     {
+        /*
         RUN_TEST( test_queue );
         RUN_TEST( test_endian );
         RUN_TEST( test_address );
@@ -6168,6 +6380,10 @@ void netcode_test()
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_client_server_connect );
         RUN_TEST( test_client_server_keep_alive );
+        */
+        netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );
+        RUN_TEST( test_client_server_multiple_clients );
+        /*
         RUN_TEST( test_client_error_connect_token_expired );
         RUN_TEST( test_client_error_invalid_server_info );
         RUN_TEST( test_client_error_connection_timed_out );
@@ -6177,6 +6393,7 @@ void netcode_test()
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_client_reconnect );
+        */
     }
 }
 
