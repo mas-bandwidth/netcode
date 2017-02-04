@@ -74,6 +74,8 @@
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 #define NETCODE_PACKET_QUEUE_SIZE 256
 #define NETCODE_REPLAY_PROTECTION_BUFFER_SIZE 256
+#define NETCODE_CLIENT_MAX_RECEIVE_PACKETS 64
+#define NETCODE_SERVER_MAX_RECEIVE_PACKETS ( 64 * NETCODE_MAX_CLIENTS )
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -2108,6 +2110,20 @@ struct netcode_network_simulator_t
     struct netcode_network_simulator_packet_entry_t pending_receive_packets[NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS];
 };
 
+struct netcode_network_simulator_t * netcode_network_simulator_create()
+{
+	struct netcode_network_simulator_t * network_simulator = (struct netcode_network_simulator_t*) malloc( sizeof( struct netcode_network_simulator_t ) );
+    assert( network_simulator );
+	memset( network_simulator, 0, sizeof( struct netcode_network_simulator_t ) );
+	return network_simulator;
+}
+
+void netcode_network_simulator_destroy( struct netcode_network_simulator_t * network_simulator )
+{
+	assert( network_simulator );
+	free( network_simulator );
+}
+
 float netcode_random_float( float a, float b )
 {
     assert( a < b );
@@ -2149,10 +2165,10 @@ void netcode_network_simulator_send_packet( struct netcode_network_simulator_t *
         network_simulator->packet_entries[network_simulator->current_index].packet_data = NULL;
     }
 
-    double delay = network_simulator->latency_milliseconds / 1000.0;
+    float delay = network_simulator->latency_milliseconds / 1000.0f;
 
     if ( network_simulator->jitter_milliseconds > 0.0 )
-        delay += netcode_random_float( -network_simulator->jitter_milliseconds, +network_simulator->jitter_milliseconds ) / 1000.0;
+        delay += netcode_random_float( -network_simulator->jitter_milliseconds, +network_simulator->jitter_milliseconds ) / 1000.0f;
 
     netcode_network_simulator_queue_packet( network_simulator, from, to, packet_data, packet_bytes, delay );
 
@@ -2307,6 +2323,9 @@ struct netcode_client_t
     struct netcode_packet_queue_t packet_receive_queue;
     uint64_t challenge_token_sequence;
     uint8_t challenge_token_data[NETCODE_CHALLENGE_TOKEN_BYTES];
+    uint8_t * receive_packet_data[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
+    int receive_packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
+    struct netcode_address_t receive_from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
 };
 
 struct netcode_client_t * netcode_client_create_internal( char * address_string, double time, struct netcode_network_simulator_t * network_simulator )
@@ -2616,27 +2635,21 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
     {
         // process packets received from network simulator
 
-        #define NETCODE_CLIENT_MAX_RECEIVE_PACKETS 64
-
-        uint8_t * packet_data[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
-        int packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
-        struct netcode_address_t from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
-
-        int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, &client->address, NETCODE_CLIENT_MAX_RECEIVE_PACKETS, packet_data, packet_bytes, from );
+        int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, &client->address, NETCODE_CLIENT_MAX_RECEIVE_PACKETS, client->receive_packet_data, client->receive_packet_bytes, client->receive_from );
 
         int i;
         for ( i = 0; i < num_packets_received; ++i )
         {
             uint64_t sequence;
 
-            void * packet = netcode_read_packet( packet_data[i], packet_bytes[i], &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+            void * packet = netcode_read_packet( client->receive_packet_data[i], client->receive_packet_bytes[i], &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
 
-            free( packet_data[i] );
+            free( client->receive_packet_data[i] );
 
             if ( !packet )
                 continue;
 
-            netcode_client_process_packet( client, &from[i], packet, sequence );
+            netcode_client_process_packet( client, &client->receive_from[i], packet, sequence );
         }
     }
 }
@@ -3170,6 +3183,9 @@ struct netcode_server_t
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
+    uint8_t * receive_packet_data[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
+    int receive_packet_bytes[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
+    struct netcode_address_t receive_from[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
 };
 
 struct netcode_server_t * netcode_server_create_internal( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator )
@@ -3865,20 +3881,14 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     {
         // process packets received from network simulator
 
-        #define NETCODE_SERVER_MAX_RECEIVE_PACKETS 64 * NETCODE_MAX_CLIENTS
-
-        uint8_t * packet_data[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
-        int packet_bytes[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
-        struct netcode_address_t from[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
-
-        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->public_address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, packet_data, packet_bytes, from );
+        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->public_address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, server->receive_packet_data, server->receive_packet_bytes, server->receive_from );
 
         int i;
         for ( i = 0; i < num_packets_received; ++i )
         {
-            netcode_server_read_and_process_packet( server, &from[i], packet_data[i], packet_bytes[i], current_timestamp, allowed_packets );
+            netcode_server_read_and_process_packet( server, &server->receive_from[i], server->receive_packet_data[i], server->receive_packet_bytes[i], current_timestamp, allowed_packets );
 
-            free( packet_data[i] );
+            free( server->receive_packet_data[i] );
         }
     }
 }
@@ -5262,23 +5272,21 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
 
 void test_client_server_connect()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5297,7 +5305,7 @@ void test_client_server_connect()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5327,7 +5335,7 @@ void test_client_server_connect()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5380,29 +5388,29 @@ void test_client_server_connect()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_create( network_simulator );
 }
 
 void test_client_server_keep_alive()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
     // connect client to server
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5421,7 +5429,7 @@ void test_client_server_keep_alive()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5448,7 +5456,7 @@ void test_client_server_keep_alive()
     int i;
     for ( i = 0; i < num_iterations; ++i )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5468,6 +5476,8 @@ void test_client_server_keep_alive()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_server_multiple_clients()
@@ -5476,19 +5486,17 @@ void test_client_server_multiple_clients()
 
     int max_clients[NUM_START_STOP_ITERATIONS] = { 2, 32, 5, 256 };
 
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5513,7 +5521,7 @@ void test_client_server_multiple_clients()
             char client_address[NETCODE_MAX_ADDRESS_STRING_LENGTH];
             sprintf( client_address, "[::]:%d", 50000 + j );
 
-            client[j] = netcode_client_create_internal( client_address, time, &network_simulator );
+            client[j] = netcode_client_create_internal( client_address, time, network_simulator );
 
             check( client[j] );
 
@@ -5533,7 +5541,7 @@ void test_client_server_multiple_clients()
 
         while ( 1 )
         {
-            netcode_network_simulator_update( &network_simulator, time );
+            netcode_network_simulator_update( network_simulator, time );
 
             for ( j = 0; j < max_clients[i]; ++j )
             {
@@ -5581,7 +5589,7 @@ void test_client_server_multiple_clients()
 
         while ( 1 )
         {
-            netcode_network_simulator_update( &network_simulator, time );
+            netcode_network_simulator_update( network_simulator, time );
 
             for ( j = 0; j < max_clients[i]; ++j )
             {
@@ -5667,7 +5675,7 @@ void test_client_server_multiple_clients()
         free( server_num_packets_received );
         free( client_num_packets_received );
         
-        netcode_network_simulator_discard_packets( &network_simulator );
+        netcode_network_simulator_discard_packets( network_simulator );
 
         for ( j = 0; j < max_clients[i]; ++j )
         {
@@ -5680,92 +5688,27 @@ void test_client_server_multiple_clients()
     }
 
     netcode_server_destroy( server );
-}
 
-void test_client_error_connect_token_expired()
-{
-    struct netcode_network_simulator_t network_simulator;
-
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
-
-    double time = 0.0;
-
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
-
-    check( client );
-
-    char * server_address = "[::1]:40000";
-
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
-
-    uint64_t client_id = 0;
-    netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-    check( netcode_generate_server_info( 1, &server_address, 0, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
-
-    netcode_client_connect( client, server_info );
-
-    netcode_client_update( client, time );
-
-    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED );
-
-    netcode_client_destroy( client );
-}
-
-void test_client_error_invalid_server_info()
-{
-    struct netcode_network_simulator_t network_simulator;
-
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
-
-    double time = 0.0;
-
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
-
-    check( client );
-
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
-    netcode_random_bytes( server_info, NETCODE_SERVER_INFO_BYTES );
-
-    uint64_t client_id = 0;
-    netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-    netcode_client_connect( client, server_info );
-
-    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_SERVER_INFO );
-
-    netcode_client_destroy( client );
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_server_multiple_servers()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5784,7 +5727,7 @@ void test_client_server_multiple_servers()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5814,7 +5757,7 @@ void test_client_server_multiple_servers()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5869,27 +5812,90 @@ void test_client_server_multiple_servers()
     netcode_client_destroy( client );
 }
 
+void test_client_error_connect_token_expired()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
+
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
+
+    double time = 0.0;
+
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
+
+    check( client );
+
+    char * server_address = "[::1]:40000";
+
+    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    check( netcode_generate_server_info( 1, &server_address, 0, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+
+    netcode_client_connect( client, server_info );
+
+    netcode_client_update( client, time );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
+void test_client_error_invalid_server_info()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
+
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
+
+    double time = 0.0;
+
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
+
+    check( client );
+
+    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    netcode_random_bytes( server_info, NETCODE_SERVER_INFO_BYTES );
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    netcode_client_connect( client, server_info );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_SERVER_INFO );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
 void test_client_error_connection_timed_out()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
     // connect a client to the server
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5908,7 +5914,7 @@ void test_client_error_connection_timed_out()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5932,7 +5938,7 @@ void test_client_error_connection_timed_out()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -5947,27 +5953,27 @@ void test_client_error_connection_timed_out()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_error_connection_response_timeout()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5988,7 +5994,7 @@ void test_client_error_connection_response_timeout()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6008,27 +6014,27 @@ void test_client_error_connection_response_timeout()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_error_connection_request_timeout()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
     double delta_time = 1.0 / 60.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6049,7 +6055,7 @@ void test_client_error_connection_request_timeout()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6069,29 +6075,29 @@ void test_client_error_connection_request_timeout()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_error_connection_denied()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
-
-    network_simulator.latency_milliseconds = 250;
-    network_simulator.jitter_milliseconds = 250;
-    network_simulator.packet_loss_percent = 5;
-    network_simulator.duplicate_packet_percent = 10;
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     // start a server and connect one client
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6110,7 +6116,7 @@ void test_client_error_connection_denied()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6132,7 +6138,7 @@ void test_client_error_connection_denied()
 
     // now attempt to connect a second client. the connection should be denied.
 
-    struct netcode_client_t * client2 = netcode_client_create_internal( "[::]:50001", time, &network_simulator );
+    struct netcode_client_t * client2 = netcode_client_create_internal( "[::]:50001", time, network_simulator );
 
     check( client2 );
 
@@ -6147,7 +6153,7 @@ void test_client_error_connection_denied()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6174,24 +6180,24 @@ void test_client_error_connection_denied()
     netcode_client_destroy( client );
     
     netcode_client_destroy( client2 );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_side_disconnect()
 {
-    struct netcode_network_simulator_t network_simulator;
-
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
     // start a server and connect one client
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6210,7 +6216,7 @@ void test_client_side_disconnect()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6237,7 +6243,7 @@ void test_client_side_disconnect()
     int i;
     for ( i = 0; i < 10; ++i )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6255,24 +6261,24 @@ void test_client_side_disconnect()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_server_side_disconnect()
 {
-    struct netcode_network_simulator_t network_simulator;
-
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
     // start a server and connect one client
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6291,7 +6297,7 @@ void test_server_side_disconnect()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6318,7 +6324,7 @@ void test_server_side_disconnect()
     int i;
     for ( i = 0; i < 10; ++i )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6337,24 +6343,29 @@ void test_server_side_disconnect()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_reconnect()
 {
-    struct netcode_network_simulator_t network_simulator;
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
-    memset( &network_simulator, 0, sizeof( network_simulator ) );
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
 
     // start a server and connect one client
 
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, &network_simulator );
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator );
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, &network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6373,7 +6384,7 @@ void test_client_reconnect()
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6395,18 +6406,19 @@ void test_client_reconnect()
 
     // disconnect client on the server-side and wait until client sees the disconnect
 
+	netcode_network_simulator_discard_packets( network_simulator );
+
     netcode_server_disconnect_client( server, 0 );
 
-    int i;
-    for ( i = 0; i < 10; ++i )
+	while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
         netcode_server_update( server, time );
 
-        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED )
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;
 
         time += delta_time;
@@ -6418,13 +6430,15 @@ void test_client_reconnect()
 
     // now reconnect the client and verify they connect
 
+	netcode_network_simulator_discard_packets( network_simulator );
+
     check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
 
     netcode_client_connect( client, server_info );
 
     while ( 1 )
     {
-        netcode_network_simulator_update( &network_simulator, time );
+        netcode_network_simulator_update( network_simulator, time );
 
         netcode_client_update( client, time );
 
@@ -6447,6 +6461,8 @@ void test_client_reconnect()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 #define RUN_TEST( test_function )                                           \

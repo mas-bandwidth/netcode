@@ -36,17 +36,17 @@ DONE
 
     What's going on? How can I debug this!?
 
-TODO
-
-    Need to debug why docker server is not receiving packets from outside docker.
-    
-    -----------------
-
     Port to windows
 
+TODO
+
+    Convert statics to per-client and per-server vars.
+
+    Statics are bad. Make it impossible to wrap the library with mutex to guarantee thread safety.
+
     -----------------
 
-    Write white paper for patent.
+    Write white paper
 
     -----------------
 
@@ -69,6 +69,10 @@ TODO
     -----------------
 
     Update standalone client to get server info from golang server.
+
+    -----------------
+
+    Work out why docker server is not receiving packets from outside of docker.
 
     -----------------
 
