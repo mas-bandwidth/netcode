@@ -20,8 +20,6 @@ DONE
 
     Finished porting to linux
 
-TODO
-    
     Client outside of docker is not able to connect to a docker server. Why?
 
     Need to add logging to work out what is going wrong.
@@ -32,6 +30,16 @@ TODO
 
     So what is going wrong here? What is different?
 
+    Tried switching to IPv4 because yojimbo server was using ipv4. 
+
+    Didn't make a difference. Server still doesn't receive packets from the client.
+
+    What's going on? How can I debug this!?
+
+TODO
+
+    Need to debug why docker server is not receiving packets from outside docker.
+    
     -----------------
 
     Port to windows
