@@ -58,6 +58,8 @@ if os.is "windows" then
         end
     }
 
+    -- todo: create shortcuts here too for windows for consistency
+
 else
 
     -- MacOSX and Linux.
@@ -112,6 +114,16 @@ else
 
     newaction
     {
+        trigger     = "docker",
+        description = "Build and run a netcode.io server inside a docker container",
+        execute = function ()
+            os.execute "docker run --rm --privileged alpine hwclock -s" -- workaround for clock getting out of sync on macos. see https://docs.docker.com/docker-for-mac/troubleshoot/#issues
+            os.execute "rm -rf docker/netcode.io && mkdir -p docker/netcode.io && cp *.h docker/netcode.io && cp *.c docker/netcode.io && cp premake5.lua docker/netcode.io && cd docker && docker build -t \"networkprotocol:netcode.io-server\" . && rm -rf netcode.io && docker run -ti -p 40000:40000/udp networkprotocol:netcode.io-server"
+        end
+    }
+
+    newaction
+    {
         trigger     = "stress",
         description = "Launch 256 client instances to stress test the server",
         execute = function ()
@@ -121,6 +133,33 @@ else
                     os.execute "./bin/client &"
                 end
             end
+        end
+    }
+
+    newaction
+    {
+        trigger     = "cppcheck",
+        description = "Run cppcheck over the source code",
+        execute = function ()
+            os.execute "cppcheck netcode.c"
+        end
+    }
+
+    newaction
+    {
+        trigger     = "scan-build",
+        description = "Run clang scan-build over the project",
+        execute = function ()
+            os.execute "premake5 clean && premake5 gmake && scan-build make all -j32"
+        end
+    }
+
+    newaction
+    {
+        trigger     = "loc",
+        description = "Count lines of code",
+        execute = function ()
+            os.execute "wc -l *.h *.c"
         end
     }
 
@@ -163,7 +202,8 @@ newaction
             "release",
             "cov-int",
             "docs",
-            "xml"
+            "xml",
+            "docker/netcode.io"
         }
 
         for i,v in ipairs( directories_to_delete ) do

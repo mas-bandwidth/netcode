@@ -2,31 +2,29 @@ DONE
 
     Add code to make sure packets were exchanged.
 
-TODO
+    Add test for client connect to multiple servers, first few servers will fail, make sure client is able to connect to last one.
 
-    -----------------
-
-    client connect to multiple servers, first few servers will fail, make sure client is able to connect to last one.
-
-    -----------------
-
-    test server cases that should be rejected, eg. invalid connect token, stale connect token, same client id already connected.
-
-    -----------------
-
-    Run scan-build
-
-    -----------------
+    Run valgrind.
 
     Run cppcheck.
 
-    -----------------
-
-    Run valgrind and make sure no memory leaks
-
-    -----------------
-
     Port to linux
+
+    To do this, setup a docker instance that can build the source code.
+
+    Copy this from the "docker" server instance code in cppcheck.
+
+    Done. Now iterating to get the linux C source code building cleanly.
+
+    Vast majority of it is complaints about for loops, eg. for ( int i = 0; ... )
+
+    Finished porting to linux
+
+TODO
+    
+    Client outside of docker is not able to connect to a docker server. Why?
+
+    Need to add logging to work out what is going wrong.
 
     -----------------
 
@@ -38,6 +36,27 @@ TODO
 
     -----------------
 
+    *** BREAK ***
+
+    -----------------
+
+    Continue writing tests for security edge cases
+
+    eg: stale connect token, modified AEAD, random connect token etc.
+
+    -----------------
+
+    Integrate mbedtls
+
+    -----------------
+
+    Write golang server to generate connect token.
+
+    -----------------
+
+    Update standalone client to get server info from golang server.
+
+    -----------------
 
 
 

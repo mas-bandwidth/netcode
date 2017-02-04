@@ -75,7 +75,8 @@ int main( int argc, char ** argv )
     signal( SIGINT, interrupt_handler );
 
     uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
-    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
 	while ( !quit )
@@ -87,7 +88,8 @@ int main( int argc, char ** argv )
             netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
         }
 
-        for ( int client_index = 0; client_index < NETCODE_MAX_CLIENTS; ++client_index )
+        int client_index;
+        for ( client_index = 0; client_index < NETCODE_MAX_CLIENTS; ++client_index )
         {
             while ( 1 )             
             {

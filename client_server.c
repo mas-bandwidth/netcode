@@ -103,7 +103,8 @@ int main( int argc, char ** argv )
     int client_num_packets_received = 0;
 
     uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
-    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
 	while ( !quit )

@@ -30,6 +30,7 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <math.h>
+#include <time.h>
 
 #ifdef _MSC_VER
 #define SODIUM_STATIC
@@ -198,7 +199,8 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     {
         const int base_index = address_string_length - 1;
         
-        for ( int i = 0; i < 6; ++i )         // note: no need to search past 6 characters as ":65535" is longest possible port value
+        int i;
+        for ( i = 0; i < 6; ++i )         // note: no need to search past 6 characters as ":65535" is longest possible port value
         {
             const int index = base_index - i;
             if ( index < 3 )
@@ -216,7 +218,8 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     if ( inet_pton( AF_INET6, address_string, &sockaddr6 ) == 1 )
     {
         address->type = NETCODE_ADDRESS_IPV6;
-        for ( int i = 0; i < 8; ++i )
+        int i;
+        for ( i = 0; i < 8; ++i )
         {
             address->data.ipv6[i] = ntohs( ( (uint16_t*) &sockaddr6 ) [i] );
         }
@@ -229,7 +232,8 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
 
     address_string_length = (int) strlen( address_string );
     const int base_index = address_string_length - 1;
-    for ( int i = 0; i < 6; ++i )
+    int i;
+    for ( i = 0; i < 6; ++i )
     {
         const int index = base_index - i;
         if ( index < 0 )
@@ -265,7 +269,8 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
         if ( address->port == 0 )
         {
             uint16_t ipv6_network_order[8];
-            for ( int i = 0; i < 8; ++i )
+            int i;
+            for ( i = 0; i < 8; ++i )
                 ipv6_network_order[i] = htons( address->data.ipv6[i] );
             inet_ntop( AF_INET6, (void*) ipv6_network_order, buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH );
             return buffer;
@@ -274,7 +279,8 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
         {
             char address_string[INET6_ADDRSTRLEN];
             uint16_t ipv6_network_order[8];
-            for ( int i = 0; i < 8; ++i )
+            int i;
+            for ( i = 0; i < 8; ++i )
                 ipv6_network_order[i] = htons( address->data.ipv6[i] );
             inet_ntop( AF_INET6, (void*) ipv6_network_order, address_string, INET6_ADDRSTRLEN );
             snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "[%s]:%d", address_string, address->port );
@@ -477,7 +483,8 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         struct sockaddr_in6 sock_address;
         memset( &sock_address, 0, sizeof( struct sockaddr_in6 ) );
         sock_address.sin6_family = AF_INET6;
-        for ( int i = 0; i < 8; ++i )
+        int i;
+        for ( i = 0; i < 8; ++i )
         {
             ( (uint16_t*) &sock_address.sin6_addr ) [i] = htons( address->data.ipv6[i] );
         }
@@ -578,7 +585,8 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         struct sockaddr_in6 socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin6_family = AF_INET6;
-        for ( int i = 0; i < 8; ++i )
+        int i;
+        for ( i = 0; i < 8; ++i )
         {
             ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->data.ipv6[i] );
         }
@@ -641,7 +649,8 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         struct sockaddr_in6 * addr_ipv6 = (struct sockaddr_in6*) &sockaddr_from;
         from->type = NETCODE_ADDRESS_IPV6;
-        for ( int i = 0; i < 8; ++i )
+        int i;
+        for ( i = 0; i < 8; ++i )
         {
             from->data.ipv6[i] = ntohs( ( (uint16_t*) &addr_ipv6->sin6_addr ) [i] );
         }
@@ -2164,7 +2173,8 @@ int netcode_network_simulator_receive_packets( struct netcode_network_simulator_
 
     int num_packets = 0;
 
-    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    int i;
+    for ( i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
         if ( num_packets == max_packets )
             break;
@@ -2197,7 +2207,8 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
 
     // discard any pending receive packets that are still in the buffer
 
-    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    int i;
+    for ( i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
         if ( network_simulator->pending_receive_packets[i].packet_data )
         {
@@ -2210,7 +2221,7 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
 
     // walk across packet entries and move any that are ready to be received into the pending receive buffer
 
-    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    for ( i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
     {
         if ( !network_simulator->packet_entries[i].packet_data )
             continue;
@@ -2233,14 +2244,15 @@ void netcode_network_simulator_discard_packets( struct netcode_network_simulator
 
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "network simulator discard packets\n" );
 
-    for ( int i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
     {
         free( network_simulator->packet_entries[i].packet_data );
 
         memset( &network_simulator->packet_entries[i], 0, sizeof( struct netcode_network_simulator_packet_entry_t ) );
     }
 
-    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    for ( i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
         free( network_simulator->pending_receive_packets[i].packet_data );
 
@@ -2612,7 +2624,8 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
         int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, &client->address, NETCODE_CLIENT_MAX_RECEIVE_PACKETS, packet_data, packet_bytes, from );
 
-        for ( int i = 0; i < num_packets_received; ++i )
+        int i;
+        for ( i = 0; i < num_packets_received; ++i )
         {
             uint64_t sequence;
 
@@ -2883,7 +2896,8 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent disconnect packets to server\n" );
 
-        for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
+        int i;
+        for ( i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent disconnect packet %d\n", i );
 
@@ -2932,7 +2946,8 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
 
     encryption_manager->num_encryption_mappings = 0;
     
-    for ( int i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
         encryption_manager->last_access_time[i] = -1000.0;
         memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
@@ -2944,7 +2959,8 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
 
 int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, uint8_t * send_key, uint8_t * receive_key, double time )
 {
-    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    int i;
+    for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
         {
@@ -2955,7 +2971,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
         }
     }
 
-    for ( int i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
         if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time )
         {
@@ -2977,7 +2993,8 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
     assert( encryption_manager );
     assert( address );
 
-    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    int i;
+    for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) )
         {
@@ -3009,7 +3026,8 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
 
 int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, double time )
 {
-    for ( int i = 0; i < encryption_manager->num_encryption_mappings; ++i )
+    int i;
+    for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
         {
@@ -3063,7 +3081,8 @@ struct netcode_connect_token_entry_t
 
 void netcode_connect_token_entries_reset( struct netcode_connect_token_entry_t * connect_token_entries )
 {
-    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
     {
         connect_token_entries[i].time = -1000.0;
         memset( connect_token_entries[i].mac, 0, NETCODE_MAC_BYTES );
@@ -3083,7 +3102,8 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
     int oldest_token_index = -1;
     double oldest_token_time = 0.0;
 
-    for ( int i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; ++i )
     {
         if ( memcmp( mac, connect_token_entries[i].mac, NETCODE_MAC_BYTES ) == 0 )
             matching_token_index = i;
@@ -3227,14 +3247,15 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
 
-    for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_CLIENTS; ++i )
         server->client_encryption_index[i] = -1;
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
     netcode_encryption_manager_reset( &server->encryption_manager );
 
-    for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
+    for ( i = 0; i < NETCODE_MAX_CLIENTS; ++i )
         netcode_replay_protection_reset( &server->client_replay_protection[i] );
 
     memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
@@ -3277,7 +3298,8 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     server->challenge_sequence = 0;    
     netcode_generate_key( server->challenge_key );
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
         netcode_packet_queue_init( &server->client_packet_queue[i] );
 }
 
@@ -3356,7 +3378,8 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packets to client %d\n", client_index );
 
-        for ( int i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
+        int i;
+        for ( i = 0; i < NETCODE_NUM_DISCONNECT_PACKETS; ++i )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packet %d\n", i );
 
@@ -3408,7 +3431,8 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {
         if ( server->client_connected[i] )
             netcode_server_disconnect_client_internal( server, i, 1 );
@@ -3426,7 +3450,8 @@ void netcode_server_stop( struct netcode_server_t * server )
 
     netcode_server_disconnect_all_clients( server );
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {
         while ( 1 )
         {
@@ -3458,7 +3483,8 @@ int netcode_server_find_client_index_by_id( struct netcode_server_t * server, ui
 {
     assert( server );
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {   
         if ( server->client_connected[i] && server->client_id[i] == client_id )
             return i;
@@ -3475,7 +3501,8 @@ int netcode_server_find_client_index_by_address( struct netcode_server_t * serve
     if ( address->type == 0 )
         return -1;
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {   
         if ( server->client_connected[i] && netcode_address_equal( &server->client_address[i], address ) )
             return i;
@@ -3499,7 +3526,8 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     }
 
     int found_server_address = 0;
-    for ( int i = 0; i < connect_token.num_server_addresses; ++i )
+    int i;
+    for ( i = 0; i < connect_token.num_server_addresses; ++i )
     {
         if ( netcode_address_equal( &server->public_address, &connect_token.server_addresses[i] ) )
         {
@@ -3575,7 +3603,8 @@ int netcode_server_find_free_client_index( struct netcode_server_t * server )
 {
     assert( server );
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {
         if ( !server->client_connected[i] )
             return i;
@@ -3844,7 +3873,8 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
         int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->public_address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, packet_data, packet_bytes, from );
 
-        for ( int i = 0; i < num_packets_received; ++i )
+        int i;
+        for ( i = 0; i < num_packets_received; ++i )
         {
             netcode_server_read_and_process_packet( server, &from[i], packet_data[i], packet_bytes[i], current_timestamp, allowed_packets );
 
@@ -3860,7 +3890,8 @@ void netcode_server_send_packets( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {
         if ( server->client_connected[i] && server->client_last_packet_send_time[i] + ( 1.0 / NETCODE_PACKET_SEND_RATE ) <= server->time )
         {
@@ -3882,7 +3913,8 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    for ( int i = 0; i < server->max_clients; ++i )
+    int i;
+    for ( i = 0; i < server->max_clients; ++i )
     {
         if ( server->client_connected[i] && ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
         {
@@ -4014,7 +4046,8 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
 
     struct netcode_address_t parsed_server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
 
-    for ( int i = 0; i < num_server_addresses; ++i )
+    int i;
+    for ( i = 0; i < num_server_addresses; ++i )
     {
         if ( !netcode_parse_address( server_addresses[i], &parsed_server_addresses[i] ) )
             return 0;
@@ -4054,7 +4087,7 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
     server_info.connect_token_sequence = sequence;
     memcpy( server_info.connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
     server_info.num_server_addresses = num_server_addresses;
-    for ( int i = 0; i < num_server_addresses; ++i )
+    for ( i = 0; i < num_server_addresses; ++i )
         server_info.server_addresses[i] = parsed_server_addresses[i];
     memcpy( server_info.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( server_info.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
@@ -4104,7 +4137,6 @@ double netcode_time()
 // linux
 
 #include <unistd.h>
-#include <time.h>
 
 void netcode_sleep( double time )
 {
@@ -4117,15 +4149,15 @@ double netcode_time()
 
     if ( start == -1 )
     {
-        timespec ts;
+        struct timespec ts;
         clock_gettime( CLOCK_MONOTONIC_RAW, &ts );
-        start = ts.tv_sec + double( ts.tv_nsec ) / 1000000000.0;
+        start = ts.tv_sec + ( (double) ( ts.tv_nsec ) ) / 1000000000.0;
         return 0.0;
     }
 
-    timespec ts;
+    struct timespec ts;
     clock_gettime( CLOCK_MONOTONIC_RAW, &ts );
-    double current = ts.tv_sec + double( ts.tv_nsec ) / 1000000000.0;
+    double current = ts.tv_sec + ( (double) ( ts.tv_nsec ) ) / 1000000000.0;
     return current - start;
 }
 
@@ -4218,15 +4250,16 @@ static void test_queue()
 
         void * packets[NUM_PACKETS];
 
-        for ( int i = 0; i < NUM_PACKETS; ++i )
+        int i;
+        for ( i = 0; i < NUM_PACKETS; ++i )
         {
-            packets[i] = malloc( i * 256 );
+            packets[i] = malloc( (i+1) * 256 );
             check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
         }
 
         check( queue.num_packets == NUM_PACKETS );
 
-        for ( int i = 0; i < NUM_PACKETS; ++i )
+        for ( i = 0; i < NUM_PACKETS; ++i )
         {
             void * packet = netcode_packet_queue_pop( &queue );
             check( packet == packets[i] );
@@ -4244,7 +4277,8 @@ static void test_queue()
 
     void * packets[NETCODE_PACKET_QUEUE_SIZE];
 
-    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
         packets[i] = malloc( i * 256 );
         check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
@@ -4258,7 +4292,7 @@ static void test_queue()
 
     // make sure all packets pop off in the correct order
 
-    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
         void * packet = netcode_packet_queue_pop( &queue );
         check( packet == packets[i] );
@@ -4267,7 +4301,7 @@ static void test_queue()
 
     // add some packets again
 
-    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
         packets[i] = malloc( i * 256 );
         check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
@@ -4279,7 +4313,7 @@ static void test_queue()
 
     check( queue.start_index == 0 );
     check( queue.num_packets == 0 );
-    for ( int i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
+    for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
         check( queue.packets[i] == NULL );
 }
 
@@ -5017,7 +5051,8 @@ void test_encryption_manager()
 
     struct encryption_mapping_t encryption_mapping[NUM_ENCRYPTION_MAPPINGS];
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    int i;
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         encryption_mapping[i].address.type = NETCODE_ADDRESS_IPV6;
         encryption_mapping[i].address.data.ipv6[7] = 1;
@@ -5028,7 +5063,7 @@ void test_encryption_manager()
 
     // add the encryption mappings to the manager and make sure they can be looked up by address
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5069,7 +5104,7 @@ void test_encryption_manager()
 
     // make sure the encryption mappings that were removed can no longer be looked up by address
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5099,7 +5134,7 @@ void test_encryption_manager()
 
     // all encryption mappings should be able to be looked up by address again
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5117,7 +5152,7 @@ void test_encryption_manager()
 
     time += NETCODE_TIMEOUT_SECONDS * 2;
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5130,7 +5165,7 @@ void test_encryption_manager()
 
     // add the same encryption mappings after timeout
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5157,7 +5192,7 @@ void test_encryption_manager()
 
     netcode_encryption_manager_reset( &encryption_manager );
 
-    for ( int i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
+    for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
         int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5173,7 +5208,8 @@ void test_replay_protection()
 {
     struct netcode_replay_protection_t replay_protection;
 
-    for ( int i = 0; i < 2; ++i )
+    int i;
+    for ( i = 0; i < 2; ++i )
     {
         netcode_replay_protection_reset( &replay_protection );
 
@@ -5189,7 +5225,8 @@ void test_replay_protection()
 
         #define MAX_SEQUENCE ( NETCODE_REPLAY_PROTECTION_BUFFER_SIZE * 4 )
 
-        for ( uint64_t sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
+        uint64_t sequence;
+        for ( sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
         {
             check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 0 );
         }
@@ -5200,7 +5237,7 @@ void test_replay_protection()
 
         // packets received a second time should be flagged already received
 
-        for ( uint64_t sequence = MAX_SEQUENCE - 10; sequence < MAX_SEQUENCE; ++sequence )
+        for ( sequence = MAX_SEQUENCE - 10; sequence < MAX_SEQUENCE; ++sequence )
         {
             check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 1 );
         }
@@ -5211,7 +5248,7 @@ void test_replay_protection()
 
         // old packets should be considered already received
 
-        for ( uint64_t sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
+        for ( sequence = 0; sequence < MAX_SEQUENCE; ++sequence )
         {
             check( netcode_replay_protection_packet_already_received( &replay_protection, sequence ) == 1 );
         }
@@ -5284,7 +5321,8 @@ void test_client_server_connect()
     int client_num_packets_received = 0;
 
     uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
-    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
     while ( 1 )
@@ -5407,7 +5445,8 @@ void test_client_server_keep_alive()
 
     int num_iterations = (int) ceil( 1.25f * NETCODE_TIMEOUT_SECONDS / delta_time );
 
-    for ( int i = 0; i < num_iterations; ++i )
+    int i;
+    for ( i = 0; i < num_iterations; ++i )
     {
         netcode_network_simulator_update( &network_simulator, time );
 
@@ -5455,7 +5494,8 @@ void test_client_server_multiple_clients()
 
     uint64_t token_sequence = 0;
 
-    for ( int i = 0; i < NUM_START_STOP_ITERATIONS; ++i )
+    int i;
+    for ( i = 0; i < NUM_START_STOP_ITERATIONS; ++i )
     {
         // start the server with max # of clients for this iteration
 
@@ -5467,7 +5507,8 @@ void test_client_server_multiple_clients()
 
         check( client );
 
-        for ( int j = 0; j < max_clients[i]; ++j )
+        int j;
+        for ( j = 0; j < max_clients[i]; ++j )
         {
             char client_address[NETCODE_MAX_ADDRESS_STRING_LENGTH];
             sprintf( client_address, "[::]:%d", 50000 + j );
@@ -5494,7 +5535,7 @@ void test_client_server_multiple_clients()
         {
             netcode_network_simulator_update( &network_simulator, time );
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 netcode_client_update( client[j], time );
             }
@@ -5503,7 +5544,7 @@ void test_client_server_multiple_clients()
 
             int num_connected_clients = 0;
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 if ( netcode_client_state( client[j] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
                     break;
@@ -5520,7 +5561,7 @@ void test_client_server_multiple_clients()
 
         check( netcode_server_num_clients_connected( server ) == max_clients[i] );
 
-        for ( int j = 0; j < max_clients[i]; ++j )
+        for ( j = 0; j < max_clients[i]; ++j )
         {
             check( netcode_client_state( client[j] ) == NETCODE_CLIENT_STATE_CONNECTED );
             check( netcode_server_client_connected( server, j ) == 1 );
@@ -5535,31 +5576,31 @@ void test_client_server_multiple_clients()
         memset( client_num_packets_received, 0, sizeof(int) * max_clients[i] );
 
         uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
-        for ( int j = 0; j < NETCODE_MAX_PACKET_SIZE; ++j )
+        for ( j = 0; j < NETCODE_MAX_PACKET_SIZE; ++j )
             packet_data[j] = (uint8_t) j;
 
         while ( 1 )
         {
             netcode_network_simulator_update( &network_simulator, time );
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 netcode_client_update( client[j], time );
             }
 
             netcode_server_update( server, time );
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 netcode_client_send_packet( client[j], packet_data, NETCODE_MAX_PACKET_SIZE );
             }
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 netcode_server_send_packet( server, j, packet_data, NETCODE_MAX_PACKET_SIZE );
             }
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 while ( 1 )             
                 {
@@ -5574,7 +5615,7 @@ void test_client_server_multiple_clients()
                 }
             }
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 while ( 1 )             
                 {
@@ -5591,7 +5632,7 @@ void test_client_server_multiple_clients()
 
             int num_clients_ready = 0;
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 if ( client_num_packets_received[j] >= 1 && server_num_packets_received[j] >= 1 )
                 {
@@ -5602,7 +5643,7 @@ void test_client_server_multiple_clients()
             if ( num_clients_ready == max_clients[i] )
                 break;
 
-            for ( int j = 0; j < max_clients[i]; ++j )
+            for ( j = 0; j < max_clients[i]; ++j )
             {
                 if ( netcode_client_state( client[j] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
                     break;
@@ -5613,7 +5654,7 @@ void test_client_server_multiple_clients()
 
         int num_clients_ready = 0;
 
-        for ( int j = 0; j < max_clients[i]; ++j )
+        for ( j = 0; j < max_clients[i]; ++j )
         {
             if ( client_num_packets_received[j] >= 1 && server_num_packets_received[j] >= 1 )
             {
@@ -5628,7 +5669,7 @@ void test_client_server_multiple_clients()
         
         netcode_network_simulator_discard_packets( &network_simulator );
 
-        for ( int j = 0; j < max_clients[i]; ++j )
+        for ( j = 0; j < max_clients[i]; ++j )
         {
             netcode_client_destroy( client[j] );
         }
@@ -5767,7 +5808,8 @@ void test_client_server_multiple_servers()
     int client_num_packets_received = 0;
 
     uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
-    for ( int i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
     while ( 1 )
@@ -6192,7 +6234,8 @@ void test_client_side_disconnect()
 
     netcode_client_disconnect( client );
 
-    for ( int i = 0; i < 10; ++i )
+    int i;
+    for ( i = 0; i < 10; ++i )
     {
         netcode_network_simulator_update( &network_simulator, time );
 
@@ -6272,7 +6315,8 @@ void test_server_side_disconnect()
 
     netcode_server_disconnect_client( server, 0 );
 
-    for ( int i = 0; i < 10; ++i )
+    int i;
+    for ( i = 0; i < 10; ++i )
     {
         netcode_network_simulator_update( &network_simulator, time );
 
@@ -6353,7 +6397,8 @@ void test_client_reconnect()
 
     netcode_server_disconnect_client( server, 0 );
 
-    for ( int i = 0; i < 10; ++i )
+    int i;
+    for ( i = 0; i < 10; ++i )
     {
         netcode_network_simulator_update( &network_simulator, time );
 
