@@ -2164,11 +2164,11 @@ int netcode_network_simulator_receive_packets( struct netcode_network_simulator_
 
     int num_packets = 0;
 
-    if ( network_simulator->num_pending_receive_packets < max_packets )
-        max_packets = network_simulator->num_pending_receive_packets;
-
-    for ( int i = 0; i < max_packets; ++i )
+    for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
+        if ( num_packets == max_packets )
+            break;
+
         if ( !network_simulator->pending_receive_packets[i].packet_data )
             continue;
 
@@ -2195,12 +2195,15 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
 
     network_simulator->time = time;
 
-    // free any pending receive packets that are still in the buffer
+    // discard any pending receive packets that are still in the buffer
 
     for ( int i = 0; i < network_simulator->num_pending_receive_packets; ++i )
     {
-        free( network_simulator->pending_receive_packets[i].packet_data );
-        network_simulator->pending_receive_packets[i].packet_data = NULL;
+        if ( network_simulator->pending_receive_packets[i].packet_data )
+        {
+            free( network_simulator->pending_receive_packets[i].packet_data );
+            network_simulator->pending_receive_packets[i].packet_data = NULL;
+        }
     }
 
     network_simulator->num_pending_receive_packets = 0;
@@ -2923,9 +2926,7 @@ struct netcode_encryption_manager_t
 
 void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * encryption_manager )
 {
-    printf( "reset encryption manager\n" );
-
-    //netcode_printd( NETCODE_LOG_LEVEL_DEBUG, "reset encryption manager\n" );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "reset encryption manager\n" );
 
     assert( encryption_manager );
 
@@ -2987,23 +2988,16 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
             memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
             memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
 
-            // todo: there is a bug in this code!
             if ( i + 1 == encryption_manager->num_encryption_mappings )
             {
-                printf( "num encryption mappings pre = %d\n", encryption_manager->num_encryption_mappings );
                 int index = i - 1;
                 while ( index >= 0 )
                 {
                     if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time )
                         break;
-                    else
-                    {
-                        printf( "%f < %f\n", encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS, time );
-                    }
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
-                printf( "num encryption mappings post = %d\n", encryption_manager->num_encryption_mappings );
             }
 
             return 1;
@@ -3238,8 +3232,6 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
-    // todo
-    printf( "reset encryption manager\n" );
     netcode_encryption_manager_reset( &server->encryption_manager );
 
     for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
@@ -3432,11 +3424,7 @@ void netcode_server_stop( struct netcode_server_t * server )
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server stopped\n" );
 
-    printf( "before disconnect all clients\n" );
-
     netcode_server_disconnect_all_clients( server );
-
-    printf( "after disconnect all clients\n" );
 
     for ( int i = 0; i < server->max_clients; ++i )
     {
@@ -5445,9 +5433,9 @@ void test_client_server_keep_alive()
 
 void test_client_server_multiple_clients()
 {
-    #define NUM_START_STOP_ITERATIONS 1//4
+    #define NUM_START_STOP_ITERATIONS 4
 
-    int max_clients[NUM_START_STOP_ITERATIONS] = { 256 };//2, 32, 5, 256 };
+    int max_clients[NUM_START_STOP_ITERATIONS] = { 2, 32, 5, 256 };
 
     struct netcode_network_simulator_t network_simulator;
 
@@ -5469,8 +5457,6 @@ void test_client_server_multiple_clients()
 
     for ( int i = 0; i < NUM_START_STOP_ITERATIONS; ++i )
     {
-        printf( "iteration %d\n", i );
-
         // start the server with max # of clients for this iteration
 
         netcode_server_start( server, max_clients[i] );
@@ -5529,12 +5515,10 @@ void test_client_server_multiple_clients()
             if ( num_connected_clients == max_clients[i] )
                 break;
 
-            printf( "%d/%d clients connected\n", netcode_server_num_clients_connected( server ), max_clients[i] );
+//            printf( "%d/%d clients connected\n", netcode_server_num_clients_connected( server ), max_clients[i] );
 
             time += delta_time;
         }
-
-        printf( "all clients connected\n" );
 
         check( netcode_server_num_clients_connected( server ) == max_clients[i] );
 
@@ -6305,7 +6289,6 @@ void netcode_test()
 {
 //    while ( 1 )
     {
-        /*
         RUN_TEST( test_queue );
         RUN_TEST( test_endian );
         RUN_TEST( test_address );
@@ -6323,10 +6306,7 @@ void netcode_test()
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_client_server_connect );
         RUN_TEST( test_client_server_keep_alive );
-        */
-        netcode_log_level( NETCODE_LOG_LEVEL_ERROR );
         RUN_TEST( test_client_server_multiple_clients );
-        /*
         RUN_TEST( test_client_error_connect_token_expired );
         RUN_TEST( test_client_error_invalid_server_info );
         RUN_TEST( test_client_error_connection_timed_out );
@@ -6336,7 +6316,6 @@ void netcode_test()
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_client_reconnect );
-        */
     }
 }
 
