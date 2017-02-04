@@ -5515,8 +5515,6 @@ void test_client_server_multiple_clients()
             if ( num_connected_clients == max_clients[i] )
                 break;
 
-//            printf( "%d/%d clients connected\n", netcode_server_num_clients_connected( server ), max_clients[i] );
-
             time += delta_time;
         }
 
@@ -5595,7 +5593,7 @@ void test_client_server_multiple_clients()
 
             for ( int j = 0; j < max_clients[i]; ++j )
             {
-                if ( client_num_packets_received[j] >= 10 && server_num_packets_received[j] >= 10 )
+                if ( client_num_packets_received[j] >= 1 && server_num_packets_received[j] >= 1 )
                 {
                     num_clients_ready++;
                 }
@@ -5613,13 +5611,21 @@ void test_client_server_multiple_clients()
             time += delta_time;
         }
 
+        int num_clients_ready = 0;
+
+        for ( int j = 0; j < max_clients[i]; ++j )
+        {
+            if ( client_num_packets_received[j] >= 1 && server_num_packets_received[j] >= 1 )
+            {
+                num_clients_ready++;
+            }
+        }
+
+        check( num_clients_ready == max_clients[i] );
+
         free( server_num_packets_received );
         free( client_num_packets_received );
         
-        /*
-        check( client_num_packets_received >= 10 && server_num_packets_received >= 10 );
-        */
-
         netcode_network_simulator_discard_packets( &network_simulator );
 
         for ( int j = 0; j < max_clients[i]; ++j )

@@ -1,35 +1,6 @@
 DONE
 
-    Here is a clue:
-
-        server timed out client 86
-        server disconnected client 86
-        server timed out client 186
-        server disconnected client 186
-        client connection timed out
-        client disconnected
-        client connection timed out
-        client disconnected
-
-    Timeouts are occuring on both client and server.
-
-    So it's not a logic error on client or server that is causing this.
-
-    It looks like some packets for some clients are just not getting through.
-
-    How could this be?
-
-    The question then is:
-
-    a) why are packets between client and server being lost?
-
-    b) why does this only occur with high # of clients?
-
-    It seems like the simulator might be hitting some limit for the # of packets that can be delivered each frame.
-
-    Add code to print discarded packets at the start of each simulator update. It's possible that the simulator is discarding some packets.
-    
-    Yes, it was a logic error in the simulator receive packets when it hit the maximum. Fixed.
+    Add code to make sure packets were exchanged.
 
 TODO
 
