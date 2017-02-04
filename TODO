@@ -38,19 +38,29 @@ DONE
 
 TODO
 
-    Need to debug why docker server is not receiving packets from outside docker.
-    
     -----------------
 
-    Port to windows
+    Port to windows (do this at work)
+
+    Port stress to windows.
+
+    Make sure unit test, stress test passes on windows.
+
+    Run static analysis tools available in windows, if applicable.
 
     -----------------
 
     Write white paper for patent.
 
+    Deadline: Monday February 6th.
+
     -----------------
 
     *** BREAK ***
+
+    -----------------
+
+    Need to debug why docker server is not receiving packets from outside docker.
 
     -----------------
 
