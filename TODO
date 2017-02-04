@@ -26,6 +26,12 @@ TODO
 
     Need to add logging to work out what is going wrong.
 
+    It really looks like the docker server is just not receiving packets at all.
+
+    Tested with the yojimbo server, and the yojimbo server *is* receiving packets inside docker.
+
+    So what is going wrong here? What is different?
+
     -----------------
 
     Port to windows

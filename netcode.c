@@ -2402,7 +2402,7 @@ void netcode_client_destroy( struct netcode_client_t * client )
 
 void netcode_client_set_state( struct netcode_client_t * client, int client_state )
 {
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client state change: %s -> %s\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client changed state from '%s' to '%s'\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
 
     client->state = client_state;
 }

@@ -53,7 +53,8 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
+// todo
+    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );//INFO );
 
     double time = 0.0;
 	double delta_time = 1.0 / 60.0;
@@ -62,7 +63,7 @@ int main( int argc, char ** argv )
 
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    struct netcode_server_t * server = netcode_server_create( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time );
+    struct netcode_server_t * server = netcode_server_create( "0.0.0.0:40000", "127.0.0.0:40000", TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {
