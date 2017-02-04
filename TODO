@@ -50,13 +50,29 @@ DONE
 
     Nope.
 
-TODO
-
     The key problem seems to be that the server is not receiving packets from the client on the second iteration. Why is this?!
 
     Is it a problem at the socket layer?
 
     Is it a logic error in my code? I think any packets being ignored would be logged with a reason. So I'm not sure what would be going on here.
+
+    It's a buffer overflow.
+
+    72 packets to be read, but buffer size only stores 64 packet pointers.
+
+    The code inside read packets in the simulator is not properly respecting the max # of packets to read in one call. This is the bug.
+
+    That bug, and the buffers were too small for the server receive packets. Wrong constant used for array size, vs. passed in to receive packets function.
+
+    Now to extend the test so that it does four iterations with max clients grow and shrink, and verifies that the clients actually exchanged packets afterwards.
+
+TODO
+
+    The test fails on the 256 client case at the end.
+
+    It looks like clients get timed out, early, even while trying to connect, some early connected clients time out.
+
+    Is there something wrong with packet delivery with so many clients?
 
     -----------------
 
