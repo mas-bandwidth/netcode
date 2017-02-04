@@ -5389,7 +5389,7 @@ void test_client_server_connect()
 
     netcode_client_destroy( client );
 
-    netcode_network_simulator_create( network_simulator );
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_server_keep_alive()

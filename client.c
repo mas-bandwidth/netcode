@@ -53,15 +53,14 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-// todo
-    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );//INFO );
+    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
     double time = 0.0;
 	double delta_time = 1.0 / 60.0;
 
 	printf( "[client]\n" );
 
-    struct netcode_client_t * client = netcode_client_create( "0.0.0.0", time );
+    struct netcode_client_t * client = netcode_client_create( "::", time );
 
     if ( !client )
     {
@@ -72,7 +71,7 @@ int main( int argc, char ** argv )
     #define TEST_CONNECT_TOKEN_EXPIRY 30
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = "127.0.0.1:40000";
+    char * server_address = "[::1]:40000";
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
