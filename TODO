@@ -1,78 +1,30 @@
 DONE
 
-    keep alive
-
-    removed ifdefs around simulator and other stuff, no point doing this. it's a reference implementation.
-
-    multiple clients. stop/start with different max clients in a loop
-
-    Seems to be some bug with multiple clients test.
-
-    Is the bug in the test, or in the code? 
-
-    Bug was in the test. One down, but seems like these is another. Second iteration fails now...
-
-    Something not getting cleared properly on server start/stop? Looks like it.
-
-    On the second iteration, 0/32 clients can exchange packets, but on the first iteration if set to 32 max clients, all 32 work.
-
-    So something is wrong on stop/start I think.
-
-    Trying a test with second iteration being 1.
-
-    Making first iteration 32, and it crashes after 32 clients connect. Something is wrong with the test (or the code...)
-
-    Debug this first...
-
-    Seems to be crashing on the second iteration, before any packets have been received.
-
-    Is it crashing on connect, or after client connect?    
-
-    Added logs.
-
-    It is crashing on second iteration while the clients try to connect.
-
-    I think this indicates a problem with something not being cleared properly on server in stop/start.
-
-    Fixed some errors in the simulator, but still something is going wrong.
-
-    I suspect an error in the server now. Something that breaks post-stop/start.
-
-    It doesn't *crash* without simulator disabled, but also the clients don't connect on the second iteration.
-
-    Working out why the clients don't connect is probably a good starting point.
-
-    Pretty much confirmed. If I don't stop the server, the test passes.
-
-    So something is wrong in server stop! What is it?!
-
-    I'm pretty sure the bug was not clearing the global sequence or challenge sequence in stop. But I'm not sure how this would have that effect?
-
-    Nope.
-
-    The key problem seems to be that the server is not receiving packets from the client on the second iteration. Why is this?!
-
-    Is it a problem at the socket layer?
-
-    Is it a logic error in my code? I think any packets being ignored would be logged with a reason. So I'm not sure what would be going on here.
-
-    It's a buffer overflow.
-
-    72 packets to be read, but buffer size only stores 64 packet pointers.
-
-    The code inside read packets in the simulator is not properly respecting the max # of packets to read in one call. This is the bug.
-
-    That bug, and the buffers were too small for the server receive packets. Wrong constant used for array size, vs. passed in to receive packets function.
-
-    Now to extend the test so that it does four iterations with max clients grow and shrink, and verifies that the clients actually exchanged packets afterwards.
-
-TODO
-
     The test fails on the 256 client case at the end.
 
     It looks like clients get timed out, early, even while trying to connect, some early connected clients time out.
 
     Is there something wrong with packet delivery with so many clients?
+
+    I think I've found it. There is a problem with encryption mapping last access time not getting updated.
+
+    It needs to get updated each time I use the pre-cached encryption index.
+
+    This means there needs to be a "touch" function in the encryption manager that takes an address and an encryption index.
+
+    Yes!
+
+    Fixed an error where the encryption mapping last time updated was not getitng updated. Does the same error exist in libyojimbo?
+
+    It might, with the caching of the encryption index in the the error with 200 clients not all completing connection is still happening.
+
+    Clearly this is a different error.
+
+TODO
+
+    So back to square one. Why is it that 200 clients aren't able to connect? Why are they timing out?
+
+    It has to be something really stupid...
 
     -----------------
 

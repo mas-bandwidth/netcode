@@ -2923,6 +2923,10 @@ struct netcode_encryption_manager_t
 
 void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * encryption_manager )
 {
+    printf( "reset encryption manager\n" );
+
+    //netcode_printd( NETCODE_LOG_LEVEL_DEBUG, "reset encryption manager\n" );
+
     assert( encryption_manager );
 
     encryption_manager->num_encryption_mappings = 0;
@@ -2983,16 +2987,23 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
             memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
             memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
 
+            // todo: there is a bug in this code!
             if ( i + 1 == encryption_manager->num_encryption_mappings )
             {
+                printf( "num encryption mappings pre = %d\n", encryption_manager->num_encryption_mappings );
                 int index = i - 1;
                 while ( index >= 0 )
                 {
                     if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time )
                         break;
+                    else
+                    {
+                        printf( "%f < %f\n", encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS, time );
+                    }
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
+                printf( "num encryption mappings post = %d\n", encryption_manager->num_encryption_mappings );
             }
 
             return 1;
@@ -3013,6 +3024,16 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
         }
     }
     return -1;
+}
+
+int netcode_encryption_manager_touch( struct netcode_encryption_manager_t * encryption_manager, int index, struct netcode_address_t * address, double time )
+{
+    assert( index >= 0 );
+    assert( index < encryption_manager->num_encryption_mappings );
+    if ( !netcode_address_equal( &encryption_manager->address[index], address ) )
+        return 0;
+    encryption_manager->last_access_time[index] = time;
+    return 1;
 }
 
 uint8_t * netcode_encryption_manager_get_send_key( struct netcode_encryption_manager_t * encryption_manager, int index )
@@ -3217,6 +3238,8 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
+    // todo
+    printf( "reset encryption manager\n" );
     netcode_encryption_manager_reset( &server->encryption_manager );
 
     for ( int i = 0; i < NETCODE_MAX_CLIENTS; ++i )
@@ -3300,6 +3323,12 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
     assert( server->client_connected[client_index] );
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+
+    if ( !netcode_encryption_manager_touch( &server->encryption_manager, server->client_encryption_index[client_index], &server->client_address[client_index], server->time ) )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: encryption mapping is out of date for client %d\n", client_index );
+        return;
+    }
 
     uint8_t * packet_key = netcode_encryption_manager_get_send_key( &server->encryption_manager, server->client_encryption_index[client_index] );
 
@@ -3403,7 +3432,11 @@ void netcode_server_stop( struct netcode_server_t * server )
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server stopped\n" );
 
+    printf( "before disconnect all clients\n" );
+
     netcode_server_disconnect_all_clients( server );
+
+    printf( "after disconnect all clients\n" );
 
     for ( int i = 0; i < server->max_clients; ++i )
     {
@@ -5412,9 +5445,9 @@ void test_client_server_keep_alive()
 
 void test_client_server_multiple_clients()
 {
-    #define NUM_START_STOP_ITERATIONS 4
+    #define NUM_START_STOP_ITERATIONS 1//4
 
-    int max_clients[NUM_START_STOP_ITERATIONS] = { 2, 32, 5, 256 };
+    int max_clients[NUM_START_STOP_ITERATIONS] = { 256 };//2, 32, 5, 256 };
 
     struct netcode_network_simulator_t network_simulator;
 
@@ -6291,6 +6324,7 @@ void netcode_test()
         RUN_TEST( test_client_server_connect );
         RUN_TEST( test_client_server_keep_alive );
         */
+        netcode_log_level( NETCODE_LOG_LEVEL_ERROR );
         RUN_TEST( test_client_server_multiple_clients );
         /*
         RUN_TEST( test_client_error_connect_token_expired );
