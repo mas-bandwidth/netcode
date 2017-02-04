@@ -36,21 +36,17 @@ DONE
 
     What's going on? How can I debug this!?
 
+    Port to windows
+
+    Convert statics to per-client and per-server vars.
+
+    Statics are bad. Make it impossible to wrap the library with mutex to guarantee thread safety.
+
 TODO
 
     -----------------
 
-    Port to windows (do this at work)
-
-    Port stress to windows.
-
-    Make sure unit test, stress test passes on windows.
-
-    Run static analysis tools available in windows, if applicable.
-
-    -----------------
-
-    Write white paper for patent.
+    Write white paper
 
     Deadline: Monday February 6th.
 
@@ -79,6 +75,10 @@ TODO
     -----------------
 
     Update standalone client to get server info from golang server.
+
+    -----------------
+
+    Work out why docker server is not receiving packets from outside of docker.
 
     -----------------
 
