@@ -1,47 +1,5 @@
 DONE
 
-    Add code to make sure packets were exchanged.
-
-    Add test for client connect to multiple servers, first few servers will fail, make sure client is able to connect to last one.
-
-    Run valgrind.
-
-    Run cppcheck.
-
-    Port to linux
-
-    To do this, setup a docker instance that can build the source code.
-
-    Copy this from the "docker" server instance code in cppcheck.
-
-    Done. Now iterating to get the linux C source code building cleanly.
-
-    Vast majority of it is complaints about for loops, eg. for ( int i = 0; ... )
-
-    Finished porting to linux
-
-    Client outside of docker is not able to connect to a docker server. Why?
-
-    Need to add logging to work out what is going wrong.
-
-    It really looks like the docker server is just not receiving packets at all.
-
-    Tested with the yojimbo server, and the yojimbo server *is* receiving packets inside docker.
-
-    So what is going wrong here? What is different?
-
-    Tried switching to IPv4 because yojimbo server was using ipv4. 
-
-    Didn't make a difference. Server still doesn't receive packets from the client.
-
-    What's going on? How can I debug this!?
-
-    Port to windows
-
-    Convert statics to per-client and per-server vars.
-
-    Statics are bad. Make it impossible to wrap the library with mutex to guarantee thread safety.
-
 TODO
 
     -----------------
@@ -82,42 +40,9 @@ TODO
 
     -----------------
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    -----------------
-
     Finish porting rest of gafferongames.com to the new hugo website.
+
+    ^--- probably not going to happen?
 
     -----------------
 

@@ -6475,6 +6475,8 @@ void test_client_reconnect()
 
 void netcode_test()
 {
+    printf( "\n" );
+
 //    while ( 1 )
     {
         RUN_TEST( test_queue );
@@ -6506,6 +6508,8 @@ void netcode_test()
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_client_reconnect );
     }
+
+    printf( "\n*** ALL TESTS PASSED ***\n\n" );
 }
 
 #endif // #if NETCODE_ENABLE_TESTS
