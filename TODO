@@ -4,10 +4,6 @@ TODO
 
     -----------------
 
-    *** BREAK ***
-
-    -----------------
-
     Need to debug why docker server is not receiving packets from outside docker.
 
     -----------------
