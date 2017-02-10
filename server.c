@@ -44,10 +44,10 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
 
 int main( int argc, char ** argv )
 {
-	(void) argc;
-	(void) argv;
+    (void) argc;
+    (void) argv;
 
-	if ( !netcode_init() )
+    if ( !netcode_init() )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;
@@ -56,9 +56,9 @@ int main( int argc, char ** argv )
     netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
     double time = 0.0;
-	double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 60.0;
 
-	printf( "[server]\n" );
+    printf( "[server]\n" );
 
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
@@ -79,8 +79,8 @@ int main( int argc, char ** argv )
     for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
-	while ( !quit )
-	{
+    while ( !quit )
+    {
         netcode_server_update( server, time );
 
         if ( netcode_server_client_connected( server, 0 ) )
@@ -105,8 +105,8 @@ int main( int argc, char ** argv )
 
         netcode_sleep( delta_time );
 
-		time += delta_time;
-	}
+        time += delta_time;
+    }
 
     if ( quit )
     {
@@ -116,6 +116,6 @@ int main( int argc, char ** argv )
     netcode_server_destroy( server );
 
     netcode_term();
-	
+    
     return 0;
 }
