@@ -77,15 +77,15 @@ int main( int argc, char ** argv )
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
     printf( "client id is %.16" PRIx64 "\n", client_id );
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
-    if ( !netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) )
+    if ( !netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) )
     {
-        printf( "error: failed to generate server info\n" );
+        printf( "error: failed to generate connect token\n" );
         return 1;
     }
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     signal( SIGINT, interrupt_handler );
 

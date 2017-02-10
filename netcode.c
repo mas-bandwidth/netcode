@@ -65,7 +65,7 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_CONNECT_TOKEN_BYTES 1024
+#define NETCODE_CONNECT_TOKEN_PRIVATE_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 360
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 256
@@ -930,7 +930,7 @@ int netcode_decrypt_aead( uint8_t * message, uint64_t message_length,
 
 // ----------------------------------------------------------------
 
-struct netcode_connect_token_t
+struct netcode_connect_token_private_t
 {
     uint64_t client_id;
     int num_server_addresses;
@@ -940,7 +940,7 @@ struct netcode_connect_token_t
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
-void netcode_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint8_t * user_data )
+void netcode_generate_connect_token_private( struct netcode_connect_token_private_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint8_t * user_data )
 {
     assert( connect_token );
     assert( num_server_addresses > 0 );
@@ -964,7 +964,7 @@ void netcode_generate_connect_token( struct netcode_connect_token_t * connect_to
     memcpy( connect_token->user_data, user_data, NETCODE_USER_DATA_BYTES );
 }
 
-void netcode_write_connect_token( struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
+void netcode_write_connect_token_private( struct netcode_connect_token_private_t * connect_token, uint8_t * buffer, int buffer_length )
 {
     (void) buffer_length;
 
@@ -972,9 +972,9 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
     assert( connect_token->num_server_addresses > 0 );
     assert( connect_token->num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
 	assert( buffer );
-    assert( buffer_length >= NETCODE_CONNECT_TOKEN_BYTES );
+    assert( buffer_length >= NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-    memset( buffer, 0, NETCODE_CONNECT_TOKEN_BYTES );
+    memset( buffer, 0, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     uint8_t * start = buffer;
 
@@ -1018,13 +1018,13 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
 
     netcode_write_bytes( &buffer, connect_token->user_data, NETCODE_USER_DATA_BYTES );
 
-    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES );
+    assert( buffer - start <= NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
+int netcode_encrypt_connect_token_private( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
 {
     assert( buffer );
-    assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
+    assert( buffer_length == NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
     assert( key );
 
 	(void) buffer_length;
@@ -1043,16 +1043,16 @@ int netcode_encrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
         netcode_write_uint64( &p, sequence );
     }
 
-    if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
+    if ( !netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
         return 0;
 
     return 1;
 }
 
-int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
+int netcode_decrypt_connect_token_private( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
 {
 	assert( buffer );
-    assert( buffer_length == NETCODE_CONNECT_TOKEN_BYTES );
+    assert( buffer_length == NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 	assert( key );
 
 	(void) buffer_length;
@@ -1071,18 +1071,18 @@ int netcode_decrypt_connect_token( uint8_t * buffer, int buffer_length, uint8_t 
         netcode_write_uint64( &p, sequence );
     }
 
-    if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
+    if ( !netcode_decrypt_aead( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, additional_data, sizeof( additional_data ), nonce, key ) )
         return 0;
 
 	return 1;
 }
 
-int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
+int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, struct netcode_connect_token_private_t * connect_token )
 {
     assert( buffer );
     assert( connect_token );
 
-    if ( buffer_length < NETCODE_CONNECT_TOKEN_BYTES )
+    if ( buffer_length < NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         return 0;
     
     connect_token->client_id = netcode_read_uint64( &buffer );
@@ -1253,7 +1253,7 @@ struct netcode_connection_request_packet_t
     uint64_t protocol_id;
     uint64_t connect_token_expire_timestamp;
     uint64_t connect_token_sequence;
-    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 };
 
 #define NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL 0
@@ -1346,7 +1346,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
     {
         // connection request packet: first byte is zero
 
-        assert( buffer_length >= 1 + 13 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer_length >= 1 + 13 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
         struct netcode_connection_request_packet_t * p = (struct netcode_connection_request_packet_t*) packet;
 
@@ -1357,9 +1357,9 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
         netcode_write_uint64( &buffer, p->protocol_id );
         netcode_write_uint64( &buffer, p->connect_token_expire_timestamp );
         netcode_write_uint64( &buffer, p->connect_token_sequence );
-        netcode_write_bytes( &buffer, p->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+        netcode_write_bytes( &buffer, p->connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-        assert( buffer - start == 1 + 13 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer - start == 1 + 13 + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
         return (int) ( buffer - start );
     }
@@ -1546,7 +1546,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             return NULL;
         }
 
-        if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES )
+        if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length\n" );
             return NULL;
@@ -1596,7 +1596,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 		assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 );
 
-		if ( !netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
+		if ( !netcode_decrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token failed to decrypt\n" );
 			return NULL;
@@ -1615,9 +1615,9 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         packet->protocol_id = packet_protocol_id;
         packet->connect_token_expire_timestamp = packet_connect_token_expire_timestamp;
 		packet->connect_token_sequence = packet_connect_token_sequence;
-        netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+        netcode_read_bytes( &buffer, packet->connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-        assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_BYTES );
+        assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
         return packet;
     }
@@ -1869,14 +1869,14 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
 // ----------------------------------------------------------------
 
-struct netcode_server_info_t
+struct netcode_connect_token_t
 {
     uint8_t version_info[NETCODE_VERSION_INFO_BYTES];
     uint64_t protocol_id;
-    uint64_t connect_token_create_timestamp;
-    uint64_t connect_token_expire_timestamp;
-    uint64_t connect_token_sequence;
-    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint64_t create_timestamp;
+    uint64_t expire_timestamp;
+    uint64_t private_sequence;
+    uint8_t private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
     int num_server_addresses;
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
@@ -1884,52 +1884,52 @@ struct netcode_server_info_t
     int timeout_seconds;
 };
 
-void netcode_write_server_info( struct netcode_server_info_t * server_info, uint8_t * buffer, int buffer_length )
+void netcode_write_connect_token( struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
 {
-    assert( server_info );
+    assert( connect_token );
     assert( buffer );
-    assert( buffer_length >= NETCODE_SERVER_INFO_BYTES );
+    assert( buffer_length >= NETCODE_CONNECT_TOKEN_BYTES );
 
     uint8_t * start = buffer;
 
 	(void) start;
 	(void) buffer_length;
 
-    netcode_write_bytes( &buffer, server_info->version_info, NETCODE_VERSION_INFO_BYTES );
+    netcode_write_bytes( &buffer, connect_token->version_info, NETCODE_VERSION_INFO_BYTES );
 
-    netcode_write_uint64( &buffer, server_info->protocol_id );
+    netcode_write_uint64( &buffer, connect_token->protocol_id );
 
-    netcode_write_uint64( &buffer, server_info->connect_token_create_timestamp );
+    netcode_write_uint64( &buffer, connect_token->create_timestamp );
 
-    netcode_write_uint64( &buffer, server_info->connect_token_expire_timestamp );
+    netcode_write_uint64( &buffer, connect_token->expire_timestamp );
 
-    netcode_write_uint64( &buffer, server_info->connect_token_sequence );
+    netcode_write_uint64( &buffer, connect_token->private_sequence );
 
-    netcode_write_bytes( &buffer, server_info->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     int i,j;
 
-    netcode_write_uint32( &buffer, server_info->num_server_addresses );
+    netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
-    for ( i = 0; i < server_info->num_server_addresses; ++i )
+    for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
-        if ( server_info->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
+        if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
             for ( j = 0; j < 4; ++j )
             {
-                netcode_write_uint8( &buffer, server_info->server_addresses[i].data.ipv4[j] );
+                netcode_write_uint8( &buffer, connect_token->server_addresses[i].data.ipv4[j] );
             }
-            netcode_write_uint16( &buffer, server_info->server_addresses[i].port );
+            netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
-        else if ( server_info->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV6 );
             for ( j = 0; j < 8; ++j )
             {
-                netcode_write_uint16( &buffer, server_info->server_addresses[i].data.ipv6[j] );
+                netcode_write_uint16( &buffer, connect_token->server_addresses[i].data.ipv6[j] );
             }
-            netcode_write_uint16( &buffer, server_info->server_addresses[i].port );
+            netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
         else
         {
@@ -1937,99 +1937,99 @@ void netcode_write_server_info( struct netcode_server_info_t * server_info, uint
         }
     }
 
-    netcode_write_bytes( &buffer, server_info->client_to_server_key, NETCODE_KEY_BYTES );
+    netcode_write_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
-    netcode_write_bytes( &buffer, server_info->server_to_client_key, NETCODE_KEY_BYTES );
+    netcode_write_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
 
-    assert( buffer - start <= NETCODE_SERVER_INFO_BYTES );
+    assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );
 
-    memset( buffer, 0, NETCODE_SERVER_INFO_BYTES - ( buffer - start ) );
+    memset( buffer, 0, NETCODE_CONNECT_TOKEN_BYTES - ( buffer - start ) );
 
-    netcode_write_uint32( &buffer, server_info->timeout_seconds );
+    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
 }
 
-int netcode_read_server_info( uint8_t * buffer, int buffer_length, struct netcode_server_info_t * server_info )
+int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netcode_connect_token_t * connect_token )
 {
     assert( buffer );
-    assert( server_info );
+    assert( connect_token );
 
-    if ( buffer_length != NETCODE_SERVER_INFO_BYTES )
+    if ( buffer_length != NETCODE_CONNECT_TOKEN_BYTES )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad buffer length (%d)\n", buffer_length );
         return 0;
     }
 
-    netcode_read_bytes( &buffer, server_info->version_info, NETCODE_VERSION_INFO_BYTES );
-    if ( server_info->version_info[0]  != 'N' || 
-         server_info->version_info[1]  != 'E' || 
-         server_info->version_info[2]  != 'T' || 
-         server_info->version_info[3]  != 'C' || 
-         server_info->version_info[4]  != 'O' ||
-         server_info->version_info[5]  != 'D' ||
-         server_info->version_info[6]  != 'E' ||
-         server_info->version_info[7]  != ' ' || 
-         server_info->version_info[8]  != '1' ||
-         server_info->version_info[9]  != '.' ||
-         server_info->version_info[10] != '0' ||
-         server_info->version_info[11] != '0' ||
-         server_info->version_info[12] != '\0' )
+    netcode_read_bytes( &buffer, connect_token->version_info, NETCODE_VERSION_INFO_BYTES );
+    if ( connect_token->version_info[0]  != 'N' || 
+         connect_token->version_info[1]  != 'E' || 
+         connect_token->version_info[2]  != 'T' || 
+         connect_token->version_info[3]  != 'C' || 
+         connect_token->version_info[4]  != 'O' ||
+         connect_token->version_info[5]  != 'D' ||
+         connect_token->version_info[6]  != 'E' ||
+         connect_token->version_info[7]  != ' ' || 
+         connect_token->version_info[8]  != '1' ||
+         connect_token->version_info[9]  != '.' ||
+         connect_token->version_info[10] != '0' ||
+         connect_token->version_info[11] != '0' ||
+         connect_token->version_info[12] != '\0' )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info\n" );
         return 0;
     }
 
-    server_info->protocol_id = netcode_read_uint64( &buffer );
+    connect_token->protocol_id = netcode_read_uint64( &buffer );
 
-    server_info->connect_token_create_timestamp = netcode_read_uint64( &buffer );
+    connect_token->create_timestamp = netcode_read_uint64( &buffer );
 
-    server_info->connect_token_expire_timestamp = netcode_read_uint64( &buffer );
+    connect_token->expire_timestamp = netcode_read_uint64( &buffer );
 
-    server_info->connect_token_sequence = netcode_read_uint64( &buffer );
+    connect_token->private_sequence = netcode_read_uint64( &buffer );
 
-    netcode_read_bytes( &buffer, server_info->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_read_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-    server_info->num_server_addresses = netcode_read_uint32( &buffer );
+    connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
-    if ( server_info->num_server_addresses <= 0 || server_info->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
+    if ( connect_token->num_server_addresses <= 0 || connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad num server addresses (%d)\n", server_info->num_server_addresses );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad num server addresses (%d)\n", connect_token->num_server_addresses );
         return 0;
     }
 
     int i,j;
 
-    for ( i = 0; i < server_info->num_server_addresses; ++i )
+    for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
-        server_info->server_addresses[i].type = netcode_read_uint8( &buffer );
+        connect_token->server_addresses[i].type = netcode_read_uint8( &buffer );
 
-        if ( server_info->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
+        if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             for ( j = 0; j < 4; ++j )
             {
-                server_info->server_addresses[i].data.ipv4[j] = netcode_read_uint8( &buffer );
+                connect_token->server_addresses[i].data.ipv4[j] = netcode_read_uint8( &buffer );
             }
-            server_info->server_addresses[i].port = netcode_read_uint16( &buffer );
+            connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
-        else if ( server_info->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV6 )
         {
             for ( j = 0; j < 8; ++j )
             {
-                server_info->server_addresses[i].data.ipv6[j] = netcode_read_uint16( &buffer );
+                connect_token->server_addresses[i].data.ipv6[j] = netcode_read_uint16( &buffer );
             }
-            server_info->server_addresses[i].port = netcode_read_uint16( &buffer );
+            connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
         else
         {
-            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad address type (%d)\n", server_info->server_addresses[i].type );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad address type (%d)\n", connect_token->server_addresses[i].type );
             return 0;
         }
     }
 
-    netcode_read_bytes( &buffer, server_info->client_to_server_key, NETCODE_KEY_BYTES );
+    netcode_read_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
-    netcode_read_bytes( &buffer, server_info->server_to_client_key, NETCODE_KEY_BYTES );
+    netcode_read_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
 
-    server_info->timeout_seconds = (int) netcode_read_uint32( &buffer );
+    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
     
     return 1;
 }
@@ -2286,7 +2286,7 @@ char * netcode_client_state_name( int client_state )
     switch ( client_state )
     {
         case NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED:                return "connect token expired";
-        case NETCODE_CLIENT_STATE_INVALID_SERVER_INFO:                  return "invalid connect data";
+        case NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN:                return "invalid connect token";
         case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:                 return "connection timed out";
         case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:           return "connection request timeout";
         case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:          return "connection response timeout";
@@ -2315,7 +2315,7 @@ struct netcode_client_t
     int server_address_index;
     struct netcode_address_t address;
     struct netcode_address_t server_address;
-    struct netcode_server_info_t server_info;
+    struct netcode_connect_token_t connect_token;
     struct netcode_network_simulator_t * network_simulator;
     struct netcode_socket_t socket;
     struct netcode_context_t context;
@@ -2390,7 +2390,7 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
     client->server_address_index = 0;
     client->challenge_token_sequence = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
-    memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
+    memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     memset( &client->context, 0, sizeof( struct netcode_context_t ) );
     memset( client->challenge_token_data, 0, NETCODE_CHALLENGE_TOKEN_BYTES );
 
@@ -2448,7 +2448,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     client->connect_start_time = 0.0;
     client->server_address_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
-    memset( &client->server_info, 0, sizeof( struct netcode_server_info_t ) );
+    memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     memset( &client->context, 0, sizeof( struct netcode_context_t ) );
 
     netcode_client_set_state( client, client_state );
@@ -2468,28 +2468,28 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
 
-void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_info )
+void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token )
 {
     assert( client );
-    assert( server_info );
+    assert( connect_token );
 
 	netcode_client_disconnect( client );
 
-    if ( !netcode_read_server_info( server_info, NETCODE_SERVER_INFO_BYTES, &client->server_info ) )
+    if ( !netcode_read_connect_token( connect_token, NETCODE_CONNECT_TOKEN_BYTES, &client->connect_token ) )
     {
-        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_SERVER_INFO );
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
         return;
     }
 
     client->server_address_index = 0;
-    client->server_address = client->server_info.server_addresses[0];
+    client->server_address = client->connect_token.server_addresses[0];
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s\n", netcode_address_to_string( &client->server_address, server_address_string ) );
 
-    memcpy( client->context.read_packet_key, client->server_info.server_to_client_key, NETCODE_KEY_BYTES );
-    memcpy( client->context.write_packet_key, client->server_info.client_to_server_key, NETCODE_KEY_BYTES );
+    memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
+    memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
 
 	netcode_client_reset_before_next_connect( client );
 
@@ -2623,7 +2623,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
             uint64_t sequence;
 
-            void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+            void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->connect_token.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
 
             if ( !packet )
                 continue;
@@ -2642,7 +2642,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
         {
             uint64_t sequence;
 
-            void * packet = netcode_read_packet( client->receive_packet_data[i], client->receive_packet_bytes[i], &sequence, client->context.read_packet_key, client->server_info.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
+            void * packet = netcode_read_packet( client->receive_packet_data[i], client->receive_packet_bytes[i], &sequence, client->context.read_packet_key, client->connect_token.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection );
 
             free( client->receive_packet_data[i] );
 
@@ -2660,7 +2660,7 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, client->context.write_packet_key, client->server_info.protocol_id );
+    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, client->context.write_packet_key, client->connect_token.protocol_id );
 
     assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
@@ -2694,10 +2694,10 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             struct netcode_connection_request_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
             memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-            packet.protocol_id = client->server_info.protocol_id;
-            packet.connect_token_expire_timestamp = client->server_info.connect_token_expire_timestamp;
-            packet.connect_token_sequence = client->server_info.connect_token_sequence;
-            memcpy( packet.connect_token_data, client->server_info.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+            packet.protocol_id = client->connect_token.protocol_id;
+            packet.connect_token_expire_timestamp = client->connect_token.expire_timestamp;
+            packet.connect_token_sequence = client->connect_token.private_sequence;
+            memcpy( packet.connect_token_data, client->connect_token.private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
             netcode_client_send_packet_to_server_internal( client, &packet );
         }
@@ -2742,17 +2742,17 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 {
 	assert( client );
 
-    if ( client->server_address_index + 1 >= client->server_info.num_server_addresses )
+    if ( client->server_address_index + 1 >= client->connect_token.num_server_addresses )
         return 0;
 
     client->server_address_index++;
-    client->server_address = client->server_info.server_addresses[client->server_address_index];
+    client->server_address = client->connect_token.server_addresses[client->server_address_index];
 
     netcode_client_reset_before_next_connect( client );
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->server_info.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -2771,7 +2771,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
     if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
     {
-        uint64_t connect_token_expire_seconds = ( client->server_info.connect_token_expire_timestamp - client->server_info.connect_token_create_timestamp );
+        uint64_t connect_token_expire_seconds = ( client->connect_token.expire_timestamp - client->connect_token.create_timestamp );
         
         if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
         {
@@ -2794,7 +2794,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     {
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:
         {
-            if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
+            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection request timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -2807,7 +2807,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:
         {
-            if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
+            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection response timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -2820,7 +2820,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
 		case NETCODE_CLIENT_STATE_CONNECTED:
         {
-            if ( client->last_packet_receive_time + client->server_info.timeout_seconds < time )
+            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connection timed out\n" );
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT, 0 );
@@ -3533,9 +3533,9 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     (void) from;
 
-    struct netcode_connect_token_t connect_token;
+    struct netcode_connect_token_private_t connect_token_private;
 
-    if ( !netcode_read_connect_token( packet->connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, &connect_token ) )
+    if ( !netcode_read_connect_token_private( packet->connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, &connect_token_private ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to read connect token\n" );
         return;
@@ -3543,9 +3543,9 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     int found_server_address = 0;
     int i;
-    for ( i = 0; i < connect_token.num_server_addresses; ++i )
+    for ( i = 0; i < connect_token_private.num_server_addresses; ++i )
     {
-        if ( netcode_address_equal( &server->public_address, &connect_token.server_addresses[i] ) )
+        if ( netcode_address_equal( &server->public_address, &connect_token_private.server_addresses[i] ) )
         {
             found_server_address = 1;
         }
@@ -3562,13 +3562,13 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    if ( netcode_server_find_client_index_by_id( server, connect_token.client_id ) != -1 )
+    if ( netcode_server_find_client_index_by_id( server, connect_token_private.client_id ) != -1 )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. a client with this id is already connected\n" );
         return;
     }
 
-    if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, server->time ) )
+    if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, server->time ) )
 	{
 		netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. connect token has already been used\n" );
 		return;
@@ -3582,21 +3582,21 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
         p.reason = NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL;
 
-        netcode_server_send_global_packet( server, &p, from, connect_token.server_to_client_key );
+        netcode_server_send_global_packet( server, &p, from, connect_token_private.server_to_client_key );
 
         return;
     }
 
-    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token.server_to_client_key, connect_token.client_to_server_key, server->time ) )
+    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token_private.server_to_client_key, connect_token_private.client_to_server_key, server->time ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
     }
 
     struct netcode_challenge_token_t challenge_token;
-    challenge_token.client_id = connect_token.client_id;
-    memcpy( challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
-    memcpy( challenge_token.user_data, connect_token.user_data, NETCODE_USER_DATA_BYTES );
+    challenge_token.client_id = connect_token_private.client_id;
+    memcpy( challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
+    memcpy( challenge_token.user_data, connect_token_private.user_data, NETCODE_USER_DATA_BYTES );
 
     struct netcode_connection_challenge_packet_t challenge_packet;
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
@@ -3612,7 +3612,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent connection challenge packet\n" );
 
-    netcode_server_send_global_packet( server, &challenge_packet, from, connect_token.server_to_client_key );
+    netcode_server_send_global_packet( server, &challenge_packet, from, connect_token_private.server_to_client_key );
 }
 
 int netcode_server_find_free_client_index( struct netcode_server_t * server )
@@ -4044,7 +4044,7 @@ void netcode_server_update( struct netcode_server_t * server, double time )
 
 // ----------------------------------------------------------------
 
-int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
+int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
 {
     assert( num_server_addresses > 0 );
     assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
@@ -4068,44 +4068,44 @@ int netcode_generate_server_info( int num_server_addresses, char ** server_addre
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
 
-    struct netcode_connect_token_t connect_token;
+    struct netcode_connect_token_private_t connect_token_private;
 
-    netcode_generate_connect_token( &connect_token, client_id, num_server_addresses, parsed_server_addresses, user_data );
+    netcode_generate_connect_token_private( &connect_token_private, client_id, num_server_addresses, parsed_server_addresses, user_data );
 
     // write it to a buffer
 
-    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
-    netcode_write_connect_token( &connect_token, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_connect_token_private( &connect_token_private, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // encrypt the buffer
 
     uint64_t create_timestamp = time( NULL );
     uint64_t expire_timestamp = create_timestamp + expire_seconds;
 
-    if ( !netcode_encrypt_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, sequence, private_key ) )
+    if ( !netcode_encrypt_connect_token_private( connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, sequence, private_key ) )
         return 0;
 
-    // wrap a server info around the connect token
+    // wrap a connect token around the private connect token data
 
-    struct netcode_server_info_t server_info;
+    struct netcode_connect_token_t connect_token;
 
-    memcpy( server_info.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-    server_info.protocol_id = protocol_id;
-    server_info.connect_token_create_timestamp = create_timestamp;
-    server_info.connect_token_expire_timestamp = expire_timestamp;
-    server_info.connect_token_sequence = sequence;
-    memcpy( server_info.connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
-    server_info.num_server_addresses = num_server_addresses;
+    memcpy( connect_token.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    connect_token.protocol_id = protocol_id;
+    connect_token.create_timestamp = create_timestamp;
+    connect_token.expire_timestamp = expire_timestamp;
+    connect_token.private_sequence = sequence;
+    memcpy( connect_token.private_data, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+    connect_token.num_server_addresses = num_server_addresses;
     for ( i = 0; i < num_server_addresses; ++i )
-        server_info.server_addresses[i] = parsed_server_addresses[i];
-    memcpy( server_info.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
-    memcpy( server_info.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
-    server_info.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
+        connect_token.server_addresses[i] = parsed_server_addresses[i];
+    memcpy( connect_token.client_to_server_key, connect_token_private.client_to_server_key, NETCODE_KEY_BYTES );
+    memcpy( connect_token.server_to_client_key, connect_token_private.server_to_client_key, NETCODE_KEY_BYTES );
+    connect_token.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
 
-    // write the server info to the output buffer
+    // write the connect token to the output buffer
 
-    netcode_write_server_info( &server_info, output_buffer, NETCODE_SERVER_INFO_BYTES );
+    netcode_write_connect_token( &connect_token, output_buffer, NETCODE_CONNECT_TOKEN_BYTES );
 
     return 1;
 }
@@ -4541,9 +4541,9 @@ static void test_connect_token()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
 
-    struct netcode_connect_token_t input_token;
+    struct netcode_connect_token_private_t input_token;
 
-    netcode_generate_connect_token( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
 
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
@@ -4552,9 +4552,9 @@ static void test_connect_token()
 
     // write it to a buffer
 
-    uint8_t buffer[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t buffer[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
-    netcode_write_connect_token( &input_token, buffer, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_connect_token_private( &input_token, buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // encrypt the buffer
 
@@ -4563,17 +4563,17 @@ static void test_connect_token()
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_encrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
     // decrypt the buffer
 
-    check( netcode_decrypt_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_decrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
     // read the connect token back in
 
-    struct netcode_connect_token_t output_token;
+    struct netcode_connect_token_private_t output_token;
 
-    check( netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_token ) == 1 );
+    check( netcode_read_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, &output_token ) == 1 );
 
 	// make sure that everything matches the original connect token
 
@@ -4641,9 +4641,9 @@ static void test_connection_request_packet()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
 
-    struct netcode_connect_token_t input_token;
+    struct netcode_connect_token_private_t input_token;
 
-    netcode_generate_connect_token( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
 
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
@@ -4652,22 +4652,22 @@ static void test_connection_request_packet()
 
     // write the conect token to a buffer (non-encrypted)
 
-    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
-    netcode_write_connect_token( &input_token, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_connect_token_private( &input_token, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // copy to a second buffer then encrypt it in place (we need the unencrypted token for verification later on)
 
-    uint8_t encrypted_connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t encrypted_connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
-    memcpy( encrypted_connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    memcpy( encrypted_connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     uint64_t connect_token_sequence = 1000;
     uint64_t connect_token_expire_timestamp = time( NULL ) + 30;
     uint8_t connect_token_key[NETCODE_KEY_BYTES];
     netcode_generate_key( connect_token_key );
 
-    check( netcode_encrypt_connect_token( encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, connect_token_expire_timestamp, connect_token_sequence, connect_token_key ) == 1 );
+    check( netcode_encrypt_connect_token_private( encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, connect_token_expire_timestamp, connect_token_sequence, connect_token_key ) == 1 );
 
     // setup a connection request packet wrapping the encrypted connect token
 
@@ -4678,7 +4678,7 @@ static void test_connection_request_packet()
     input_packet.protocol_id = TEST_PROTOCOL_ID;
     input_packet.connect_token_expire_timestamp = connect_token_expire_timestamp;
     input_packet.connect_token_sequence = connect_token_sequence;
-    memcpy( input_packet.connect_token_data, encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    memcpy( input_packet.connect_token_data, encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
 	// write the connection request packet to a buffer
 
@@ -4710,7 +4710,7 @@ static void test_connection_request_packet()
     check( output_packet->protocol_id == input_packet.protocol_id );
     check( output_packet->connect_token_expire_timestamp == input_packet.connect_token_expire_timestamp );
 	check( output_packet->connect_token_sequence == input_packet.connect_token_sequence );
-    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES - NETCODE_MAC_BYTES ) == 0 );
+    check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES ) == 0 );
 
     free( output_packet );
 }
@@ -4959,9 +4959,9 @@ void test_connection_disconnect_packet()
     free( output_packet );
 }
 
-void test_server_info()
+void test_connect_token_public()
 {
-    // generate a connect token
+    // generate a private connect token
 
     struct netcode_address_t server_address;
     server_address.type = NETCODE_ADDRESS_IPV4;
@@ -4974,20 +4974,20 @@ void test_server_info()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
 
-    struct netcode_connect_token_t connect_token;
+    struct netcode_connect_token_private_t connect_token_private;
 
-    netcode_generate_connect_token( &connect_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &connect_token_private, TEST_CLIENT_ID, 1, &server_address, user_data );
 
-    check( connect_token.client_id == TEST_CLIENT_ID );
-    check( connect_token.num_server_addresses == 1 );
-    check( memcmp( connect_token.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
-    check( netcode_address_equal( &connect_token.server_addresses[0], &server_address ) );
+    check( connect_token_private.client_id == TEST_CLIENT_ID );
+    check( connect_token_private.num_server_addresses == 1 );
+    check( memcmp( connect_token_private.user_data, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
+    check( netcode_address_equal( &connect_token_private.server_addresses[0], &server_address ) );
 
     // write it to a buffer
 
-    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    uint8_t connect_token_private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
-    netcode_write_connect_token( &connect_token, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
+    netcode_write_connect_token_private( &connect_token_private, connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // encrypt the buffer
 
@@ -4997,49 +4997,49 @@ void test_server_info()
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_encrypt_connect_token_private( connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
-    // wrap the connect token inside a server info
+    // wrap a public connect token around the private connect token data
 
-    struct netcode_server_info_t input_server_info;
+    struct netcode_connect_token_t input_connect_token;
 
-    memcpy( input_server_info.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
-    input_server_info.protocol_id = TEST_PROTOCOL_ID;
-    input_server_info.connect_token_create_timestamp = create_timestamp;
-    input_server_info.connect_token_expire_timestamp = expire_timestamp;
-    input_server_info.connect_token_sequence = sequence;
-    memcpy( input_server_info.connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_BYTES );
-    input_server_info.num_server_addresses = 1;
-    input_server_info.server_addresses[0] = server_address;
-    memcpy( input_server_info.client_to_server_key, connect_token.client_to_server_key, NETCODE_KEY_BYTES );
-    memcpy( input_server_info.server_to_client_key, connect_token.server_to_client_key, NETCODE_KEY_BYTES );
-    input_server_info.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
+    memcpy( input_connect_token.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    input_connect_token.protocol_id = TEST_PROTOCOL_ID;
+    input_connect_token.create_timestamp = create_timestamp;
+    input_connect_token.expire_timestamp = expire_timestamp;
+    input_connect_token.private_sequence = sequence;
+    memcpy( input_connect_token.private_data, connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+    input_connect_token.num_server_addresses = 1;
+    input_connect_token.server_addresses[0] = server_address;
+    memcpy( input_connect_token.client_to_server_key, input_connect_token.client_to_server_key, NETCODE_KEY_BYTES );
+    memcpy( input_connect_token.server_to_client_key, input_connect_token.server_to_client_key, NETCODE_KEY_BYTES );
+    input_connect_token.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
 
-    // write the server info to a buffer
+    // write the connect token to a buffer
 
-    uint8_t buffer[NETCODE_SERVER_INFO_BYTES];
+    uint8_t buffer[NETCODE_CONNECT_TOKEN_BYTES];
 
-    netcode_write_server_info( &input_server_info, buffer, NETCODE_SERVER_INFO_BYTES );
+    netcode_write_connect_token( &input_connect_token, buffer, NETCODE_CONNECT_TOKEN_BYTES );
 
     // read the buffer back in
 
-    struct netcode_server_info_t output_server_info;
+    struct netcode_connect_token_t output_connect_token;
 
-    check( netcode_read_server_info( buffer, NETCODE_SERVER_INFO_BYTES, &output_server_info ) == 1 );
+    check( netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_connect_token ) == 1 );
 
-    // make sure the server info matches what was written
+    // make sure the public connect token matches what was written
 
-    check( memcmp( output_server_info.version_info, input_server_info.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
-    check( output_server_info.protocol_id == input_server_info.protocol_id );
-    check( output_server_info.connect_token_create_timestamp == input_server_info.connect_token_create_timestamp );
-    check( output_server_info.connect_token_expire_timestamp == input_server_info.connect_token_expire_timestamp );
-    check( output_server_info.connect_token_sequence == input_server_info.connect_token_sequence );
-    check( memcmp( output_server_info.connect_token_data, input_server_info.connect_token_data, NETCODE_CONNECT_TOKEN_BYTES ) == 0 );
-    check( output_server_info.num_server_addresses == input_server_info.num_server_addresses );
-    check( netcode_address_equal( &output_server_info.server_addresses[0], &input_server_info.server_addresses[0] ) );
-    check( memcmp( output_server_info.client_to_server_key, input_server_info.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
-    check( memcmp( output_server_info.server_to_client_key, input_server_info.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
-    check( output_server_info.timeout_seconds == input_server_info.timeout_seconds );
+    check( memcmp( output_connect_token.version_info, input_connect_token.version_info, NETCODE_VERSION_INFO_BYTES ) == 0 );
+    check( output_connect_token.protocol_id == input_connect_token.protocol_id );
+    check( output_connect_token.create_timestamp == input_connect_token.create_timestamp );
+    check( output_connect_token.expire_timestamp == input_connect_token.expire_timestamp );
+    check( output_connect_token.private_sequence == input_connect_token.private_sequence );
+    check( memcmp( output_connect_token.private_data, input_connect_token.private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES ) == 0 );
+    check( output_connect_token.num_server_addresses == input_connect_token.num_server_addresses );
+    check( netcode_address_equal( &output_connect_token.server_addresses[0], &input_connect_token.server_addresses[0] ) );
+    check( memcmp( output_connect_token.client_to_server_key, input_connect_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( output_connect_token.server_to_client_key, input_connect_token.server_to_client_key, NETCODE_KEY_BYTES ) == 0 );
+    check( output_connect_token.timeout_seconds == input_connect_token.timeout_seconds );
 }
 
 void test_encryption_manager()
@@ -5294,14 +5294,14 @@ void test_client_server_connect()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -5418,14 +5418,14 @@ void test_client_server_keep_alive()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -5530,11 +5530,11 @@ void test_client_server_multiple_clients()
 
             char * server_address = "[::1]:40000";
 
-            uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+            uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
-            check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, token_sequence++, private_key, server_info ) );
+            check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, token_sequence++, private_key, connect_token ) );
 
-            netcode_client_connect( client[j], server_info );
+            netcode_client_connect( client[j], connect_token );
         }
 
         // make sure all clients can connect
@@ -5716,14 +5716,14 @@ void test_client_server_multiple_servers()
 
     char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000", "[::1]:40000" };
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 3, server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 3, server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -5829,14 +5829,14 @@ void test_client_error_connect_token_expired()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, 0, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, 0, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     netcode_client_update( client, time );
 
@@ -5847,7 +5847,7 @@ void test_client_error_connect_token_expired()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-void test_client_error_invalid_server_info()
+void test_client_error_invalid_connect_token()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
@@ -5862,15 +5862,15 @@ void test_client_error_invalid_server_info()
 
     check( client );
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
-    netcode_random_bytes( server_info, NETCODE_SERVER_INFO_BYTES );
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+    netcode_random_bytes( connect_token, NETCODE_CONNECT_TOKEN_BYTES );
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
-    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_SERVER_INFO );
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
 
     netcode_client_destroy( client );
 
@@ -5903,14 +5903,14 @@ void test_client_error_connection_timed_out()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -5983,14 +5983,14 @@ void test_client_error_connection_response_timeout()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6044,14 +6044,14 @@ void test_client_error_connection_request_timeout()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6105,14 +6105,14 @@ void test_client_error_connection_denied()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6142,14 +6142,14 @@ void test_client_error_connection_denied()
 
     check( client2 );
 
-    uint8_t server_info2[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token2[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id2 = 0;
     netcode_random_bytes( (uint8_t*) &client_id2, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id2, TEST_PROTOCOL_ID, 0, private_key, server_info2 ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id2, TEST_PROTOCOL_ID, 0, private_key, connect_token2 ) );
 
-    netcode_client_connect( client2, server_info2 );
+    netcode_client_connect( client2, connect_token2 );
 
     while ( 1 )
     {
@@ -6205,14 +6205,14 @@ void test_client_side_disconnect()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6286,14 +6286,14 @@ void test_server_side_disconnect()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6373,14 +6373,14 @@ void test_client_reconnect()
 
     char * server_address = "[::1]:40000";
 
-    uint8_t server_info[NETCODE_SERVER_INFO_BYTES];
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6432,9 +6432,9 @@ void test_client_reconnect()
 
 	netcode_network_simulator_discard_packets( network_simulator );
 
-    check( netcode_generate_server_info( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, server_info ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    netcode_client_connect( client, server_info );
+    netcode_client_connect( client, connect_token );
 
     while ( 1 )
     {
@@ -6491,7 +6491,7 @@ void netcode_test()
         RUN_TEST( test_connection_response_packet );
         RUN_TEST( test_connection_payload_packet );
         RUN_TEST( test_connection_disconnect_packet );
-        RUN_TEST( test_server_info );
+        RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_client_server_connect );
@@ -6499,7 +6499,7 @@ void netcode_test()
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
         RUN_TEST( test_client_error_connect_token_expired );
-        RUN_TEST( test_client_error_invalid_server_info );
+        RUN_TEST( test_client_error_invalid_connect_token );
         RUN_TEST( test_client_error_connection_timed_out );
         RUN_TEST( test_client_error_connection_response_timeout );
         RUN_TEST( test_client_error_connection_request_timeout );

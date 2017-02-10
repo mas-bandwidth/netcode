@@ -1,16 +1,12 @@
 DONE
 
+    Standardized on "connect token" being the public facing name, with the internal encrypted connect token being the "private connect token".
+
+    This is much better, seeing as the typical user would only see the "connect token", and that is a very intuitive name for the concept.
+
+    Now the source code matches the white paper naming of concepts.
+
 TODO
-
-    -----------------
-
-    Write white paper
-
-    Deadline: Monday February 6th.
-
-    -----------------
-
-    *** BREAK ***
 
     -----------------
 
@@ -21,35 +17,5 @@ TODO
     Continue writing tests for security edge cases
 
     eg: stale connect token, modified AEAD, random connect token etc.
-
-    -----------------
-
-    Integrate mbedtls
-
-    -----------------
-
-    Write golang server to generate connect token.
-
-    -----------------
-
-    Update standalone client to get server info from golang server.
-
-    -----------------
-
-    Work out why docker server is not receiving packets from outside of docker.
-
-    -----------------
-
-    Finish porting rest of gafferongames.com to the new hugo website.
-
-    ^--- probably not going to happen?
-
-    -----------------
-
-    Write post announcing netcode.io and queue it up at GDC 2017.
-
-    -----------------
-
-    GDC 2017
 
     -----------------

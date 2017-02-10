@@ -53,14 +53,14 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_SERVER_INFO_BYTES 4096
+#define NETCODE_CONNECT_TOKEN_BYTES 4096
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
 #define NETCODE_NONCE_BYTES 8
 #define NETCODE_MAX_SERVERS_PER_CONNECT 16
 
 #define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -6
-#define NETCODE_CLIENT_STATE_INVALID_SERVER_INFO                -5
+#define NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN              -5
 #define NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT               -4
 #define NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT        -3
 #define NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT         -2
@@ -93,7 +93,7 @@ struct netcode_client_t * netcode_client_create( char * address, double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
-void netcode_client_connect( struct netcode_client_t * client, uint8_t * server_info );
+void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token );
 
 void netcode_client_update( struct netcode_client_t * client, double time );
 
@@ -109,7 +109,7 @@ int netcode_client_state( struct netcode_client_t * client );
 
 int netcode_client_index( struct netcode_client_t * client );
 
-int netcode_generate_server_info( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * server_info );
+int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
 struct netcode_server_t * netcode_server_create( char * bind_address, char * public_address, uint64_t protocol_id, uint8_t * private_key, double time );
 
