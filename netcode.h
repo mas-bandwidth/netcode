@@ -121,7 +121,7 @@ int netcode_server_client_connected( struct netcode_server_t * server, int clien
 
 void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index );
 
-void netcode_server_disconenct_all_clients( struct netcode_server_t * server );
+void netcode_server_disconnect_all_clients( struct netcode_server_t * server );
 
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
 
