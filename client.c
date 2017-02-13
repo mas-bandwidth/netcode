@@ -44,10 +44,10 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
 
 int main( int argc, char ** argv )
 {
-	(void) argc;
-	(void) argv;
+    (void) argc;
+    (void) argv;
 
-	if ( !netcode_init() )
+    if ( !netcode_init() )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;
@@ -56,9 +56,9 @@ int main( int argc, char ** argv )
     netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
     double time = 0.0;
-	double delta_time = 1.0 / 60.0;
+    double delta_time = 1.0 / 60.0;
 
-	printf( "[client]\n" );
+    printf( "[client]\n" );
 
     struct netcode_client_t * client = netcode_client_create( "::", time );
 
@@ -94,8 +94,8 @@ int main( int argc, char ** argv )
     for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
         packet_data[i] = (uint8_t) i;
 
-	while ( !quit )
-	{
+    while ( !quit )
+    {
         netcode_client_update( client, time );
 
         if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
@@ -117,10 +117,10 @@ int main( int argc, char ** argv )
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;
 
-		netcode_sleep( delta_time );
+        netcode_sleep( delta_time );
 
-		time += delta_time;
-	}
+        time += delta_time;
+    }
 
     if ( quit )
     {
@@ -130,6 +130,6 @@ int main( int argc, char ** argv )
     netcode_client_destroy( client );
 
     netcode_term();
-	
+    
     return 0;
 }
