@@ -34,11 +34,11 @@ netcode.io is a simple protocol that can easily be incorporated into a client, d
 
 It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
 
-## How does it work?
+# How does it work?
 
 Please refer to this whitepaper [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
 
-## How can I help?
+# How can I help?
 
 This is an open source project. Please help if you can:
 
@@ -51,7 +51,7 @@ Some ideas for things people can do to help:
 
 Please let me know if you have any ideas, and feel free to ask questions and get involved by logging issues.
 
-## Author
+# Author
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
 
@@ -59,7 +59,7 @@ Glenn is currently writing an article series about the development of this libra
 
 You can support Glenn's work writing articles and open source code via [Patreon](http://www.patreon.com/gafferongames).
 
-## Sponsors
+# Sponsors
 
 **netcode.io** is generously sponsored by:
 
@@ -75,6 +75,6 @@ You can support Glenn's work writing articles and open source code via [Patreon]
  
 And by individual supporters on [Patreon](http://www.patreon.com/gafferongames). Thank you. You make this possible!
 
-## License
+# License
 
 [BSD 3-Clause license](https://opensource.org/licenses/BSD-3-Clause).
