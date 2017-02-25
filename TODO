@@ -1,21 +1,13 @@
 DONE
 
-    Standardized on "connect token" being the public facing name, with the internal encrypted connect token being the "private connect token".
+    Need to direct netcode.io to github website
 
-    This is much better, seeing as the typical user would only see the "connect token", and that is a very intuitive name for the concept.
-
-    Now the source code matches the white paper naming of concepts.
+    Did this via my linode box + nginx. Should be able to test this in a few days once the DNS gets through.
 
 TODO
+    
+    Need to write project README.md (adapt from white paper)
 
-    -----------------
+    Need to write project BUILDING.md (adapt from yojimbo)
 
-    Need to debug why docker server is not receiving packets from outside docker.
-
-    -----------------
-
-    Continue writing tests for security edge cases
-
-    eg: stale connect token, modified AEAD, random connect token etc.
-
-    -----------------
+    Need to write USAGE.md show how to use the APIs
