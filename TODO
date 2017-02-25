@@ -4,10 +4,32 @@ DONE
 
     Did this via my linode box + nginx. Should be able to test this in a few days once the DNS gets through.
 
+    Verified this morning that the redirect works. Great!
+
+    Added the coverity thingo for netcode.io, since it take a while for them to approve it.
+
 TODO
     
+    Get the project automatically built by travis, again copy from yojimbo.
+
+    -----------------
+
     Need to write project README.md (adapt from white paper)
+
+    -----------------
+
+    -----------------
+
+    Get the project automatically build by coverity
+
+    -----------------
 
     Need to write project BUILDING.md (adapt from yojimbo)
 
     Need to write USAGE.md show how to use the APIs
+
+    Need to find a way to transition old gafferongames.com to new gafferongames.com
+
+    Maybe a simple solution where it tries first to match on gafferongames, but if it can't find it on the new site, it falls back to the old website?
+
+    This would allow automatic fallback, without a bunch of work on my part trying to manually find all links.
