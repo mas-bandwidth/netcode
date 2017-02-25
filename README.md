@@ -12,9 +12,25 @@ It has the following properties:
 2. It encrypts and sign packets
 3. It provides authentication support so only authenticated clients can connect to dedicated servers
 
-And of course, because the data is transmitted over UDP, data sent across netcode.io is not subject to head of line blocking.
+# What are the benefits?
 
-This means that unlike with WebSockets, your time series data like player inputs, and player positions arrive as rapidly as possible, without being buffered up while waiting for a dropped packet to be resent.
+## Full bidirectional transfer of data
+
+Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
+
+There is no request/response pattern like HTTP.
+
+## No Head of Line Blocking
+
+All data is transmitted over UDP. This means that unlike data sent over WebSockets, it is not subject to head of line blocking.
+
+No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
+
+## Simplicity
+
+netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
+
+It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
 
 ## How does it work?
 
