@@ -2,17 +2,10 @@
 
 # netcode.io
 
-**libyojimbo** is a new, easy-to-use library for creating secure client/server network protocols over UDP.
+**netcode.io** is a binary standard for a secure and authenticated client/server network protocol over UDP.
 
-It is designed around the networking requirements of competitive realtime multiplayer games such as first person shooters and action games. As such it provides the absolute fastest, most time critical networking layer over UDP, with a client/server architecture supporting up to 64 players per-dedicated server instance.
+This repository contains a reference implementation of version 1.0 of this standard written it the C language.
 
-## Status
-
-**libyojimbo** is currently in pre-release for early feedback. Right now it provides support for: cryptographically secure authentication, client/server connection management, encryption for packets sent over UDP, reliable-ordered messages and data blocks, plus a serialization framework for extending the protocol with custom messages and packet types.
-
-Work over the past few months has been focused on documenting and finalizing the API. This work is nearly complete and a new release is imminent. After the documentation push, new features coming soon include packet fragmentation and reassembly and extending the matcher to support dynamically registered server instances.
-
-For more details please refer to the [roadmap](https://github.com/networkprotocol/libyojimbo/blob/master/ROADMAP.md).
 
 ## Author
 
@@ -24,7 +17,7 @@ You can support Glenn's work writing articles and open source code via [Patreon]
 
 ## Sponsors
 
-**libyojimbo** is generously sponsored by:
+**netcode.io** is generously sponsored by:
 
 * Gold Sponsors
  - [Cloud Imperium Games](https://cloudimperiumgames.com)

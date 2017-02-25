@@ -8,19 +8,15 @@ DONE
 
     Added the coverity thingo for netcode.io, since it take a while for them to approve it.
 
-TODO
-    
     Get the project automatically built by travis, again copy from yojimbo.
 
+TODO
+    
     -----------------
 
     Need to write project README.md (adapt from white paper)
 
     -----------------
-
-    -----------------
-
-    Get the project automatically build by coverity
 
     -----------------
 
@@ -33,3 +29,11 @@ TODO
     Maybe a simple solution where it tries first to match on gafferongames, but if it can't find it on the new site, it falls back to the old website?
 
     This would allow automatic fallback, without a bunch of work on my part trying to manually find all links.
+
+    -----------------
+
+    Lower priority
+
+    Get the project automatically build by coverity
+
+    -----------------
