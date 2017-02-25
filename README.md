@@ -42,8 +42,6 @@ Please refer to this whitepaper [Why can't I send UDP packets from a browser?](h
 
 This is an open source project. Please help if you can:
 
-Some ideas for things people can do to help:
-
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
 * Implement additional tests. Find ways to break the code!
