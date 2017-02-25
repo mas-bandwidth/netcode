@@ -2,21 +2,31 @@
 
 # netcode.io
 
-**netcode.io** is a network protocol for secure client/server connections to dedicated servers over UDP.
+**netcode.io** is a protocol for creating secure connections between clients and dedicated servers over UDP.
 
 It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation). 
 
-The protocol is:
+It has the following properties:
 
 1. It's connection oriented
 2. It encrypts and sign packets
 3. It provides authentication support so only authenticated clients can connect to dedicated servers
 
-And of course, because the data is transmitted over UDP, not TCP, data sent across netcode.io is not subject to head of line blocking.
+And of course, because the data is transmitted over UDP, data sent across netcode.io is not subject to head of line blocking.
 
-This means that your time series data like player inputs, and player positions arrive as rapidly as possible.
+This means that unlike with WebSockets, your time series data like player inputs, and player positions arrive as rapidly as possible, without being buffered up while waiting for a dropped packet to be resent.
 
 ## How does it work?
+
+netcode.io has three parts:
+
+1. The client
+2. The dedicated server
+3. The web backend
+
+The client could be a game that you write in Unity, or some other engine, the dedicated server is some game code you host somewhere with a public IP, and the web backend is the website your user connects to in order to authenticate before playing the game (eg OAuth).
+
+In the netcode.io model, you are responsible for writing your own web backend, and all you 
 
 To implement this, the authenticated performed by the web backend is transferred to dedicated servers across UDP using a short lived _connect token_. This token is passed across UDP as part of the connection handshake, and ensures that any rate limiting for connections can be done at a per-authenticated user basis, rather than a having to write rules across each dedicated server instance running your game.
 
