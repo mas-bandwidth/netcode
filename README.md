@@ -12,6 +12,8 @@ It has the following properties:
 2. It encrypts and sign packets
 3. It provides authentication support so only authenticated clients can connect to dedicated servers
 
+This github repository contains the reference implementation of this protocol in C.
+
 # What are the benefits?
 
 ## Full bidirectional transfer of data
