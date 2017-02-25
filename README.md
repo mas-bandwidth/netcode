@@ -22,9 +22,9 @@ There is no request/response pattern like HTTP.
 
 ## No Head of Line Blocking
 
-All data is transmitted over UDP. This means that unlike data sent over WebSockets, it is not subject to head of line blocking.
+All data is transmitted over UDP. Unlike data sent over WebSockets, data sent across netcode.io is not subject to head of line blocking.
 
-No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
+No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
 ## Simplicity
 
@@ -34,37 +34,20 @@ It has no external dependencies except [libsodium](http://www.libsodium.org), wh
 
 ## How does it work?
 
-netcode.io has three parts:
-
-1. The client
-2. The dedicated server
-3. The web backend
-
-The client could be a game that you write in Unity, or some other engine, the dedicated server is some game code you host somewhere with a public IP, and the web backend is the website your user connects to in order to authenticate before playing the game (eg OAuth).
-
-In the netcode.io model, you are responsible for writing your own web backend, and all you 
-
-To implement this, the authenticated performed by the web backend is transferred to dedicated servers across UDP using a short lived _connect token_. This token is passed across UDP as part of the connection handshake, and ensures that any rate limiting for connections can be done at a per-authenticated user basis, rather than a having to write rules across each dedicated server instance running your game.
-
-
-the basic idea is that the web backend performs authentication and when a client wants to play, the client makes a REST call to obtain a connect token. Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only clients with a valid connect token are able to connect to the dedicated servers.
-
-For more information, please read [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
+Please refer to this whitepaper [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
 
 ## How can I help?
 
-This is an open source project. I need your help!
+This is an open source project. Please help if you can:
 
-What can you do that is useful:
+Some ideas for things people can do to help:
 
 * Study the code, and look for flaws and weaknesses
 * Implement additional tests. Find ways to break the code
-* If you are a security professional, please contact me if you would like to help with the security audit.
-* Port netcode.io to your favorite languge.
-* Help me write the netcode
-* Help create a test suite and framework to validate new implementations are conform to the spec
+* We welcome anybody who would like to volunteer to perform as security audit of the code
+* Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 
-This github repository contains the reference implementation of netcode.io. I'm happy to answer any questions you have, just log an issue, and if you are interested in helping port netcode.io to other languages like C#
+Please let me know if you have any ideas, and feel free to ask questions and get involved by logging issues.
 
 ## Author
 
