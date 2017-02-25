@@ -1,11 +1,20 @@
-[![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io) [![Coverity Scan Build Status](https://scan.coverity.com/projects/11339/badge.svg)](https://scan.coverity.com/projects/11339)
+[![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
 
 # netcode.io
 
-**netcode.io** is a binary standard for a secure and authenticated client/server network protocol over UDP.
+**netcode.io** is a simple network protocol that lets clients securely connect to dedicated servers and communicate over UDP. It’s connection oriented and encrypts and signs packets, and provides authentication support so only authenticated clients can connect to dedicated servers.
 
-This repository contains a reference implementation of version 1.0 of this standard written it the C language.
+It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation).
 
+The basic idea is that the web backend performs authentication and when a client wants to play, it makes a REST call to obtain a connect token which is passed to the dedicated server as part of the connection handshake over UDP.
+
+Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only authenticated clients are able to connect to the dedicated servers.
+
+Over the past month I’ve created a reference implementation of netcode.io in C. It’s licenced under the BSD 3-Clause open source licence. 
+
+Over the next few months, I hope to continue refining this implementation, spend time writing a spec, and work with people to port netcode.io to different languages.
+
+Your feedback on the reference implementation is appreciated.
 
 ## Author
 
