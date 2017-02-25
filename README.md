@@ -2,11 +2,26 @@
 
 # netcode.io
 
-**netcode.io** is a network protocol that lets clients securely connect to dedicated servers over UDP. It’s connection oriented and encrypts and signs packets. It also provides authentication support so only authenticated clients can connect to dedicated servers.
+**netcode.io** is a network protocol for secure client/server connections to dedicated servers over UDP.
 
 It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation). 
 
-To implement this, the basic idea is that the web backend performs authentication and when a client wants to play, the client makes a REST call to obtain a connect token. Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only clients with a valid connect token are able to connect to the dedicated servers.
+The protocol is:
+
+1. It's connection oriented
+2. It encrypts and sign packets
+3. It provides authentication support so only authenticated clients can connect to dedicated servers
+
+And of course, because the data is transmitted over UDP, not TCP, data sent across netcode.io is not subject to head of line blocking.
+
+This means that your time series data like player inputs, and player positions arrive as rapidly as possible.
+
+## How does it work?
+
+To implement this, the authenticated performed by the web backend is transferred to dedicated servers across UDP using a short lived _connect token_. This token is passed across UDP as part of the connection handshake, and ensures that any rate limiting for connections can be done at a per-authenticated user basis, rather than a having to write rules across each dedicated server instance running your game.
+
+
+the basic idea is that the web backend performs authentication and when a client wants to play, the client makes a REST call to obtain a connect token. Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only clients with a valid connect token are able to connect to the dedicated servers.
 
 For more information, please read [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
 
