@@ -2,19 +2,28 @@
 
 # netcode.io
 
-**netcode.io** is a simple network protocol that lets clients securely connect to dedicated servers and communicate over UDP. It’s connection oriented and encrypts and signs packets, and provides authentication support so only authenticated clients can connect to dedicated servers.
+**netcode.io** is a network protocol that lets clients securely connect to dedicated servers over UDP. It’s connection oriented and encrypts and signs packets. It also provides authentication support so only authenticated clients can connect to dedicated servers.
 
-It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation).
+It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation). 
 
-The basic idea is that the web backend performs authentication and when a client wants to play, it makes a REST call to obtain a connect token which is passed to the dedicated server as part of the connection handshake over UDP.
+To implement this, the basic idea is that the web backend performs authentication and when a client wants to play, the client makes a REST call to obtain a connect token. Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only clients with a valid connect token are able to connect to the dedicated servers.
 
-Connect tokens are short lived and rely on a shared private key between the web backend and the dedicated server instances. The benefit of this approach is that only authenticated clients are able to connect to the dedicated servers.
+For more information, please read [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
 
-Over the past month I’ve created a reference implementation of netcode.io in C. It’s licenced under the BSD 3-Clause open source licence. 
+## How can I help?
 
-Over the next few months, I hope to continue refining this implementation, spend time writing a spec, and work with people to port netcode.io to different languages.
+This is an open source project. I need your help!
 
-Your feedback on the reference implementation is appreciated.
+What can you do that is useful:
+
+* Study the code, and look for flaws and weaknesses
+* Implement additional tests. Find ways to break the code
+* If you are a security professional, please contact me if you would like to help with the security audit.
+* Port netcode.io to your favorite languge.
+* Help me write the netcode
+* Help create a test suite and framework to validate new implementations are conform to the spec
+
+This github repository contains the reference implementation of netcode.io. I'm happy to answer any questions you have, just log an issue, and if you are interested in helping port netcode.io to other languages like C#
 
 ## Author
 
