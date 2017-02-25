@@ -22,7 +22,7 @@ Once a netcode.io connection is established, data can be exchanged between clien
 
 There is no request/response pattern like HTTP.
 
-## No Head of Line Blocking
+## No head of line blocking
 
 All data is transmitted over UDP. Unlike data sent over WebSockets, data sent across netcode.io is not subject to head of line blocking.
 
