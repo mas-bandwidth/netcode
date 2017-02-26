@@ -12,24 +12,13 @@ DONE
 
     Need to write project README.md (adapt from white paper)
 
-TODO
-
-    -----------------
-
     Need to write project BUILDING.md (adapt from yojimbo)
 
-    Need to write USAGE.md show how to use the APIs
+TODO
 
-    Need to find a way to transition old gafferongames.com to new gafferongames.com
+    Find a way to transition old gafferongames to new gafferongames.com
 
-    Maybe a simple solution where it tries first to match on gafferongames, but if it can't find it on the new site, it falls back to the old website?
+    This is necessary for the netcode.io announcement coming up, because at this point the whitepaper should become public.
 
-    This would allow automatic fallback, without a bunch of work on my part trying to manually find all links.
-
-    -----------------
-
-    Lower priority
-
-    Get the project automatically build by coverity
-
-    -----------------
+    But I don't have all gafferongames.com ported, so I think I need to do something smart, a mix of old and new, at least until I can finish porting across. Think about what is the best way to do this!
+    
