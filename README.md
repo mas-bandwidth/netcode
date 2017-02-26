@@ -17,11 +17,15 @@ This github repository contains the reference implementation of this protocol in
 
 # What are the benefits?
 
+## Simplicity
+
+netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
+
+It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
+
 ## Full bidirectional transfer of data
 
 Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
-
-There is no request/response pattern like HTTP.
 
 ## No head of line blocking
 
@@ -29,15 +33,9 @@ Unlike data sent over WebSockets, data sent across netcode.io is sent over UDP, 
 
 No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
-## Connection rate limiting is performed on the web backend
+## Connection rate limiting can be performed on the web backend
 
-Because netcode.io servers only accept connections from clients with connect tokens, traditional web rate limiting can be applied to rest calls that generate connect tokens for authenticated users, rather than attempting to rate limit connections to the dedicated servers themselves over UDP.
-
-## Simplicity
-
-netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
-
-It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
+Because netcode.io servers only accept connections from clients with connect tokens, traditional web rate limiting can be applied to REST calls that generate connect tokens for authenticated users, instead of attempting to rate limit incoming connections at the UDP protocol level on each dedicated server instance.
 
 # How does it work?
 
