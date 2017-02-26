@@ -29,7 +29,7 @@ Unlike data sent over WebSockets, data sent across netcode.io is sent over UDP, 
 
 No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
-## Authentication rate limiting may be performed on the web backend
+## Connection rate limiting is performed on the web backend
 
 Because netcode.io servers only accept connections from clients with connect tokens, traditional web rate limiting can be applied to rest calls that generate connect tokens for authenticated users, rather than attempting to rate limit connections to the dedicated servers themselves over UDP.
 
