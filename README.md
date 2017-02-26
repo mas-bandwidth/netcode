@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each server having some maximum number of players.
+It’s designed for games like [agar.io](http://agar.io) that shunt players from the main website to a number of dedicated server instances, with each server having some maximum number of players.
 
 It has the following features:
 
@@ -27,11 +27,11 @@ Once a netcode.io connection is established, data can be exchanged between clien
 
 ## No head of line blocking
 
-Unlike data sent over WebSockets, data sent across netcode.io is sent over UDP, so it is not subject to head of line blocking. No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
+Data sent across netcode.io is sent over UDP, so it is not subject to head of line blocking. No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
 ## Connection rate limiting can be performed on the web backend
 
-Because netcode.io servers only accept connections from clients with connect tokens, traditional web rate limiting can be applied to REST calls that generate connect tokens for authenticated users, instead of attempting to rate limit incoming connections at the UDP protocol level on each dedicated server instance.
+Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limit incoming connections at the UDP protocol level on each dedicated server instance.
 
 # How does it work?
 
