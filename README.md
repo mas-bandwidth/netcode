@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It’s designed for games like [agar.io](http://agar.io) that shunt players from the main website to a number of dedicated server instances, with each server having some maximum number of players.
+It’s designed for games like [agar.io](http://agar.io) that shunt players from a main website or web backend to a number of dedicated server instances, with each server having some maximum number of players.
 
 It has the following features:
 
@@ -27,7 +27,7 @@ Once a netcode.io connection is established, data can be exchanged between clien
 
 ## No head of line blocking
 
-Data sent across netcode.io is sent over UDP, so it is not subject to head of line blocking. No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
+Data sent across netcode.io is sent over UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
 ## Connection rate limiting can be performed on the web backend
 
