@@ -8,9 +8,10 @@ It’s designed for games like [agar.io](http://agar.io) that need to shunt play
 
 It has the following properties:
 
-1. It's connection oriented
-2. It encrypts and sign packets
-3. It provides authentication support so only authenticated clients can connect to dedicated servers
+1. All packets are delivered over UDP
+2. Connection oriented
+3. Encrypts and sign packets
+4. Only authenticated clients can connect to dedicated servers
 
 This github repository contains the reference implementation of this protocol in C.
 
@@ -24,7 +25,7 @@ There is no request/response pattern like HTTP.
 
 ## No head of line blocking
 
-All data is transmitted over UDP. Unlike data sent over WebSockets, data sent across netcode.io is not subject to head of line blocking.
+Unlike data sent over WebSockets, data sent across netcode.io sent over UDP, so it is not subject to head of line blocking.
 
 No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
@@ -36,11 +37,13 @@ It has no external dependencies except [libsodium](http://www.libsodium.org), wh
 
 # How does it work?
 
-Please refer to this whitepaper [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
+Please refer to the second half of this whitepaper [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
 
 # How can I help?
 
-This is an open source project. Please help if you can:
+This is an open source project and we welcome contributions. Please join us!
+
+Here are some things that we think would be helpful:
 
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
