@@ -2,7 +2,7 @@
 
 # netcode.io
 
-**netcode.io** is a protocol for creating secure client/server connections over UDP.
+**netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
 It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each server having some maximum number of players.
 
@@ -12,8 +12,6 @@ It has the following features:
 2. Encrypts and sign packets
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
-
-This github repository contains the reference implementation of this protocol in C.
 
 # What are the benefits?
 
