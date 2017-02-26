@@ -25,7 +25,7 @@ There is no request/response pattern like HTTP.
 
 ## No head of line blocking
 
-Unlike data sent over WebSockets, data sent across netcode.io sent over UDP, so it is not subject to head of line blocking.
+Unlike data sent over WebSockets, data sent across netcode.io is sent over UDP, so it is not subject to head of line blocking.
 
 No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
