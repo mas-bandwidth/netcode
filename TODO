@@ -16,9 +16,4 @@ DONE
 
 TODO
 
-    Find a way to transition old gafferongames to new gafferongames.com
-
-    This is necessary for the netcode.io announcement coming up, because at this point the whitepaper should become public.
-
-    But I don't have all gafferongames.com ported, so I think I need to do something smart, a mix of old and new, at least until I can finish porting across. Think about what is the best way to do this!
-    
+    Write USAGE.md
