@@ -27,7 +27,7 @@ Once a netcode.io connection is established, data can be exchanged between clien
 
 ## No head of line blocking
 
-Data sent across netcode.io is sent over UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
+Data sent across netcode.io is sent over UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
 
 ## Connection rate limiting can be performed on the web backend
 
