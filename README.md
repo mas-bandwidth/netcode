@@ -35,7 +35,7 @@ Because netcode.io servers only accept connections from clients with short-lived
 
 # How does it work?
 
-Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
+Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://new.gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/)
 
 # How can I help?
 
