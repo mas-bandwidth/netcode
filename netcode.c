@@ -555,7 +555,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         return NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED;
     }
 
-#elif YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_WINDOWS
+#elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
     DWORD nonBlocking = 1;
     if ( ioctlsocket( s->handle, FIONBIO, &nonBlocking ) != 0 )
