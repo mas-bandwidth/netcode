@@ -31,7 +31,7 @@ Data sent across netcode.io is sent over UDP so it's not subject to head of line
 
 ## Connection rate limiting can be performed on the web backend
 
-Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limit incoming connections at the UDP protocol level for each dedicated server instance.
+Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level for each dedicated server instance.
 
 # How does it work?
 
