@@ -131,5 +131,5 @@ int main( int argc, char ** argv )
 
     netcode_term();
     
-    return 0;
+    return EXIT_SUCCESS;
 }
