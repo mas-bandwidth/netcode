@@ -27,11 +27,11 @@ Once a netcode.io connection is established, data can be exchanged between clien
 
 ## No head of line blocking
 
-Data sent across netcode.io is sent over UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
+Data is sent across UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
 
 ## Connection rate limiting can be performed on the web backend
 
-Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level for each dedicated server instance.
+Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level.
 
 # How does it work?
 
@@ -50,7 +50,7 @@ Here are some things that we think would be helpful:
 * Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 * Create bindings for netcode.io for your favorite language
 * Help me finish writing the spec and provide feedback on the spec!
-* Develop a testing framework to guarantee that different languages implementations confirm to the spec.
+* Develop a testing framework to guarantee that different languages implementations conform to the spec.
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
 
