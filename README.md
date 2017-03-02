@@ -2,31 +2,18 @@
 
 # netcode.io
 
-**netcode.io** is a protocol for creating secure connections between clients and dedicated servers over UDP.
+**netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It’s designed for games like [agar.io](http://agar.io) that need to shunt players off from the main website to a number of dedicated server instances, each with some maximum number of players (up to 256 players per-instance in the reference implementation). 
+It’s designed for games like [agar.io](http://agar.io) that shunt players from a main website or web backend to a number of dedicated server instances, with each dedicated server having some maximum number of players.
 
-It has the following properties:
+It has the following features:
 
-1. It's connection oriented
-2. It encrypts and sign packets
-3. It provides authentication support so only authenticated clients can connect to dedicated servers
-
-This github repository contains the reference implementation of this protocol in C.
+1. Connection oriented
+2. Encrypts and sign packets
+3. All packets are delivered over UDP
+4. Only authenticated clients can connect to dedicated servers
 
 # What are the benefits?
-
-## Full bidirectional transfer of data
-
-Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
-
-There is no request/response pattern like HTTP.
-
-## No head of line blocking
-
-All data is transmitted over UDP. Unlike data sent over WebSockets, data sent across netcode.io is not subject to head of line blocking.
-
-No head of line blocking means games play better, as time critical data like player inputs and the state of the world are transmitted as quickly as possible, without being artificially delayed while waiting for dropped packets to be resent.
 
 ## Simplicity
 
@@ -34,13 +21,27 @@ netcode.io is a simple protocol that can easily be incorporated into a client, d
 
 It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
 
+## Full bidirectional transfer of data
+
+Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
+
+## No head of line blocking
+
+Data is sent across UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
+
+## Connection rate limiting can be performed on the web backend
+
+Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level.
+
 # How does it work?
 
-Please refer to this whitepaper [Why can't I send UDP packets from a browser?](http://173.255.195.190/gafferongames/post/why_cant_i_send_udp_packets_from_a_browser/)
+Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://new.gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/)
 
 # How can I help?
 
-This is an open source project. Please help if you can:
+This is an open source project and we welcome contributions. Please join us!
+
+Here are some things that we think would be helpful:
 
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
@@ -49,7 +50,7 @@ This is an open source project. Please help if you can:
 * Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 * Create bindings for netcode.io for your favorite language
 * Help me finish writing the spec and provide feedback on the spec!
-* Develop a testing framework to guarantee that different languages implementations confirm to the spec.
+* Develop a testing framework to guarantee that different languages implementations conform to the spec.
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
 
