@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Val Vanderschaegen <valere.vanderschaegen@gmail.com>"]
 build = "build.rs"
 links = "libnetcode"
+keywords = ["netcode"]
+license = "BSD-3-Clause"
+repository = "https://github.com/vvanders/netcode-rust"
+description = "Wrapper for netcode.io library"
 
 [dependencies]
 
