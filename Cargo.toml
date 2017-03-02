@@ -1,12 +1,13 @@
 [package]
 name = "netcode"
-version = "0.1.0"
+version = "0.1.01"
 authors = ["Val Vanderschaegen <valere.vanderschaegen@gmail.com>"]
 build = "build.rs"
 links = "libnetcode"
 keywords = ["netcode"]
 license = "BSD-3-Clause"
 repository = "https://github.com/vvanders/netcode-rust"
+documentation = "https://docs.rs/netcode"
 description = "Wrapper for netcode.io library"
 
 [dependencies]
