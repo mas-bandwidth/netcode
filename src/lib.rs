@@ -1,3 +1,5 @@
+//@todo: Remove when we have implemented all fns
+#[allow(dead_code)]
 mod netcode;
 mod util;   
 
@@ -6,6 +8,10 @@ use std::ffi::CString;
 pub enum ClientError {
     Create,
     Token
+}
+
+pub enum SendError {
+    LengthExceeded
 }
 
 pub enum ClientState {
@@ -76,6 +82,44 @@ impl Client {
             ClientState::from_code(netcode::netcode_client_state(self.handle))
         }
     }
+
+    pub fn update(&mut self, time: f64) {
+        unsafe {
+            netcode::netcode_client_update(self.handle, time);
+        }
+    }
+
+    pub fn send(&mut self, data: &[u8]) -> Result<(), SendError> {
+        if data.len() > netcode::NETCODE_MAX_PACKET_SIZE {
+            return Err(SendError::LengthExceeded)
+        }
+
+        unsafe {
+            netcode::netcode_client_send_packet(self.handle, data.as_ptr(), data.len() as i32);
+        }
+
+        Ok(())
+    }
+
+    pub fn recv<'a>(&'a mut self) -> Option<ClientPacket<'a>> {
+        let mut bytes: std::os::raw::c_int = 0;
+
+        unsafe {
+            let ptr = netcode::netcode_client_receive_packet(self.handle, &mut bytes);
+
+            if ptr == std::ptr::null_mut() {
+                return None
+            }
+
+            Some(ClientPacket::new(self, ptr as *mut u8, bytes as usize))
+        }
+    }
+
+    pub fn disconnect(&mut self) {
+        unsafe {
+            netcode::netcode_client_disconnect(self.handle)
+        }
+    }
 }
 
 impl Drop for Client {
@@ -83,6 +127,36 @@ impl Drop for Client {
         unsafe {
             netcode::netcode_client_destroy(self.handle);
             util::global_term();
+        }
+    }
+}
+
+pub struct ClientPacket<'a> {
+    client: &'a Client,
+    data: *mut u8,
+    size: usize
+}
+
+impl<'a> ClientPacket<'a> {
+    fn new(client: &'a Client, data: *mut u8, size: usize) -> ClientPacket<'a> {
+        ClientPacket {
+            client: client,
+            data: data,
+            size: size
+        }
+    }
+
+    pub fn data(&self) -> &'a [u8] {
+        unsafe {
+            std::slice::from_raw_parts(self.data, self.size)
+        }
+    }
+}
+
+impl<'a> Drop for ClientPacket<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            netcode::netcode_client_free_packet(self.client.handle, self.data as *mut std::os::raw::c_void);
         }
     }
 }

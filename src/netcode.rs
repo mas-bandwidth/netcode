@@ -39,11 +39,11 @@ pub const NETCODE_LOG_LEVEL_DEBUG: ::std::os::raw::c_uint = 3;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct netcode_client_t;
+pub struct netcode_client_t([u8; 0]);
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct netcode_server_t;
+pub struct netcode_server_t([u8; 0]);
 
 extern "C" {
     pub fn netcode_init() -> ::std::os::raw::c_int;
@@ -58,7 +58,7 @@ extern "C" {
                                   connect_token: *const u8);
     pub fn netcode_client_update(client: *mut netcode_client_t, time: f64);
     pub fn netcode_client_send_packet(client: *mut netcode_client_t,
-                                      packet_data: *mut u8,
+                                      packet_data: *const u8,
                                       packet_bytes: ::std::os::raw::c_int);
     pub fn netcode_client_receive_packet(client: *mut netcode_client_t,
                                          packet_bytes:
