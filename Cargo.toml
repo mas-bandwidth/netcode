@@ -1,6 +1,6 @@
 [package]
 name = "netcode"
-version = "0.1.01"
+version = "0.1.1"
 authors = ["Val Vanderschaegen <valere.vanderschaegen@gmail.com>"]
 build = "build.rs"
 links = "libnetcode"
