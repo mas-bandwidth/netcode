@@ -1,7 +1,5 @@
 pub const NETCODE_CONNECT_TOKEN_BYTES: usize = 4096;
 pub const NETCODE_KEY_BYTES: usize = 32;
-pub const NETCODE_MAC_BYTES: usize = 16;
-pub const NETCODE_NONCE_BYTES: usize = 8;
 pub const NETCODE_MAX_SERVERS_PER_CONNECT: usize = 16;
 
 pub const NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED: ::std::os::raw::c_int =
@@ -82,9 +80,9 @@ extern "C" {
                                           connect_token: *mut u8)
      -> ::std::os::raw::c_int;
 
-    pub fn netcode_server_create(bind_address: *mut ::std::os::raw::c_char,
-                                 public_address: *mut ::std::os::raw::c_char,
-                                 protocol_id: u64, private_key: *mut u8,
+    pub fn netcode_server_create(bind_address: *const ::std::os::raw::c_char,
+                                 public_address: *const ::std::os::raw::c_char,
+                                 protocol_id: u64, private_key: *const u8,
                                  time: f64) -> *mut netcode_server_t;
     pub fn netcode_server_start(server: *mut netcode_server_t,
                                 max_clients: ::std::os::raw::c_int);
@@ -100,7 +98,7 @@ extern "C" {
                                                      *mut netcode_server_t);
     pub fn netcode_server_send_packet(server: *mut netcode_server_t,
                                       client_index: ::std::os::raw::c_int,
-                                      packet_data: *mut u8,
+                                      packet_data: *const u8,
                                       packet_bytes: ::std::os::raw::c_int);
     pub fn netcode_server_receive_packet(server: *mut netcode_server_t,
                                          client_index: ::std::os::raw::c_int,
