@@ -76,6 +76,12 @@ impl Server {
         }
     }
 
+    pub fn client_id(&mut self, client_index: usize) -> u64 {
+        unsafe {
+            netcode_server_client_id(self.handle, client_index as i32)
+        }
+    }
+
     pub fn num_clients_connected(&mut self) -> usize {
         unsafe {
             netcode_server_num_clients_connected(self.handle) as usize

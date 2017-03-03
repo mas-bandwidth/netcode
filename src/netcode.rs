@@ -109,5 +109,6 @@ extern "C" {
                                       packet: *mut ::std::os::raw::c_void);
     pub fn netcode_server_num_clients_connected(server: *mut netcode_server_t)
      -> ::std::os::raw::c_int;
+    pub fn netcode_server_client_id(server: *mut netcode_server_t, client_index: ::std::os::raw::c_int ) -> u64;
     pub fn netcode_server_destroy(server: *mut netcode_server_t);
 }
