@@ -72,11 +72,11 @@ extern "C" {
     pub fn netcode_generate_connect_token(num_server_addresses:
                                               ::std::os::raw::c_int,
                                           server_addresses:
-                                              *mut *mut ::std::os::raw::c_char,
+                                              *const *const ::std::os::raw::c_char,
                                           expire_seconds:
                                               ::std::os::raw::c_int,
                                           client_id: u64, protocol_id: u64,
-                                          sequence: u64, private_key: *mut u8,
+                                          sequence: u64, private_key: *const u8,
                                           connect_token: *mut u8)
      -> ::std::os::raw::c_int;
 

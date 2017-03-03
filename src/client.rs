@@ -4,11 +4,13 @@ use util;
 
 use std::ffi::CString;
 
+#[derive(Debug)]
 pub enum ClientError {
     Create,
     Token
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ClientState {
     ConnectTokenExpired,
     InvalidConnectToken,
@@ -69,7 +71,7 @@ impl Client {
     }
 
     pub fn new(token: &ConnectToken) -> Result<Client, ClientError> {
-        Self::new_with_host("::", token)
+        Self::new_with_host("127.0.0.1", token)
     }
 
     pub fn state(&self) -> ClientState {

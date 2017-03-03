@@ -3,6 +3,7 @@ use util;
 
 use std::ffi::CString;
 
+#[derive(Debug)]
 pub enum ServerError {
     Create,
     MaxClients

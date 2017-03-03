@@ -2,6 +2,7 @@ use netcode::*;
 
 use std::ffi::CString;
 
+#[derive(Debug)]
 pub enum TokenError {
     Generate
 }
@@ -21,7 +22,7 @@ impl ConnectToken {
         ConnectToken { token: token }
     }
 
-    pub fn from_hosts<I>(hosts: I, private_key: &mut [u8; NETCODE_KEY_BYTES], expire: i32, client_id: u64, protocol: u64, sequence: u64)
+    pub fn from_hosts<I>(hosts: I, private_key: &[u8; NETCODE_KEY_BYTES], expire: i32, client_id: u64, protocol: u64, sequence: u64)
             -> Result<ConnectToken, TokenError>
             where I: Iterator<Item=String> {
         let mut host_list_ptr = [::std::ptr::null_mut(); NETCODE_MAX_SERVERS_PER_CONNECT];
@@ -37,23 +38,25 @@ impl ConnectToken {
 
         let result = unsafe {
             match netcode_generate_connect_token(host_count,
-                host_list_ptr.as_mut_ptr(),
+                host_list_ptr.as_ptr() as *const *const i8,
                 expire,
                 client_id,
                 protocol,
                 sequence,
-                private_key.as_mut_ptr(),
+                private_key.as_ptr(),
                 token.as_mut_ptr()
                 ) {
-                    0 => Ok(ConnectToken { token: token }),
-                    _ => Err(TokenError::Generate)
+                    0 => Err(TokenError::Generate),
+                    _ => Ok(ConnectToken { token: token })
             }
         };
 
         //Make sure to free our memory that we passed to netcode
         for host in &mut host_list_ptr[..] {
-            unsafe {
-                CString::from_raw(*host);
+            if *host != ::std::ptr::null_mut() {
+                unsafe {
+                    CString::from_raw(*host);
+                }
             }
             *host = ::std::ptr::null_mut();
         }
