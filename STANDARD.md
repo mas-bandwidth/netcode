@@ -1,20 +1,16 @@
-# netcode.io standard
+# netcode.io standard v1.0
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It’s designed for games like [agar.io](http://agar.io) that shunt players from a main website or web backend to a number of dedicated server instances, with each dedicated server having some maximum number of players.
+## Overview
 
-It has the following features:
+## Packet Structure
 
-1. Connection oriented
-2. Encrypts and sign packets
-3. All packets are delivered over UDP
-4. Only authenticated clients can connect to dedicated servers
+## Connect Token
 
-# What are the benefits?
+## Challenge Token
 
-## Simplicity
+## Client State Machine
 
-netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
+## Server Connection Processing
 
-It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
