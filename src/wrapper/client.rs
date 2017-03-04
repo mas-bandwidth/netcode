@@ -1,6 +1,7 @@
-use netcode::*;
-use token::*;
-use util;
+use wrapper::netcode::*;
+use wrapper::token::*;
+use wrapper::util;
+use wrapper::SendError;
 
 use std::ffi::CString;
 
@@ -86,9 +87,9 @@ impl Client {
         }
     }
 
-    pub fn send(&mut self, data: &[u8]) -> Result<(), ::SendError> {
+    pub fn send(&mut self, data: &[u8]) -> Result<(), SendError> {
         if data.len() > NETCODE_MAX_PACKET_SIZE {
-            return Err(::SendError::LengthExceeded)
+            return Err(SendError::LengthExceeded)
         }
 
         unsafe {

@@ -1,6 +1,6 @@
 use std::sync::atomic;
 
-use netcode;
+use wrapper::netcode;
 
 static mut NETCODE_INIT_COUNT: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 

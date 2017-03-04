@@ -1,5 +1,6 @@
-use netcode::*;
-use util;
+use wrapper::netcode::*;
+use wrapper::util;
+use wrapper::SendError;
 
 use std::ffi::CString;
 
@@ -44,9 +45,9 @@ impl Server {
         }
     }
 
-    pub fn send(&mut self, client_id: i32, data: &[u8]) -> Result<(), ::SendError> {
+    pub fn send(&mut self, client_id: i32, data: &[u8]) -> Result<(), SendError> {
         if data.len() > NETCODE_MAX_PACKET_SIZE {
-            return Err(::SendError::LengthExceeded)
+            return Err(SendError::LengthExceeded)
         }
 
         unsafe {

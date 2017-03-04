@@ -1,4 +1,4 @@
-use netcode::*;
+use wrapper::netcode::*;
 
 use std::ffi::CString;
 
