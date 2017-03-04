@@ -12,12 +12,6 @@
             "cwd": "${workspaceRoot}",
             "environment": [],
             "externalConsole": false
-        },
-        {
-            "name": "C++ Attach (Windows)",
-            "type": "cppvsdbg",
-            "request": "attach",
-            "processId": "${command.pickProcess}"
         }
     ]
 }
