@@ -11,6 +11,9 @@ documentation = "https://docs.rs/netcode"
 description = "Wrapper for netcode.io library"
 
 [dependencies]
+libsodium-sys = "0.0.14"
+log = "0.3.6"
+byteorder = "1.0.0"
 
 [build-dependencies]
 gcc = "0.3.43"
