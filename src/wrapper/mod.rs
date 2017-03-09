@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-mod netcode;
+pub mod netcode;
 mod client;
 mod server;
 mod token;

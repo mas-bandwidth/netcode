@@ -77,6 +77,8 @@ pub struct ConnectToken {
     pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
     /// Private key for server -> client communcation.
     pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
+    /// Time in seconds connection should wait before disconnecting
+    pub timeout_sec: u32
 }
 
 pub struct PrivateData {
@@ -156,6 +158,7 @@ impl ConnectToken {
             private_data: private_data,
             client_to_server_key: decoded_data.client_to_server_key,
             server_to_client_key: decoded_data.server_to_client_key,
+            timeout_sec: NETCODE_TIMEOUT_SECONDS
         })
     }
 
@@ -189,6 +192,7 @@ impl ConnectToken {
         self.hosts.write(out)?;
         out.write(&self.client_to_server_key)?;
         out.write(&self.server_to_client_key)?;
+        out.write_u32::<BigEndian>(self.timeout_sec)?;
 
         Ok(())
     }
@@ -219,6 +223,8 @@ impl ConnectToken {
         let mut server_to_client_key = [0; NETCODE_KEY_BYTES];
         source.read_exact(&mut server_to_client_key)?;
 
+        let timeout_sec = source.read_u32::<BigEndian>()?;
+
         Ok(ConnectToken {
             hosts: hosts,
             create_utc: create_utc,
@@ -228,6 +234,7 @@ impl ConnectToken {
             private_data: private_data,
             client_to_server_key: client_to_server_key,
             server_to_client_key: server_to_client_key,
+            timeout_sec: timeout_sec
         })
     }
 }
@@ -460,7 +467,6 @@ fn read_write() {
                         client_id,
                         Some(&userdata)).unwrap();
 
-
     let mut scratch = [0; NETCODE_CONNECT_TOKEN_BYTES];
     token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();
 
@@ -474,6 +480,7 @@ fn read_write() {
     assert_eq!(read.create_utc, token.create_utc);
     assert_eq!(read.sequence, token.sequence);
     assert_eq!(read.protocol, token.protocol);
+    assert_eq!(read.timeout_sec, NETCODE_TIMEOUT_SECONDS);
 }
 
 #[test]
@@ -511,7 +518,7 @@ fn decode() {
 }
 
 #[test]
-fn interop() {
+fn interop_read() {
     use wrapper;
 
     let mut private_key = [0; NETCODE_KEY_BYTES];
@@ -539,4 +546,37 @@ fn interop() {
     assert_eq!(conv.protocol, protocol);
     assert_eq!(conv.expire_utc, conv.create_utc + expire as u64);
 }
- 
+
+#[test]
+fn interop_write() {
+    use wrapper;
+
+    let mut private_key = [0; NETCODE_KEY_BYTES];
+    crypto::random_bytes(&mut private_key);
+
+    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut userdata);
+
+    let expire = 30;
+    let sequence = 1;
+    let protocol = 0x112233445566;
+    let client_id = 0x665544332211;
+
+    let token = ConnectToken::generate(
+                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+                        &private_key,
+                        expire,
+                        sequence,
+                        protocol,
+                        client_id,
+                        Some(&userdata)).unwrap();
+
+    let mut scratch = [0; NETCODE_CONNECT_TOKEN_BYTES];
+    token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();
+
+    unsafe {
+        let mut output = [0; 4096];
+        assert_eq!(wrapper::netcode::netcode_read_connect_token(scratch.as_ptr(), scratch.len() as i32, output.as_mut_ptr()), 1);
+    }
+}
+

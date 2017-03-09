@@ -49,6 +49,22 @@ extern "C" {
     pub fn netcode_log_level(level: ::std::os::raw::c_int);
     pub fn netcode_random_bytes(data: *mut u8, bytes: ::std::os::raw::c_int);
 
+    pub fn netcode_read_connect_token(
+        buffer: *const u8, 
+        buffer_length: ::std::os::raw::c_int,
+        connect_token: *mut u8)
+        -> ::std::os::raw::c_int;
+    pub fn netcode_generate_connect_token(num_server_addresses:
+                                              ::std::os::raw::c_int,
+                                          server_addresses:
+                                              *const *const ::std::os::raw::c_char,
+                                          expire_seconds:
+                                              ::std::os::raw::c_int,
+                                          client_id: u64, protocol_id: u64,
+                                          sequence: u64, private_key: *const u8,
+                                          connect_token: *mut u8)
+     -> ::std::os::raw::c_int;
+
     pub fn netcode_client_create(address: *const ::std::os::raw::c_char,
                                  time: f64) -> *mut netcode_client_t;
     pub fn netcode_client_destroy(client: *mut netcode_client_t);
@@ -68,16 +84,6 @@ extern "C" {
     pub fn netcode_client_state(client: *const netcode_client_t)
      -> ::std::os::raw::c_int;
     pub fn netcode_client_index(client: *mut netcode_client_t)
-     -> ::std::os::raw::c_int;
-    pub fn netcode_generate_connect_token(num_server_addresses:
-                                              ::std::os::raw::c_int,
-                                          server_addresses:
-                                              *const *const ::std::os::raw::c_char,
-                                          expire_seconds:
-                                              ::std::os::raw::c_int,
-                                          client_id: u64, protocol_id: u64,
-                                          sequence: u64, private_key: *const u8,
-                                          connect_token: *mut u8)
      -> ::std::os::raw::c_int;
 
     pub fn netcode_server_create(bind_address: *const ::std::os::raw::c_char,
