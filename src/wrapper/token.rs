@@ -1,4 +1,5 @@
-use wrapper::netcode::*;
+use common::*;
+use wrapper::netcode as wrapper;
 
 use std::ffi::CString;
 
@@ -37,7 +38,7 @@ impl ConnectToken {
         let mut token = [0; NETCODE_CONNECT_TOKEN_BYTES];
 
         let result = unsafe {
-            match netcode_generate_connect_token(host_count,
+            match wrapper::netcode_generate_connect_token(host_count,
                 host_list_ptr.as_ptr() as *const *const i8,
                 expire,
                 client_id,

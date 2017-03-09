@@ -1,8 +1,7 @@
 use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::io;
-use std::io::{Read, Write};
 use std::time;
-use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian};
+use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 
 use common::*;
 use crypto;
@@ -60,24 +59,36 @@ const NETCODE_VERSION_LEN: usize = 13;
 const NETCODE_VERSION_STRING: &'static [u8; NETCODE_VERSION_LEN] = b"NETCODE 1.00\0";
 const NETCODE_ADDITIONAL_DATA_SIZE: usize = NETCODE_VERSION_LEN + 8 + 8;
 
+/// Token used by clients to connect and authenticate to a netcode `Server`
 pub struct ConnectToken {
-    protocol: u64,
-    create_utc: u64,
-    expire_utc: u64,
-    sequence: u64,
-    private_data: [u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES + crypto::NETCODE_ENCRYPT_EXTA_BYTES],
-    hosts: HostList,
-    client_to_server_key: [u8; NETCODE_KEY_BYTES],
-    server_to_client_key: [u8; NETCODE_KEY_BYTES],
-
-    decoded_private_data: Option<PrivateData>
+    /// Protocl ID for messages relayed by netcode.
+    pub protocol: u64,
+    /// Token creation time in ms from unix epoch.
+    pub create_utc: u64,
+    /// Token expire time in ms from unix epoch.
+    pub expire_utc: u64,
+    /// Nonce sequence for decoding private data.
+    pub sequence: u64,
+    /// Private data encryped with server's private key(separate from client <-> server keys).
+    pub private_data: [u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
+    /// List of hosts this token supports connecting to.
+    pub hosts: HostList,
+    /// Private key for client -> server communcation.
+    pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
+    /// Private key for server -> client communcation.
+    pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
 }
 
 pub struct PrivateData {
+    /// Unique client id, determined by the server.
     pub client_id: u64,
+    /// Secondary host list to authoritatively determine which hosts clients can connect to.
     pub hosts: HostList,
+    /// Private key for client -> server communcation.
     pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
+    /// Private key for server -> client communcation.
     pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
+    /// Server-specific user data.
     pub userdata: [u8; NETCODE_USER_DATA_BYTES]
 }
 
@@ -97,8 +108,8 @@ fn generate_userdata() -> [u8; NETCODE_USER_DATA_BYTES] {
 
 fn generate_additional_data<W>(mut out: W, protocol: u64, expire_utc: u64) -> Result<(), io::Error> where W: io::Write {
     out.write(NETCODE_VERSION_STRING)?;
-    out.write_u64::<LittleEndian>(protocol)?;
-    out.write_u64::<LittleEndian>(expire_utc)?;
+    out.write_u64::<BigEndian>(protocol)?;
+    out.write_u64::<BigEndian>(expire_utc)?;
 
     Ok(())
 }
@@ -108,7 +119,7 @@ impl ConnectToken {
     /// `addrs` - List of allowed hosts to connect to.
     /// `private_key` - Server private key that will be used to authenticate requests.
     /// `expire_sec` - How long this token is valid for in seconds.
-    /// `sequence` - Sequence nonce to use, this should always be unique per server, per token.
+    /// `sequence` - Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
     /// `protocol` - Client specific protocol.
     /// `client_id` - Unique client identifier.
     /// `userdata` - Client specific userdata.
@@ -133,7 +144,7 @@ impl ConnectToken {
 
         let decoded_data = PrivateData::new(client_id, hosts, userdata);
 
-        let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES + crypto::NETCODE_ENCRYPT_EXTA_BYTES];
+        let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
         decoded_data.encode(&mut io::Cursor::new(&mut private_data[..]), &additional_data, sequence, private_key)?;
 
         Ok(ConnectToken {
@@ -145,15 +156,17 @@ impl ConnectToken {
             private_data: private_data,
             client_to_server_key: decoded_data.client_to_server_key,
             server_to_client_key: decoded_data.server_to_client_key,
-            decoded_private_data: Some(decoded_data)
         })
     }
 
-    pub fn decode(&mut self, private_key: &[u8; NETCODE_KEY_BYTES], sequence: u64) -> Result<(), DecodeError> {
+    /// Decodes the private data stored by this connection token.
+    /// `private_key` - Server's private key used to generate this token.
+    /// `sequence` - Nonce sequence used to generate this token.
+    pub fn decode(&mut self, private_key: &[u8; NETCODE_KEY_BYTES], sequence: u64) -> Result<PrivateData, DecodeError> {
         let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];
         generate_additional_data(io::Cursor::new(&mut additional_data[..]), self.protocol, self.expire_utc)?;
 
-        let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+        let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
         let len = crypto::decode(&mut decoded, &self.private_data, &additional_data, sequence, private_key)?;
 
         if len != decoded.len() {
@@ -161,18 +174,17 @@ impl ConnectToken {
         }
 
         let private_data = PrivateData::read(&mut io::Cursor::new(&decoded[..]))?;
-        self.decoded_private_data = Some(private_data);
 
-        Ok(())
+        Ok(private_data)
     }
 
     /// Encodes a ConnectToken into a `io::Write`.
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
         out.write(NETCODE_VERSION_STRING)?;
-        out.write_u64::<LittleEndian>(self.protocol)?;
-        out.write_u64::<LittleEndian>(self.create_utc)?;
-        out.write_u64::<LittleEndian>(self.expire_utc)?;
-        out.write_u64::<LittleEndian>(self.sequence)?;
+        out.write_u64::<BigEndian>(self.protocol)?;
+        out.write_u64::<BigEndian>(self.create_utc)?;
+        out.write_u64::<BigEndian>(self.expire_utc)?;
+        out.write_u64::<BigEndian>(self.sequence)?;
         out.write(&self.private_data)?;
         self.hosts.write(out)?;
         out.write(&self.client_to_server_key)?;
@@ -191,15 +203,15 @@ impl ConnectToken {
             return Err(DecodeError::InvalidVersion)
         }
 
-        let protocol = source.read_u64::<LittleEndian>()?;
-        let create_utc = source.read_u64::<LittleEndian>()?;
-        let expire_utc = source.read_u64::<LittleEndian>()?; 
-        let sequence = source.read_u64::<LittleEndian>()?;
+        let protocol = source.read_u64::<BigEndian>()?;
+        let create_utc = source.read_u64::<BigEndian>()?;
+        let expire_utc = source.read_u64::<BigEndian>()?; 
+        let sequence = source.read_u64::<BigEndian>()?;
 
-        let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES + crypto::NETCODE_ENCRYPT_EXTA_BYTES];
+        let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
         source.read_exact(&mut private_data)?;
 
-        let hosts = HostList::from_io(source)?;
+        let hosts = HostList::read(source)?;
 
         let mut client_to_server_key = [0; NETCODE_KEY_BYTES];
         source.read_exact(&mut client_to_server_key)?;
@@ -216,7 +228,6 @@ impl ConnectToken {
             private_data: private_data,
             client_to_server_key: client_to_server_key,
             server_to_client_key: server_to_client_key,
-            decoded_private_data: None
         })
     }
 }
@@ -247,8 +258,8 @@ impl PrivateData {
     pub fn decode<R>(source: &mut R, additional_data: &[u8; NETCODE_ADDITIONAL_DATA_SIZE], sequence: u64, private_key: &[u8; NETCODE_KEY_BYTES])
             -> Result<PrivateData, DecodeError>
                where R: io::Read {
-        let mut encoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES + crypto::NETCODE_ENCRYPT_EXTA_BYTES];
-        let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+        let mut encoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+        let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
         source.read_exact(&mut encoded)?;
 
         crypto::decode(&mut decoded, &encoded, additional_data, sequence, private_key)?;
@@ -259,8 +270,8 @@ impl PrivateData {
     pub fn encode<W>(&self, out: &mut W, additional_data: &[u8; NETCODE_ADDITIONAL_DATA_SIZE], sequence: u64, private_key: &[u8; NETCODE_KEY_BYTES])
             -> Result<(), GenerateError> 
             where W: io::Write {
-        let mut scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
-        let mut out_scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES + crypto::NETCODE_ENCRYPT_EXTA_BYTES];
+        let mut scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
+        let mut out_scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
         self.write(&mut io::Cursor::new(&mut scratch[..]))?;
 
@@ -272,20 +283,20 @@ impl PrivateData {
     }
 
     fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
-        out.write_u64::<LittleEndian>(self.client_id)?;
+        out.write_u64::<BigEndian>(self.client_id)?;
 
         self.hosts.write(out)?;
         out.write(&self.client_to_server_key)?;
         out.write(&self.server_to_client_key)?;
 
-        out.write(&self.userdata);
+        out.write(&self.userdata)?;
 
         Ok(())
     }
 
     fn read<R>(source: &mut R) -> Result<PrivateData, io::Error> where R: io::Read {
-        let client_id = source.read_u64::<LittleEndian>()?;
-        let hosts = HostList::from_io(source)?;
+        let client_id = source.read_u64::<BigEndian>()?;
+        let hosts = HostList::read(source)?;
 
         let mut client_to_server_key = [0; NETCODE_KEY_BYTES];
         source.read_exact(&mut client_to_server_key)?;
@@ -306,11 +317,6 @@ impl PrivateData {
     }
 }
 
-pub struct HostIterator<'a> {
-    hosts: &'a HostList,
-    idx: usize
-}
-
 impl HostList {
     pub fn new<I>(hosts: I) -> HostList where I: Iterator<Item=SocketAddr> {
         let mut final_hosts = [None; NETCODE_MAX_SERVERS_PER_CONNECT];
@@ -324,8 +330,8 @@ impl HostList {
         }
     }
 
-    pub fn from_io<R>(source: &mut R) -> Result<HostList, io::Error> where R: io::Read {
-        let host_count = source.read_u32::<LittleEndian>()?;
+    pub fn read<R>(source: &mut R) -> Result<HostList, io::Error> where R: io::Read {
+        let host_count = source.read_u32::<BigEndian>()?;
         let mut hosts = [None; NETCODE_MAX_SERVERS_PER_CONNECT];
 
         for i in 0..host_count as usize {
@@ -333,18 +339,18 @@ impl HostList {
 
             match host_type {
                 NETCODE_ADDRESS_IPV4 => {
-                    let ip = source.read_u32::<LittleEndian>()?;
-                    let port = source.read_u16::<LittleEndian>()?;
+                    let ip = source.read_u32::<BigEndian>()?;
+                    let port = source.read_u16::<BigEndian>()?;
 
                     hosts[i] = Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::from(ip)), port))
                 },
                 NETCODE_ADDRESS_IPV6 => {
                     let mut ip = [0; 16];
                     source.read_exact(&mut ip)?;
-                    let port = source.read_u16::<LittleEndian>()?;
+                    let port = source.read_u16::<BigEndian>()?;
 
                     hosts[i] = Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::from(ip)), port))
-                }
+                },
                 _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Unknown ip address type"))
             }
         }
@@ -362,27 +368,27 @@ impl HostList {
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
-        out.write_u32::<LittleEndian>(self.get().len() as u32)?;
+        out.write_u32::<BigEndian>(self.get().len() as u32)?;
         for host in self.get() {
             match host {
                 SocketAddr::V4(addr) => {
                     out.write_u8(NETCODE_ADDRESS_IPV4)?;
                     let ip = addr.ip().octets();
 
-                    for i in (0..4).rev() {
+                    for i in 0..4 {
                         out.write_u8(ip[i])?;
                     }
                 },
                 SocketAddr::V6(addr) => {
-                    out.write_u8(NETCODE_ADDRESS_IPV6);
+                    out.write_u8(NETCODE_ADDRESS_IPV6)?;
                     let ip = addr.ip().octets();
 
-                    for i in (0..16).rev() {
+                    for i in 0..16 {
                         out.write_u8(ip[i])?;
                     }
                 }
             }
-            out.write_u16::<LittleEndian>(host.port())?;
+            out.write_u16::<BigEndian>(host.port())?;
         }
 
         Ok(())
@@ -393,6 +399,12 @@ impl PartialEq for HostList {
     fn eq(&self, other: &HostList) -> bool {
         self.hosts == other.hosts
     }
+}
+
+/// Iterator for hosts held by a `ConnectToken`
+pub struct HostIterator<'a> {
+    hosts: &'a HostList,
+    idx: usize
 }
 
 impl<'a> Iterator for HostIterator<'a> {
@@ -486,21 +498,45 @@ fn decode() {
                         client_id,
                         Some(&userdata)).unwrap();
     
-    token.decoded_private_data = None;
-    
-    token.decode(&private_key, sequence).unwrap();
+    let decoded = token.decode(&private_key, sequence).unwrap();
 
-    match token.decoded_private_data {
-        Some(decoded) => {
-            assert_eq!(decoded.hosts, token.hosts);
-            assert_eq!(decoded.client_id, client_id);
-            assert_eq!(decoded.client_to_server_key, token.client_to_server_key);
-            assert_eq!(decoded.server_to_client_key, token.server_to_client_key);
+    assert_eq!(decoded.hosts, token.hosts);
+    assert_eq!(decoded.client_id, client_id);
+    assert_eq!(decoded.client_to_server_key, token.client_to_server_key);
+    assert_eq!(decoded.server_to_client_key, token.server_to_client_key);
 
-            for i in 0..userdata.len() {
-                assert_eq!(decoded.userdata[i], userdata[i]);
-            }
-        },
-        None => assert!(false)
+    for i in 0..userdata.len() {
+        assert_eq!(decoded.userdata[i], userdata[i]);
     }
 }
+
+#[test]
+fn interop() {
+    use wrapper;
+
+    let mut private_key = [0; NETCODE_KEY_BYTES];
+    crypto::random_bytes(&mut private_key);
+
+    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut userdata);
+
+    let expire = 30;
+    let sequence = 1;
+    let protocol = 0x112233445566;
+    let client_id = 0x665544332211;
+
+    let result = wrapper::ConnectToken::from_hosts(
+            ["127.0.0.1:8080".to_string()].iter().cloned(),
+            &private_key,
+            expire,
+            client_id,
+            protocol,
+            sequence).unwrap();
+
+    let conv = ConnectToken::read(&mut io::Cursor::new(result.get_bytes())).unwrap();
+
+    assert_eq!(conv.sequence, sequence);
+    assert_eq!(conv.protocol, protocol);
+    assert_eq!(conv.expire_utc, conv.create_utc + expire as u64);
+}
+ 

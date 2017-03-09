@@ -26,15 +26,15 @@ impl Socket<UdpSocket> for UdpSocket {
     }
 
     fn recv_from(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr), io::Error> {
-        self.recv_from(buf)
+        UdpSocket::recv_from(self, buf)
     }
 
     fn connect<A>(&mut self, addr: A) -> Result<(), io::Error> where A: ToSocketAddrs {
-        self.connect(addr)
+        UdpSocket::connect(self, addr)
     }
 
     fn send(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        self.send(buf)
+        UdpSocket::send(self, buf)
     }
 }
 

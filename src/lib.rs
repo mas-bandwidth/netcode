@@ -11,3 +11,4 @@ mod server;
 mod token;
 
 pub use server::*;
+pub use token::{ConnectToken, PrivateData, HostIterator};
