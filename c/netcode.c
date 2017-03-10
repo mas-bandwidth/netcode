@@ -691,30 +691,30 @@ void netcode_write_uint8( uint8_t ** p, uint8_t value )
 
 void netcode_write_uint16( uint8_t ** p, uint16_t value )
 {
-    (*p)[0] = value >> 8;
-    (*p)[1] = value & 0xFF;
+    (*p)[0] = value & 0xFF;
+    (*p)[1] = value >> 8;
     *p += 2;
 }
 
 void netcode_write_uint32( uint8_t ** p, uint32_t value )
 {
-    (*p)[0] = value >> 24;
-    (*p)[1] = ( value >> 16 ) & 0xFF;
-    (*p)[2] = ( value >> 8  ) & 0xFF;
-    (*p)[3] = value & 0xFF;
+    (*p)[0] = value & 0xFF;
+    (*p)[1] = ( value >> 8  ) & 0xFF;
+    (*p)[2] = ( value >> 16 ) & 0xFF;
+    (*p)[3] = value >> 24;
     *p += 4;
 }
 
 void netcode_write_uint64( uint8_t ** p, uint64_t value )
 {
-    (*p)[0] = value >> 56;
-    (*p)[1] = ( value >> 48 ) & 0xFF;
-    (*p)[2] = ( value >> 40 ) & 0xFF;
-    (*p)[3] = ( value >> 32 ) & 0xFF;
-    (*p)[4] = ( value >> 24 ) & 0xFF;
-    (*p)[5] = ( value >> 16 ) & 0xFF;
-    (*p)[6] = ( value >> 8  ) & 0xFF;
-    (*p)[7] = value & 0xFF;
+    (*p)[0] = value & 0xFF;
+    (*p)[1] = ( value >> 8  ) & 0xFF;
+    (*p)[2] = ( value >> 16 ) & 0xFF;
+    (*p)[3] = ( value >> 24 ) & 0xFF;
+    (*p)[4] = ( value >> 32 ) & 0xFF;
+    (*p)[5] = ( value >> 40 ) & 0xFF;
+    (*p)[6] = ( value >> 48 ) & 0xFF;
+    (*p)[7] = value >> 56;
     *p += 8;
 }
 
@@ -737,8 +737,8 @@ uint8_t netcode_read_uint8( uint8_t ** p )
 uint16_t netcode_read_uint16( uint8_t ** p )
 {
     uint16_t value;
-    value  = ( ( (uint16_t)( (*p)[0] ) ) << 8 );
-    value |= (*p)[1];
+    value = (*p)[0];
+    value |= ( ( (uint16_t)( (*p)[1] ) ) << 8 );
     *p += 2;
     return value;
 }
@@ -746,10 +746,10 @@ uint16_t netcode_read_uint16( uint8_t ** p )
 uint32_t netcode_read_uint32( uint8_t ** p )
 {
     uint32_t value;
-    value  = ( ( (uint32_t)( (*p)[0] ) ) << 24 );
-    value |= ( ( (uint32_t)( (*p)[1] ) ) << 16 );
-    value |= ( ( (uint32_t)( (*p)[2] ) ) << 8 );
-    value |= (*p)[3];
+    value  = (*p)[0];
+    value |= ( ( (uint32_t)( (*p)[1] ) ) << 8 );
+    value |= ( ( (uint32_t)( (*p)[2] ) ) << 16 );
+    value |= ( ( (uint32_t)( (*p)[3] ) ) << 24 );
     *p += 4;
     return value;
 }
@@ -757,14 +757,14 @@ uint32_t netcode_read_uint32( uint8_t ** p )
 uint64_t netcode_read_uint64( uint8_t ** p )
 {
     uint64_t value;
-    value  = ( ( (uint64_t)( (*p)[0] ) ) << 56 );
-    value |= ( ( (uint64_t)( (*p)[1] ) ) << 48 );
-    value |= ( ( (uint64_t)( (*p)[2] ) ) << 40 );
-    value |= ( ( (uint64_t)( (*p)[3] ) ) << 32 );
-    value |= ( ( (uint64_t)( (*p)[4] ) ) << 24 );
-    value |= ( ( (uint64_t)( (*p)[5] ) ) << 16 );
-    value |= ( ( (uint64_t)( (*p)[6] ) ) << 8  );
-    value |= (*p)[7];
+    value  = (*p)[0];
+    value |= ( ( (uint64_t)( (*p)[1] ) ) << 8  );
+    value |= ( ( (uint64_t)( (*p)[2] ) ) << 16 );
+    value |= ( ( (uint64_t)( (*p)[3] ) ) << 24 );
+    value |= ( ( (uint64_t)( (*p)[4] ) ) << 32 );
+    value |= ( ( (uint64_t)( (*p)[5] ) ) << 40 );
+    value |= ( ( (uint64_t)( (*p)[6] ) ) << 48 );
+    value |= ( ( (uint64_t)( (*p)[7] ) ) << 56 );
     *p += 8;
     return value;
 }
