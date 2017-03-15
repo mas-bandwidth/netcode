@@ -10,7 +10,7 @@ There are three main components in a netcode.io-based architecture:
 2. Dedicated servers
 3. Clients
 
-The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running on top of netcode.io that run in data centers or the cloud.
+The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running on top of netcode.io in data centers or the cloud.
 
 The sequence of operations for a client connect are:
 
@@ -21,13 +21,6 @@ The sequence of operations for a client connect are:
 5. The dedicated server runs logic to ensure that only clients with a valid connect token may connect to it
 6. Once connection is established, the client and server exchange encrypted and signed UDP packets.
 
-This protocol is designed with simplicity in mind, and is focused exclusively on the dedicated server use-case. 
-
-Therefore, netcode.io has the following limitations:
-
-1. Dedicated servers are expected to be hosted on a publicly accessible IP address. There is no support for NAT punch-through between clients and servers. 
-2. Player hosted servers are not supported because the security model is based around the web backend and dedicated server instances sharing a private key.
-
 ## General Conventions
 
 All data in the netcode.io protocol is serialized in a binary format.
@@ -36,11 +29,11 @@ Integer values are serialized in little endian byte order.
 
 ## Connect Token Structure
 
-A connect token is a short-lived token that transmits the client authentication on the web server to clients connecting to dedicated servers over UDP.
+A connect token is a short-lived token designed to transfer the authentication of clients on the web server to clients as the connect to dedicated servers over UDP. The whole point being, only clients who have authenticated and requested a connect token from the web backend will be allowed to connect to dedicated servers.
 
 The connect token consists of two parts: private and public.
 
-The private part of the connect token is encrypted and signed with a shared private key known to the web backend and the dedicated server instances. The private portion of the connect token is sent over UDP as part of the connection handshake between a client and server.
+The private part of the connect token is encrypted and signed with a shared private key known to the web backend and dedicated server instances. This encryption is necessary because it's sent over UDP as part of the connection handshake between a client and server.
 
 Prior to encryption the private connect token has this binary format:
 
@@ -143,8 +136,6 @@ Combining the public and private portions together gives us a _connect token_:
 The connect token is written to a buffer that is 2048 bytes large.
 
 The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. The rest is zero padded to 2048 bytes.
-
-This is the binary format passed from the web backend to the client when the client wants to connect to a server.
 
 ## Packet Structure
 
