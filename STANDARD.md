@@ -42,6 +42,23 @@ The connect token consists of two parts: public and private.
 
 The private portion of the connect token is encrypted and signed with a shared private key known to the web backend and the dedicated server instances. The private portion of the connect token is sent over UDP as part of the connection handshake between a client and server.
 
+Prior to encryption the private connect token has this format:
+
+    [client_id] (uint64)
+    [num_server_addresses] (uint32)
+    <for each server address>
+    {
+        [address_type] (uint8) - 0 = IPV4 address, 1 = IPV6 address.
+        <if IPV4>
+        {
+        }
+        <else if IPV6>
+        {
+        }
+    }
+
+When encrypt
+
 The public portion of the connect token is not encrypted, and exists to provide the client with the information it needs to connect to a dedicated server such as the list of server IP addresses to connect to, and the encryption keys to use for UDP packets.
 
 When the private and public portions are combined they form a _connect token_.
