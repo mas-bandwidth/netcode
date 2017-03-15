@@ -74,14 +74,14 @@ Prior to encryption the private connect token has this binary format:
     }
     [client to server key] (32 bytes)
     [server to client key] (32 bytes)
-    [user data] (256 bytes)         // user defined data specific to this protocol id
+    [user data] (256 bytes) // user defined data specific to this protocol id
     <zero pad to 1024 bytes>
 
 The connect token private data is written to a buffer that is 1024 bytes large.
 
 The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. The rest is zero padded.
 
-Encryption of the connect token private data is performed using libsodium AEAD primitive: *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the associated data: 
+Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the associated data: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
@@ -106,8 +106,8 @@ Combining the public and private portions together gives us a _connect token_:
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
-    [private connect token sequence] (uint64)
-    [private connect token data] (1024 bytes)
+    [encrypted private connect token sequence] (uint64)
+    [encrypted private connect token data] (1024 bytes)
     [num_server_addresses] (uint32) // in [1,32]
     <for each server address>
     {
