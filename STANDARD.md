@@ -23,7 +23,7 @@ The sequence of operations for a client connect are:
 
 ## General Conventions
 
-All data in netcode.io protocol is serialized in a binary format.
+All data in the netcode.io protocol is serialized in a binary format.
 
 Integer values are serialized in little endian byte order.
 
