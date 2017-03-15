@@ -38,32 +38,69 @@ Integer values are serialized in little endian byte order.
 
 A connect token is a short-lived token that transmits the client authentication on the web server to clients connecting to dedicated servers over UDP.
 
-The connect token consists of two parts: public and private.
+The connect token consists of two parts: private and public.
 
-The private portion of the connect token is encrypted and signed with a shared private key known to the web backend and the dedicated server instances. The private portion of the connect token is sent over UDP as part of the connection handshake between a client and server.
+The private part of the connect token is encrypted and signed with a shared private key known to the web backend and the dedicated server instances. The private portion of the connect token is sent over UDP as part of the connection handshake between a client and server.
 
-Prior to encryption the private connect token has this format:
+Prior to encryption the private connect token has this binary format:
 
-    [client_id] (uint64)
-    [num_server_addresses] (uint32)
+    [client_id] (uint64) // globally unique identifier for an authenticated client
+    [num_server_addresses] (uint32) // in [1,32]
     <for each server address>
     {
-        [address_type] (uint8) - 0 = IPV4 address, 1 = IPV6 address.
-        <if IPV4>
+        [address_type] (uint8) // value of 0 = IPv4 address, 1 = IPv6 address.
+        <if IPV4 address>
         {
+            // for a given IPv4 address: a.b.c.d:port
+            [a] (uint8)
+            [b] (uint8)
+            [c] (uint8)
+            [d] (uint8)
+            [port] (uint16)
         }
-        <else if IPV6>
+        <else IPv6 address>
         {
+            // for a given IPv6 address: [a:b:c:d:e:f:g:h]:port
+            [a] (uint16)
+            [b] (uint16)
+            [c] (uint16)
+            [d] (uint16)
+            [e] (uint16)
+            [f] (uint16)
+            [g] (uint16)
+            [h] (uint16)
+            [port] (uint16)
         }
     }
+    [client to server key] (32 bytes)
+    [server to client key] (32 bytes)
+    [user data] (256 bytes)
+    <zero pad to 1024 bytes>
 
-When encrypt
+The connect token private data is written to a buffer that is 1024 bytes large. 
+
+The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. The rest is zero padded.
+
+Encryption of the connect token private data is performed using libsodium AEAD primitive: *crypto_aead_chacha20poly1305_encrypt* using the following binary data as associated data and the private key shared between the web backend and dedicated server instances and a 64bit sequence number as the nonce:
+
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
+    [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
+
+The encryption is performed on the first 1024 - 16 bytes, leaving the last 16 bytes in the 1024 byte buffer to store the resulting HMAC from the AEAD encryption at the end of the buffer as follows:
+
+    [encrypted private connect token] (1008 bytes)
+    [hmac of private connect token] (16 bytes)
+
+The form above is referred to as the encrypted private connect token data.
 
 The public portion of the connect token is not encrypted, and exists to provide the client with the information it needs to connect to a dedicated server such as the list of server IP addresses to connect to, and the encryption keys to use for UDP packets.
 
-When the private and public portions are combined they form a _connect token_.
+Combining the public and private portions together we have the full connect token data structure:
 
-The public portion exists
+    ...
+
+This is the binary format of data passed from the web backend back to the client over HTTPS, and passed to the client connect.
 
 ## Packet Structure
 
