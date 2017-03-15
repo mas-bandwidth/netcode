@@ -74,33 +74,77 @@ Prior to encryption the private connect token has this binary format:
     }
     [client to server key] (32 bytes)
     [server to client key] (32 bytes)
-    [user data] (256 bytes)
+    [user data] (256 bytes)         // user defined data specific to this protocol id
     <zero pad to 1024 bytes>
 
-The connect token private data is written to a buffer that is 1024 bytes large. 
+The connect token private data is written to a buffer that is 1024 bytes large.
 
 The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. The rest is zero padded.
 
-Encryption of the connect token private data is performed using libsodium AEAD primitive: *crypto_aead_chacha20poly1305_encrypt* using the following binary data as associated data and the private key shared between the web backend and dedicated server instances and a 64bit sequence number as the nonce:
+Encryption of the connect token private data is performed using libsodium AEAD primitive: *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the associated data: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The encryption is performed on the first 1024 - 16 bytes, leaving the last 16 bytes in the 1024 byte buffer to store the resulting HMAC from the AEAD encryption at the end of the buffer as follows:
+The key for encryption is a 32 byte private key known to both the web backend and the dedicated server instances. 
+
+The nonce for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. 
+
+Encryption is performed on the first 1024 - 16 bytes, leaving the last 16 bytes in the 1024 byte buffer to store the HMAC:
 
     [encrypted private connect token] (1008 bytes)
     [hmac of private connect token] (16 bytes)
 
-The form above is referred to as the encrypted private connect token data.
+The form above is referred to as the _encrypted private connect token data_.
 
-The public portion of the connect token is not encrypted, and exists to provide the client with the information it needs to connect to a dedicated server such as the list of server IP addresses to connect to, and the encryption keys to use for UDP packets.
+The public portion of the connect token is not encrypted, and exists to provide the client with the information it needs to connect to a dedicated server such as the list of server IP addresses to connect to, and the encryption keys to use for UDP packets. There is some redundancy in this data vs. the private connect token data, because the clien (by design) does not know the shared private key, and cannot decrypt the private connect token data.
 
-Combining the public and private portions together we have the full connect token data structure:
+Combining the public and private portions together gives us a _connect token_:
 
-    ...
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
+    [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
+    [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
+    [private connect token sequence] (uint64)
+    [private connect token data] (1024 bytes)
+    [num_server_addresses] (uint32) // in [1,32]
+    <for each server address>
+    {
+        [address_type] (uint8) // value of 0 = IPv4 address, 1 = IPv6 address.
+        <if IPV4 address>
+        {
+            // for a given IPv4 address: a.b.c.d:port
+            [a] (uint8)
+            [b] (uint8)
+            [c] (uint8)
+            [d] (uint8)
+            [port] (uint16)
+        }
+        <else IPv6 address>
+        {
+            // for a given IPv6 address: [a:b:c:d:e:f:g:h]:port
+            [a] (uint16)
+            [b] (uint16)
+            [c] (uint16)
+            [d] (uint16)
+            [e] (uint16)
+            [f] (uint16)
+            [g] (uint16)
+            [h] (uint16)
+            [port] (uint16)
+        }
+    }
+    [client to server key] (32 bytes)
+    [server to client key] (32 bytes)
+    [timeout seconds] (4 bytes)         // number of seconds with no packets before client conenction times out
+    <zero padding to 2048 bytes>
 
-This is the binary format of data passed from the web backend back to the client over HTTPS, and passed to the client connect.
+The connect token is written to a buffer that is 2048 bytes large.
+
+The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. The rest is zero padded to 2048 bytes.
+
+This is the binary format passed from the web backend to the client when the client wants to connect to a server.
 
 ## Packet Structure
 
