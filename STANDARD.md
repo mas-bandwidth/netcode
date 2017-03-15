@@ -93,8 +93,6 @@ This is referred to as the _encrypted private connect token data_.
 
 The public portion of the connect token is not encrypted. It provides the client with information it needs to connect to the dedicated server.
 
-Some duplication is necessary because the client doesn't know the shared private key (by design), and therefore cannot read the encrypted private connect token data.
-
 Together the public and private portions form a _connect token_:
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
@@ -140,6 +138,8 @@ The connect token is written to a buffer that is 2048 bytes large.
 The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. Unused bytes are zero padded.
 
 This data is sent to the client, typically base64 encoded over HTTPS, because it contains data which should not be exposed to other parties such as the keys used for encrypting UDP packets between the client and the dedicated server.
+
+When the client receives this data, it uses the public portion to know how to connect to a server, and passes the encrypted private connect token data to the dedicated server in the _connection request packet_.
 
 ## Packet Structure
 
