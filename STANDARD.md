@@ -4,15 +4,15 @@
 
 ## Architecture
 
-There are three main components in a netcode.io architecture:
+There are three main components in a netcode.io-based architecture:
 
 1. The web backend
 2. Dedicated servers
 3. Clients
 
-The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running on top of netcode.io, that run in data centers or the cloud.
+The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running on top of netcode.io that run in data centers or the cloud.
 
-The sequence of operations in a client connect are:
+The sequence of operations for a client connect are:
 
 1. A client authenticates with the web backend
 2. The authenticated client requests to play a game
@@ -21,17 +21,21 @@ The sequence of operations in a client connect are:
 5. The dedicated server runs logic to ensure that only clients with a valid connect token may connect to it
 6. Once connection is established, the client and server may exchange UDP packets. These packets are encrypted and signed.
 
-This protocol is designed with simplicity in mind, and is focused exclusively on this use-case. Therefore, it has the following limitations:
+This protocol is designed with simplicity in mind, and is focused exclusively on the dedicated server use-case. 
+
+Therefore, netcode.io has the following limitations:
 
 1. There is no support for NAT punch-through between clients and servers. Dedicated servers are expected to be hosted on a publicly accessible IP address.
-2. The security model is based around the web backend and dedicated server instances sharing a private key. Therefore, player hosted servers are not supported. All servers must be hosted securely in a data center or in the cloud, in such a way that they are inaccessible for clients. Clients must not discover the shared private key.
+
+2. The security model is based around the web backend and dedicated server instances sharing a private key. Therefore, player hosted servers are not supported.
 
 ## General Conventions
 
+All data is in the netcode.io protocol serialized in binary format. Integer values are serialized in little endian byte order.
 
 ## Connect Token Structure
 
-The first aspect of 
+
 
 ## Packet Structure
 
