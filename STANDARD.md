@@ -1,14 +1,17 @@
-# netcode.io standard 1.0
+# netcode.io 1.0
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-This is the standard document which is intended to make it possible for anybody to implement a client or server that is compatible with the netcode.io protocol.
+This document describes the binary standard for the netcode.io, so that compatible implementations of this protocol can be created in multiple languages.
 
-The goal of this standard is to encourage implementations of netcode.io in different languages.
+All data unless otherwise noted is written as binary in little endian order. The rationale is that the majority of machines that run the netcode.io protocol are little endian, so this is the least amount of work.
 
-## Overview
+## General Conventions
 
-**
+
+## Connect Token Structure
+
+The first aspect of 
 
 ## Packet Structure
 
