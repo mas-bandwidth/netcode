@@ -19,7 +19,7 @@ The sequence of operations for a client connect are:
 3. The web backend generates a _connect token_ and passes it to client over HTTPS
 4. The client uses that connect token to establish a connection with a dedicated server over UDP
 5. The dedicated server runs logic that ensures only clients with a valid connect token may connect to it
-6. Once connection is established, the client and server exchange encrypted and signed UDP packets
+6. Once a connection is established the client and server exchange encrypted and signed UDP packets
 
 ## General Conventions
 
@@ -29,11 +29,11 @@ Integer values are serialized in little endian byte order.
 
 ## Connect Token Structure
 
-A _connect token_ ensures that only clients who have authenticated and requested connection through the web backend are able to connect to dedicated servers.
+A _connect token_ ensures that only clients who have authenticated and requested connection via the web backend can connect dedicated servers.
 
 The connect token consists of two parts: private and public.
 
-The private portion is encrypted and signed with a shared private key known to the web backend and dedicated server instances. 
+The private portion is encrypted and signed with a private key known to the web backend and dedicated server instances. 
 
 Prior to encryption the private connect token has the following binary format.
 
@@ -72,7 +72,7 @@ Prior to encryption the private connect token has the following binary format.
 
 The connect token private data is written to a buffer that is 1024 bytes large.
 
-The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. The rest is zero padded.
+The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. Unused bytes are zero padded.
 
 Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
@@ -80,7 +80,7 @@ Encryption of the connect token private data is performed using libsodium AEAD p
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The encryption key is the shared private key known to the web backend and the dedicated server instances. 
+The encryption key is the private key known to the web backend and the dedicated server instances. 
 
 The nonce for encryption is a 64 bit sequence number starting at zero and increasing with each connect token generated. 
 
@@ -91,9 +91,11 @@ Encryption is performed on the first 1024 - 16 bytes, leaving the last 16 bytes 
 
 This is referred to as the _encrypted private connect token data_.
 
-The public portion of the connect token is not encrypted. Some duplication is necessary because the client does not know the shared private key (by design), and thus cannot read the encrypted private connect token data.
+The public portion of the connect token is not encrypted. It provides the client with information it needs to connect to the dedicated server.
 
-The public and private portions combine to form a _connect token_:
+Some duplication is necessary because the client doesn't know the shared private key (by design), and therefore cannot read the encrypted private connect token data.
+
+Together the public and private portions form a _connect token_:
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
@@ -135,9 +137,9 @@ The public and private portions combine to form a _connect token_:
 
 The connect token is written to a buffer that is 2048 bytes large.
 
-The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. The rest is zero padded to 2048 bytes.
+The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. Unused bytes are zero padded.
 
-This data is sent to the client, typically base64 encoded over HTTPS, because it contains data which should not be exposed to other parties such as the keys used for encrypting packets sent between the client and the dedicated server.
+This data is sent to the client, typically base64 encoded over HTTPS, because it contains data which should not be exposed to other parties such as the keys used for encrypting UDP packets between the client and the dedicated server.
 
 ## Packet Structure
 
