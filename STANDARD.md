@@ -2,10 +2,13 @@
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It is designed for architectures which need to shunt players from a web backend that performs authentication, to dedicated server instances where the game is played.
+This is the standard document which is intended to make it possible for anybody to implement a client or server that is compatible with the netcode.io protocol.
+
+The goal of this standard is to encourage implementations of netcode.io in different languages.
 
 ## Overview
 
+**
 
 ## Packet Structure
 
