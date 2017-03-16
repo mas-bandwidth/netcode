@@ -70,7 +70,7 @@ Prior to encryption the private connect token data has the following binary form
     [user data] (256 bytes) // user defined data specific to this protocol id
     <zero pad to 1024 bytes>
 
-This data is variable size but for simplicity it is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
+This data is variable size but for simplicity is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
 Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
