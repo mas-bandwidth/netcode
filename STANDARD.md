@@ -124,7 +124,7 @@ Together the public and private data form a _connect token_:
     }
     [client to server key] (32 bytes)
     [server to client key] (32 bytes)
-    [timeout seconds] (4 bytes)         // number of seconds with no packets before client conenction times out
+    [timeout seconds] (4 bytes)         // number of seconds with no packets before client connection should time out
     <zero pad to 2048 bytes>
 
 This data is variable size but for simplicity is written to a fixed size buffer of 2048 bytes. Unused bytes are zero padded.
