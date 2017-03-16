@@ -6,8 +6,10 @@ DONE
 
     Connect token buffer size reduced from 4096 to 2048.
 
-TODO
-
     Server should return maximum # of clients to client inside connect token. It's important for client to know that it is client X/Y.
 
-    
+    Fixed bug where client didn't store its client index! Wow. whoops.
+
+TODO
+
+
