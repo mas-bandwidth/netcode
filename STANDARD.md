@@ -29,13 +29,13 @@ Integer values are serialized in little endian byte order.
 
 ## Connect Token Structure
 
-A _connect token_ ensures that only clients who have authenticated and requested connection via the web backend can connect dedicated servers.
+A _connect token_ ensures that only authenticated clients who request connection via the web backend can connect to dedicated servers.
 
-The connect token consists of two parts: private and public.
+The connect token has two parts: private and public.
 
-The private portion is encrypted and signed with a private key known to the web backend and dedicated server instances. 
+The private portion of a connect token is encrypted and signed with a private key shared between the web backend and dedicated server instances. 
 
-Prior to encryption the private connect token has the following binary format.
+Prior to encryption the private connect token data has the following binary format.
 
     [client id] (uint64) // globally unique identifier for an authenticated client
     [num server addresses] (uint32) // in [1,32]
@@ -70,9 +70,7 @@ Prior to encryption the private connect token has the following binary format.
     [user data] (256 bytes) // user defined data specific to this protocol id
     <zero pad to 1024 bytes>
 
-The connect token private data is written to a buffer that is 1024 bytes large.
-
-The worst case size is 8 + 4 + 32*(1+8*2+2) + 32 + 32 + 256 = 940 bytes. Unused bytes are zero padded.
+This data is variable size but for simplicity it is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
 Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
@@ -80,20 +78,16 @@ Encryption of the connect token private data is performed using libsodium AEAD p
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The encryption key is the private key known to the web backend and the dedicated server instances. 
+The nonce for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. 
 
-The nonce for encryption is a 64 bit sequence number starting at zero and increasing with each connect token generated. 
-
-Encryption is performed on the first 1024 - 16 bytes, leaving the last 16 bytes in the 1024 byte buffer to store the HMAC:
+Encryption is performed on the first 1024 - 16 bytes in the buffer only, leaving the last 16 bytes to store the HMAC:
 
     [encrypted private connect token] (1008 bytes)
     [hmac of private connect token] (16 bytes)
 
 This is referred to as the _encrypted private connect token data_.
 
-The public portion of the connect token is not encrypted. It provides the client with information it needs to connect to the dedicated server.
-
-Together the public and private portions form a _connect token_:
+Together the public and private data form a _connect token_:
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
@@ -133,13 +127,7 @@ Together the public and private portions form a _connect token_:
     [timeout seconds] (4 bytes)         // number of seconds with no packets before client conenction times out
     <zero pad to 2048 bytes>
 
-The connect token is written to a buffer that is 2048 bytes large.
-
-The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 4 = 1749 bytes. Unused bytes are zero padded.
-
-This data is sent to the client, typically base64 encoded over HTTPS, because it contains data which should not be exposed to other parties.
-
-When the client receives this data, it uses the public portion to connect to a server, and passes the encrypted private connect token data to the dedicated server as part of the _connection request packet_.
+This data is variable size but for simplicity is written to a fixed size buffer of 2048 bytes. Unused bytes are zero padded.
 
 ## Packet Structure
 
