@@ -10,7 +10,7 @@ There are three main components in a netcode.io-based architecture:
 2. Dedicated servers
 3. Clients
 
-The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running on top of netcode.io in data centers or the cloud.
+The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running in data centers or the cloud.
 
 The sequence of operations for a client connect are:
 
