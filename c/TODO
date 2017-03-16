@@ -1,19 +1,13 @@
 DONE
 
-    Need to direct netcode.io to github website
+    # of servers per connect token increased from 16 to 32.
 
-    Did this via my linode box + nginx. Should be able to test this in a few days once the DNS gets through.
+    Private connect token is now zero padded to 1024 bytes for consistency
 
-    Verified this morning that the redirect works. Great!
-
-    Added the coverity thingo for netcode.io, since it take a while for them to approve it.
-
-    Get the project automatically built by travis, again copy from yojimbo.
-
-    Need to write project README.md (adapt from white paper)
-
-    Need to write project BUILDING.md (adapt from yojimbo)
+    Connect token buffer size reduced from 4096 to 2048.
 
 TODO
 
-    Write USAGE.md
+    Server should return maximum # of clients to client inside connect token. It's important for client to know that it is client X/Y.
+
+    

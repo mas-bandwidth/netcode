@@ -53,11 +53,11 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
-#define NETCODE_CONNECT_TOKEN_BYTES 4096
+#define NETCODE_CONNECT_TOKEN_BYTES 2048
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
 #define NETCODE_NONCE_BYTES 8
-#define NETCODE_MAX_SERVERS_PER_CONNECT 16
+#define NETCODE_MAX_SERVERS_PER_CONNECT 32
 
 #define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -6
 #define NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN              -5
@@ -108,6 +108,8 @@ void netcode_client_disconnect( struct netcode_client_t * client );
 int netcode_client_state( struct netcode_client_t * client );
 
 int netcode_client_index( struct netcode_client_t * client );
+
+int netcode_client_max_clients( struct netcode_client_t * client );
 
 int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
