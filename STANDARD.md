@@ -15,8 +15,8 @@ The web backend is a typical web server, for example nginx, which authenticates 
 The sequence of operations for a client connect are:
 
 1. A client authenticates with the web backend
-2. The authenticated client requests to play a game via a REST call to the web backend
-3. The web backend generates a _connect token_ and returns it to the client over HTTPS
+2. The authenticated client requests to play a game via REST call to the web backend
+3. The web backend generates a _connect token_ and returns it to that client over HTTPS
 4. The client uses the connect token to establish a connection with a dedicated server over UDP
 5. The dedicated server runs logic to ensure that only clients with a valid connect token can connect to it
 6. Once a connection is established the client and server exchange encrypted and signed UDP packets
