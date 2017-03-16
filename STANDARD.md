@@ -37,11 +37,11 @@ The private portion is encrypted and signed with a private key known to the web 
 
 Prior to encryption the private connect token has the following binary format.
 
-    [client_id] (uint64) // globally unique identifier for an authenticated client
-    [num_server_addresses] (uint32) // in [1,32]
+    [client id] (uint64) // globally unique identifier for an authenticated client
+    [num server addresses] (uint32) // in [1,32]
     <for each server address>
     {
-        [address_type] (uint8) // value of 0 = IPv4 address, 1 = IPv6 address.
+        [address type] (uint8) // value of 0 = IPv4 address, 1 = IPv6 address.
         <if IPV4 address>
         {
             // for a given IPv4 address: a.b.c.d:port
@@ -131,7 +131,7 @@ Together the public and private portions form a _connect token_:
     [client to server key] (32 bytes)
     [server to client key] (32 bytes)
     [timeout seconds] (4 bytes)         // number of seconds with no packets before client conenction times out
-    <zero padding to 2048 bytes>
+    <zero pad to 2048 bytes>
 
 The connect token is written to a buffer that is 2048 bytes large.
 
@@ -139,7 +139,7 @@ The worst case size is 13 + 8 + 8 + 8 + 8 + 1024 + 4 + 32*(1+8*2+2) + 32 + 32 + 
 
 This data is sent to the client, typically base64 encoded over HTTPS, because it contains data which should not be exposed to other parties.
 
-When the client receives this data, it uses the public portion to know how to connect to a server, and passes the encrypted private connect token data to the dedicated server as part of the _connection request packet_.
+When the client receives this data, it uses the public portion to connect to a server, and passes the encrypted private connect token data to the dedicated server as part of the _connection request packet_.
 
 ## Packet Structure
 
