@@ -173,16 +173,22 @@ Encryption of the connect token private data is performed using libsodium AEAD p
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The _connection denied packet_ has the following data:
+Each of the encrypted packet types have their own data that is written to the encryption portion of the packet.
+
+_connection denied packet_:
 
     [reason] (uint32)               // currently always 0, which means "server is full".
 
-The _connection challenge packet_ has the following data:
+_connection challenge packet_:
 
     [challenge token sequence] (uint64)
     [encrypted challenge token data] (360 bytes)
     
-The 
+_connection response packet_:
+
+    [challenge token sequence] (uint64)
+    [encrypted challenge token data] (360 bytes)
+    
 
 ## Client State Machine
 
