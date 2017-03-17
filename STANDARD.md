@@ -220,7 +220,30 @@ _connection disconnect packet_:
 
 ## Client State Machine
 
-...
+The client has the following states:
+
+* connect token expired (-6)
+* invalid connect token (-5)
+* connection timed out (-4)
+* connection response timed out (-3)
+* connection request timed out (-2)
+* connection denied (-1)
+* disconnected (0)
+* sending connection request (1)
+* sending connection response (2)
+* connected (3)
+
+The initial state is disconnected (0). Negative states represent error states.
+
+When a client wants to connect to a server, a _connect token_ is first requested from the backend. 
+
+Once a connect token is obtained, the client begins connection by storing the connect token data and transitioning to the _sending connection request_ state with the server being the first server in the list of server addresses inside the connect token, and preparing to send and receive encrypted packets with the encryption keys in the connection token.
+
+While in the _sending connection request_ state, the client sends _connection request packets_ to the server at some fixed rate, like 10HZ. When the client receives a _connection challenge packet_ from the server, it transitions to the _sending challenge response_ state. This represents a successful transition to the next stage in the connection process.
+
+All other transitions from _sending connection request_ are failure cases. In these cases the client first tries to fall back to connecting to the next server in the list of server addresses in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
+
+If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection request denied_ is received within the client timeout period, the client transitions to _connection request timed out_.
 
 ## Server Packet Processing
 
