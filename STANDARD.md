@@ -161,11 +161,11 @@ All other packet types are encrypted and have the following general format:
     [encrypted packet data] (variable length according to packet type)
     [encrypted packet hmac] (16 bytes)
 
-The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the length of the sequence number in bytes in the range [1,8].
+The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
-The sequence number is encoded by omitting high zero bytes, so for example, a sequence number of 1000 in hex is 0x3E8, and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte would be 3 and the variable length sequence data written to the packet is:
+The sequence number is encoded by omitting high zero bytes, so for example, a sequence number of 1000 in hex is 0x3E8, and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are 3 and the sequence data written to the packet after is:
 
-    0x3,0xE,0x8
+    0x8, 0xE, 0x3       // sequence bytes are reversed for ease of implementation
 
 Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
@@ -188,7 +188,19 @@ _connection response packet_:
 
     [challenge token sequence] (uint64)
     [encrypted challenge token data] (360 bytes)
+
+_connection keep-alive packet_:
+
+    [client index] (uint32)
+    [max clients] (uint32)
     
+_connection payload packet_:
+
+    [user payload data] (0 to 1200 bytes)
+    
+_connection disconnect packet_:
+    
+    <no payload>
 
 ## Client State Machine
 
