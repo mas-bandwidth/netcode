@@ -133,13 +133,21 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 Challenge tokens are used by netcode.io to stop clients with spoofed IP packet source addresses from connecting to servers.
 
-Prior to encryption, they have the following structure:
+Prior to encryption, challenge tokens have the following structure:
 
-    ...
+    [client id] (uint64)
+    [encrypted private connect token hmac] (16 bytes)
+    [user data] (256 bytes)
+    <zero pad to 300 bytes>
     
-Something about encryption.
+Challenge tokens are encrypted with the libsodium _crypto_secretbox_easy_ primitive, with a random key that is generated each time a dedicated server is started and a sequence number starts at zero and increases with each challenge token generated.
 
-...
+Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
+
+    [encrypted challenge token] (284 bytes)
+    [hmac of encrypted challenge token] (16 bytes)
+    
+Together this is referred to as the _encrypted challenge token data_.
 
 ## Packet Structure
 
