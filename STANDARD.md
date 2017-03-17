@@ -135,7 +135,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Packet Structure
 
-*netcode.io* has the following packet types:
+**netcode.io** has the following packet types:
 
 * connection request (0)
 * connection denied (1)
