@@ -131,7 +131,29 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Packet Structure
 
-...
+The protocol has the following packet types:
+
+* connection request (0)
+* connection denied (1)
+* connection challenge (2)
+* connection response (3)
+* connection keep alive (4)
+* connection payload packet (5)
+* connection disconnect packet (6)
+
+The connection request packet (0) is special, as it is not encrypted:
+
+    0 (uint8) // prefix byte of zero
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (8 bytes)
+    [connect token expire timestamp] (8 bytes)
+    [connect token sequence number] (8 bytes)
+    [encrypted private connect token data] (1024 bytes)
+    
+All other packet types are encrypted, and have the following general format:
+
+    [prefix byte] (uint8) // non-zero prefix byte
+    ...
 
 ## Connect Token
 
