@@ -29,7 +29,7 @@ Integer values are serialized in little endian byte order.
 
 ## Connect Token Structure
 
-A _connect token_ ensures that only authenticated clients who request connection via the web backend can connect to dedicated servers.
+A _connect token_ ensures that only authenticated clients can connect to dedicated servers.
 
 The connect token has two parts: private and public.
 
