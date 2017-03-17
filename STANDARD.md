@@ -129,9 +129,13 @@ Together the public and private data form a _connect token_:
 
 This data is variable size but for simplicity is written to a fixed size buffer of 2048 bytes. Unused bytes are zero padded.
 
+## Challenge Token
+
+...
+
 ## Packet Structure
 
-The protocol has the following packet types:
+*netcode.io* has the following packet types:
 
 * connection request (0)
 * connection denied (1)
@@ -141,7 +145,7 @@ The protocol has the following packet types:
 * connection payload packet (5)
 * connection disconnect packet (6)
 
-The connection request packet (0) is special, as it is not encrypted:
+The _connection request packet_ (0) is special, as it is not encrypted:
 
     0 (uint8) // prefix byte of zero
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
@@ -150,14 +154,35 @@ The connection request packet (0) is special, as it is not encrypted:
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
     
-All other packet types are encrypted, and have the following general format:
+All other packet types are encrypted and have the following general format:
 
     [prefix byte] (uint8) // non-zero prefix byte
-    ...
+    [sequence number] (variable length 1-8 bytes)
+    [encrypted packet data] (variable length according to packet type)
+    [encrypted packet hmac] (16 bytes)
 
-## Connect Token
+The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the length of the sequence number in bytes in the range [1,8].
 
-## Challenge Token
+The sequence number is encoded by omitting high zero bytes, so for example, a sequence number of 1000 in hex is 0x3E8, and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte would be 3 and the variable length sequence data written to the packet is:
+
+    0x3,0xE,0x8
+
+Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
+
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
+    [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
+
+The _connection denied packet_ has the following data:
+
+    [reason] (uint32)               // currently always 0, which means "server is full".
+
+The _connection challenge packet_ has the following data:
+
+    [challenge token sequence] (uint64)
+    [encrypted challenge token data] (360 bytes)
+    
+The 
 
 ## Client State Machine
 
