@@ -129,7 +129,7 @@ Together the public and private data form a _connect token_:
 
 This data is variable size but for simplicity is written to a fixed size buffer of 2048 bytes. Unused bytes are zero padded.
 
-## Challenge Token
+## Challenge Token Structure
 
 ...
 
