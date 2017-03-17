@@ -137,13 +137,13 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 **netcode.io** has the following packet types:
 
-* connection request (0)
-* connection denied (1)
-* connection challenge (2)
-* connection response (3)
-* connection keep alive (4)
-* connection payload packet (5)
-* connection disconnect packet (6)
+* connection request packet (0)
+* connection denied packet (1)
+* connection challenge packet (2)
+* connection response packet (3)
+* connection keep alive packet (4)
+* connection payload packet packet (5)
+* connection disconnect packet packet (6)
 
 The _connection request packet_ (0) is special, as it is not encrypted:
 
@@ -163,9 +163,9 @@ All other packet types are encrypted and have the following general format:
 
 The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
-The sequence number is encoded by omitting high zero bytes, so for example, a sequence number of 1000 in hex is 0x3E8, and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are 3 and the sequence data written to the packet after is:
+The sequence number is encoded by omitting high zero bytes, for example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are 3 and the sequence data written to the packet after is:
 
-    0x8, 0xE, 0x3       // sequence bytes are reversed for ease of implementation
+    0x8,0xE,0x3       // sequence bytes reversed for ease of implementation
 
 Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
@@ -173,7 +173,7 @@ Encryption of the connect token private data is performed using libsodium AEAD p
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-Each of the encrypted packet types have their own data that is written to the encryption portion of the packet.
+Each of the encrypted packet types have their own data that is written to the encrypted packet data portion of the packet.
 
 _connection denied packet_:
 
@@ -200,9 +200,16 @@ _connection payload packet_:
     
 _connection disconnect packet_:
     
-    <no payload>
+    <no data>
 
 ## Client State Machine
 
-## Server Connection Processing
+...
 
+## Server Packet Processing
+
+...
+
+## Replay Protection
+
+...
