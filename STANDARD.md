@@ -131,6 +131,14 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Challenge Token Structure
 
+Challenge tokens are used by netcode.io to stop clients with spoofed IP packet source addresses from connecting to servers.
+
+Prior to encryption, they have the following structure:
+
+    ...
+    
+Something about encryption.
+
 ...
 
 ## Packet Structure
