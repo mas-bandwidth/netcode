@@ -93,7 +93,7 @@ Together the public and private data form a _connect token_:
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
-    [encrypted private connect token sequence] (uint64)
+    [connect token sequence] (uint64)
     [encrypted private connect token data] (1024 bytes)
     [num_server_addresses] (uint32) // in [1,32]
     <for each server address>
@@ -136,7 +136,7 @@ Challenge tokens are used by netcode.io to stop clients with spoofed IP packet s
 Prior to encryption, challenge tokens have the following structure:
 
     [client id] (uint64)
-    [encrypted private connect token hmac] (16 bytes)
+    [hmac of encrypted private connect token data] (16 bytes)
     [user data] (256 bytes)
     <zero pad to 300 bytes>
     
@@ -145,7 +145,7 @@ Challenge tokens are encrypted with the libsodium _crypto_secretbox_easy_ primit
 Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
 
     [encrypted challenge token] (284 bytes)
-    [hmac of encrypted challenge token] (16 bytes)
+    [hmac of encrypted challenge token data] (16 bytes)
     
 Together this is referred to as the _encrypted challenge token data_.
 
