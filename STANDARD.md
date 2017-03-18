@@ -233,19 +233,27 @@ The client has the following states:
 * sending connection response (2)
 * connected (3)
 
-The initial state is disconnected (0). Negative states represent error states.
+The initial state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
 
-When a client wants to connect to a server, a _connect token_ is requested from the backend. 
+## Client Connection Process
 
-The client then stores this connect token and transitions to the _sending connection request_ state with the server address being the first entry in the list of server addresses in the connect token. The client also prepares to encrypt packets sent to the server with the client to server key in the connect token, and decrypt packets sent from the server with the server to client key in the connect token.
+When a client wants to connect to a server, a _connect token_ is first requested from the backend. 
 
-### Sending Connection Request State
+The client stores this connect token and transitions to the _sending connection request_ state with the first server address in the connect token. The client prepares to encrypt UDP packets sent to the server with the client to server key in the connect token, and decrypt UDP packets received from the server with the server to client key.
 
-While in the _sending connection request_ state, the client sends _connection request packets_ to the server at some rate, for example 10HZ. When the client receives a _connection challenge packet_ from the server, it transitions to the _sending challenge response_ state. This represents a successful transition to the next stage in the connection process.
+While in the _sending connection request_ state, the client sends _connection request packets_ to the server at some rate, such as 10HZ. When the client receives a _connection challenge packet_ from the server, it stores the challenge token data and transitions to the _sending challenge response_ state. This represents a successful transition to the next stage in the connection process.
 
-All other transitions from _sending connection request_ are failure cases. In these cases the client first tries to fall back to connecting to the next server in the list of server addresses in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers to connect to, the client transitions to the appropriate error state as described in the next paragraph.
+All other transitions from _sending connection request_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection request denied_ is received within the client timeout period (as specified in the connect token), the client transitions to _connection request timed out_.
+If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ is received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
+
+While in the _sending challenge response_ state, the client sends _challenge response packets_ to the server at some rate, such as 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients in that packet, and transitions to the _connected_ state.
+
+All other transitions from _sending challenge response_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers to connect to, the client transitions to the appropriate error state as described in the next paragraph.
+
+If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ is received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+
+While in the _connected_ state. ...
 
 ## Server Packet Processing
 
