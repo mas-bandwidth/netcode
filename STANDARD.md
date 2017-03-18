@@ -261,7 +261,7 @@ While _connected_ the client application may send _connection payload packets_ t
 
 While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
-If the client wishes to disconnect cleanly, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_. This informs the server that the client has disconnected even under packet loss, which speeds up the disconnection process.
+If the client wishes to disconnect, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_. This informs the server that the client has disconnected and speeds up the disconnection process.
 
 ## Server-Side Connection Process
 
