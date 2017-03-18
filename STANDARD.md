@@ -179,7 +179,7 @@ All other packet types are encrypted and have the following general format:
 
 The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
-The sequence number is encoded by omitting high zero bytes, for example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are 3 and the sequence data written to the packet after is:
+The sequence number is encoded by omitting high zero bytes, for example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are set to 3 and the sequence data written to the packet is:
 
     0x8,0xE,0x3       // sequence bytes reversed for ease of implementation
 
