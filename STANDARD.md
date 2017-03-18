@@ -237,27 +237,31 @@ The initial client state is disconnected (0). Negative states represent error st
 
 ## Client-Side Connection Process
 
-When a client wants to connect to a server, a _connect token_ is first requested from the backend. 
+When a client wants to connect to a server, a _connect token_ is requested from the web backend. 
 
 The client stores this connect token and transitions to the _sending connection request_ state with the first server address in the connect token. The client prepares to encrypt UDP packets sent to the server with the client to server key in the connect token, and decrypt UDP packets received from the server with the server to client key.
 
-While in _sending connection request_ the client sends _connection request packets_ to the server at some rate, such as 10HZ. When the client receives a _connection challenge packet_ from the server, it stores the challenge token data and transitions to _sending challenge response_. This represents a successful transition to the next stage in the connection process.
+While in _sending connection request_ the client sends _connection request packets_ to the server at some rate, like 10HZ. When the client receives a _connection challenge packet_ from the server, it stores the challenge token data and transitions to _sending challenge response_. This represents a successful transition to the next stage in the connection process.
 
 All other transitions from _sending connection request_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ is received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
+If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
-While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, such as 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients in that packet, and transitions to _connected_.
+While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_. Any _connection payload_ packets received prior to _connected_ are discarded.
 
 All other transitions from _sending challenge response_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the list). Alternatively, when a failure occurs and there are no additional servers to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ is received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
 
-If the client connection process takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_. This time period is measured from the start of connection, so if a large number of servers are being connected to, the connection attempt will abort once the connect token has expired and can no longer succeed, rather than continuing through the list of server addresses in the connect token.
+If the entire client connection process takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_. Thus, the connection attempt aborts once the connect token has expired and can no longer possibly succeed, rather than continuing to work through the list of server addresses in the connect token.
 
-While in the _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ has been received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. If no _connection payload packet_ has been sent by the application for some period of time (for example, 1/20th of a second), the client generates and sends _connection keep-alive packets_ at some rate, such as 10HZ to the server, until the client application sends a _connection payload packet_ to the server. If the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
+While in _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ has been received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
-If the client-side wishes to disconnect cleanly while in the _connected_ state, it should send a number of redundant _connection disconnect_ packets to the server before disconnecting. This informs the server that the client has disconnected, which speeds up the disconnection process on the server-side.
+While in _connected_ the client application may send _connection payload packets_ to the server. If no _connection payload packet_ has been sent by the application for some period of time (for example, 2/10ths of a second), the client generates and sends _connection keep-alive packets_ to the server at some rate, such as 10HZ, until the client application sends a _connection payload packet_ to the server. 
+
+While in _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
+
+If the client-side wishes to disconnect cleanly from _connected_, it sends a number of redundant _connection disconnect_ packets to the server before transitioning to _disconnected_. This informs the server-side that the client has disconnected, which speeds up the disconnection process on the server-side.
 
 ## Server-Side Connection Process
 
