@@ -257,11 +257,11 @@ If the entire client connection process takes long enough that the connect token
 
 While in _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ has been received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
-While in _connected_ the client application may send _connection payload packets_ to the server. If no _connection payload packet_ has been sent by the application for some period of time (for example, 1/10th of a second), the client generates and sends _connection keep-alive packets_ to the server at some rate, such as 10HZ, until the client application sends a _connection payload packet_ to the server. 
+While in _connected_ the client application may send _connection payload packets_ to the server. If no _connection payload packet_ has been sent by the application for some period of time (for example, longer than 1/10th of a second), the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
-While in _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
+While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
-If the client-side wishes to disconnect cleanly, it sends a number of redundant _connection disconnect_ packets to the server before transitioning to _disconnected_. This informs the server that the client has disconnected, which speeds up the disconnection process.
+If the client wishes to disconnect cleanly, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_. This informs the server that the client has disconnected even under packet loss, which speeds up the disconnection process.
 
 ## Server-Side Connection Process
 
