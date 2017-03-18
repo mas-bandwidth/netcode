@@ -233,9 +233,9 @@ The client has the following states:
 * sending connection response (2)
 * connected (3)
 
-The initial state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
+The initial client state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
 
-## Client Connection Process
+## Client-Side Connection Process
 
 When a client wants to connect to a server, a _connect token_ is first requested from the backend. 
 
@@ -259,7 +259,7 @@ While in the _connected_ the client buffers _connection payload packets_ receive
 
 If the client-side wishes to disconnect cleanly while in the _connected_ state, it should send a number of redundant _connection disconnect_ packets to the server before disconnecting. This informs the server that the client has disconnected, which speeds up the disconnection process on the server-side.
 
-## Server Packet Processing
+## Server-Side Connection Process
 
 ...
 
