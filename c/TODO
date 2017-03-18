@@ -10,6 +10,8 @@ DONE
 
     Fixed bug where client didn't store its client index! Wow. whoops.
 
+    Reduced size of challenge token to 300 bytes. That's all that is needed.
+
 TODO
 
 

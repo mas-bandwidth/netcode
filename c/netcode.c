@@ -66,7 +66,7 @@
 #endif
 
 #define NETCODE_CONNECT_TOKEN_PRIVATE_BYTES 1024
-#define NETCODE_CHALLENGE_TOKEN_BYTES 360
+#define NETCODE_CHALLENGE_TOKEN_BYTES 300
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 256
 #define NETCODE_MAX_PACKET_BYTES 1220
@@ -2300,8 +2300,8 @@ char * netcode_client_state_name( int client_state )
         case NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED:                return "connect token expired";
         case NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN:                return "invalid connect token";
         case NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT:                 return "connection timed out";
-        case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT:           return "connection request timeout";
-        case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT:          return "connection response timeout";
+        case NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT:         return "connection request timed out";
+        case NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMED_OUT:        return "connection response timed out";
         case NETCODE_CLIENT_STATE_CONNECTION_DENIED:                    return "connection denied";
         case NETCODE_CLIENT_STATE_DISCONNECTED:                         return "disconnected";
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:           return "sending connection request";
@@ -2747,6 +2747,8 @@ void netcode_client_send_packets( struct netcode_client_t * client )
 
             struct netcode_connection_keep_alive_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+            packet.client_index = 0;
+            packet.max_clients = 0;
 
             netcode_client_send_packet_to_server_internal( client, &packet );
         }
@@ -2818,7 +2820,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection request timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
                     return;
-                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT, 0 );
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT, 0 );
                 return;
             }
         }
@@ -2831,7 +2833,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection response timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
                     return;
-                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT, 0 );
+                netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMED_OUT, 0 );
                 return;
             }
         }
@@ -6053,7 +6055,7 @@ void test_client_error_connection_response_timeout()
         time += delta_time;
     }
 
-    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT );
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMED_OUT );
 
     netcode_server_destroy( server );
 
@@ -6114,7 +6116,7 @@ void test_client_error_connection_request_timeout()
         time += delta_time;
     }
 
-    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT );
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
 
     netcode_server_destroy( server );
 
