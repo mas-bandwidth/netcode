@@ -1265,12 +1265,9 @@ struct netcode_connection_request_packet_t
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 };
 
-#define NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL 0
-
 struct netcode_connection_denied_packet_t
 {
     uint8_t packet_type;
-    uint32_t reason;
 };
 
 struct netcode_connection_challenge_packet_t
@@ -1411,8 +1408,7 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
         {
             case NETCODE_CONNECTION_DENIED_PACKET:
             {
-                struct netcode_connection_denied_packet_t * p = (struct netcode_connection_denied_packet_t*) packet;
-                netcode_write_uint32( &buffer, p->reason );
+                // ...
             }
             break;
 
@@ -1736,7 +1732,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         {
             case NETCODE_CONNECTION_DENIED_PACKET:
             {
-                if ( decrypted_bytes != 4 )
+                if ( decrypted_bytes != 0 )
                 {
                     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection denied packet. decrypted packet data is wrong size\n" );
                     return NULL;
@@ -1744,14 +1740,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
                 struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) malloc( sizeof( struct netcode_connection_denied_packet_t ) );
 
-                if ( !packet )
-                {
-                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection denied packet. could not allocate packet struct\n" );
-                    return NULL;
-                }
-                
                 packet->packet_type = NETCODE_CONNECTION_DENIED_PACKET;
-                packet->reason = netcode_read_uint32( &buffer );
                 
                 return packet;
             }
@@ -3608,8 +3597,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
         struct netcode_connection_denied_packet_t p;
         p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
-        p.reason = NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL;
-
+        
         netcode_server_send_global_packet( server, &p, from, connect_token_private.server_to_client_key );
 
         return;
@@ -3735,7 +3723,6 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
         struct netcode_connection_denied_packet_t p;
         p.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
-        p.reason = NETCODE_CONNECTION_REQUEST_DENIED_REASON_SERVER_IS_FULL;
 
         netcode_server_send_global_packet( server, &p, from, packet_send_key );
 

@@ -12,6 +12,8 @@ DONE
 
     Reduced size of challenge token to 300 bytes. That's all that is needed.
 
+    Removed the always 0 "reason" for connection denied. Pointless. There is only one reason :)
+
 TODO
 
 
