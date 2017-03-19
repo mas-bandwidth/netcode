@@ -83,7 +83,7 @@ The nonce for encryption is a 64 bit sequence number that starts at zero and inc
 Encryption is performed on the first 1024 - 16 bytes in the buffer only, leaving the last 16 bytes to store the HMAC:
 
     [encrypted private connect token] (1008 bytes)
-    [hmac of private connect token] (16 bytes)
+    [hmac of encrypted private connect token] (16 bytes)
 
 This is referred to as the _encrypted private connect token data_.
 
