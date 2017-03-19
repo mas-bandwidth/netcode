@@ -72,7 +72,7 @@ Prior to encryption the private connect token data has the following binary form
 
 This data is variable size but for simplicity is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
-Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
+Encryption of the connect token private data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
@@ -140,7 +140,7 @@ Prior to encryption, challenge tokens have the following structure:
     [user data] (256 bytes)
     <zero pad to 300 bytes>
     
-Challenge tokens are encrypted with the libsodium _crypto_secretbox_easy_ primitive, with a random key that is generated each time a dedicated server is started and a sequence number starts at zero and increases with each challenge token generated.
+Challenge tokens are encrypted with the libsodium _crypto_secretbox_easy_ primitive, with a random key that is generated each time a dedicated server is started and a sequence number that starts at zero and increases with each challenge token generated.
 
 Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
 
@@ -161,7 +161,7 @@ Together this is referred to as the _encrypted challenge token data_.
 * connection payload packet packet (5)
 * connection disconnect packet packet (6)
 
-The _connection request packet_ (0) is special, as it is not encrypted:
+The first packet type _connection request packet_ (0) is special, as it is not encrypted:
 
     0 (uint8) // prefix byte of zero
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
@@ -170,7 +170,7 @@ The _connection request packet_ (0) is special, as it is not encrypted:
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
     
-All other packet types are encrypted and have the following general format prior to encryption:
+All other packet types are encrypted. Prior to encryption they have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
@@ -182,11 +182,11 @@ The sequence number is encoded by omitting high zero bytes, for example, a seque
 
     0x8,0xE,0x3       // sequence bytes reversed for ease of implementation
 
-Each encrypted packet type the following data written to the per-packet type data section of the packet.
+Each encrypted packet type writes the following data to the per-packet type data section of the packet.
 
 _connection denied packet_:
 
-    [reason] (uint32)               // currently always 0, which means "server is full".
+    <no data>
 
 _connection challenge packet_:
 
@@ -215,7 +215,16 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
-    [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from changing packet type.
+    [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
+
+Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
+
+Post-encryption packets have the following format:
+
+    [prefix byte] (uint8) // non-zero prefix byte
+    [sequence number] (variable length 1-8 bytes)
+    [encrypted per-packet type data] (variable length according to packet type)
+    [hmac of encrypted per-packet type data] (16 bytes)
 
 ## Client State Machine
 
