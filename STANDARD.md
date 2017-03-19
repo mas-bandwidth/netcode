@@ -170,12 +170,11 @@ The _connection request packet_ (0) is special, as it is not encrypted:
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
     
-All other packet types are encrypted and have the following general format:
+All other packet types are encrypted and have the following general format prior to encryption:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
-    [encrypted packet data] (variable length according to packet type)
-    [encrypted packet hmac] (16 bytes)
+    [per-packet type data] (variable length according to packet type)
 
 The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
@@ -183,13 +182,7 @@ The sequence number is encoded by omitting high zero bytes, for example, a seque
 
     0x8,0xE,0x3       // sequence bytes reversed for ease of implementation
 
-Encryption of the connect token private data is performed using libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
-
-    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
-    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
-    [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
-
-Each of the encrypted packet types have their own data that is written to the encrypted packet data portion of the packet.
+Each encrypted packet type the following data written to the per-packet type data section of the packet.
 
 _connection denied packet_:
 
@@ -217,6 +210,12 @@ _connection payload packet_:
 _connection disconnect packet_:
     
     <no data>
+
+The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* with the following binary data as the _associated data_: 
+
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
+    [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from changing packet type.
 
 ## Client State Machine
 
