@@ -205,7 +205,7 @@ _connection keep-alive packet_:
     
 _connection payload packet_:
 
-    [user payload data] (0 to 1200 bytes)
+    [user payload data] (1 to 1200 bytes)
     
 _connection disconnect packet_:
     
@@ -225,6 +225,43 @@ Post-encryption packets have the following format:
     [sequence number] (variable length 1-8 bytes)
     [encrypted per-packet type data] (variable length according to packet type)
     [hmac of encrypted per-packet type data] (16 bytes)
+
+## Steps For Reading an Encrypted Packet
+
+Client and server follow these steps, in this exact order when reading an encrypted packet:
+
+* If the packet size is less than 18 bytes it is to small to possibly be valid, ignore the packet.
+
+* If the low 4 bits of the prefix byte is greater than or equal to 7, the packet type is invalid, ignore the packet.
+
+* The server ignores packets with type  _connection challenge packet_. 
+
+* The client ignores packets of type _connection request packet_ and _connection response packet_.
+
+* If the high 4 bits of the prefix byte (sequence bytes) is outside the range [1,8], ignore the packet.
+
+* If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
+
+* If the packet type is _connection payload packet_ and a _connection payload packet_ with that sequence number has already been read, or the sequence number is old enough that it is outside the bounds of the replay buffer, ignore the packet. See the section below on replay buffer for details.
+
+* If the per-packet type data fails to decrypt, ignore the packet.
+
+* If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
+
+* Expected per-packet type data sizes are:
+    
+    * 0 bytes for _connection denied packet_
+    * 308 bytes for _connection challenge packet_
+    * 308 bytes for _connection response packet_
+    * 8 bytes for _connection keep-alive packet_
+    * [1,1200] bytes for _connection payload packet_
+    * 0 bytes for _connection disconnect packet_
+
+* _All steps above should be performed before performing any allocations for this packet_.
+
+## Replay Protection
+
+...
 
 ## Client State Machine
 
@@ -271,10 +308,74 @@ While _connected_ if the client receives a _connection disconnect_ packet from t
 
 If the client wishes to disconnect, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_. This informs the server that the client has disconnected and speeds up the disconnection process.
 
+## Server-Side Overview
+
+The dedicated server should be on a publicly accessible IP address and port, without NAT.
+
+The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may extend this to be any number you wish, provided your implementation can support that many connected clients efficiently.
+
+The server listens on a single UDP socket bound to a specific port. Using this one UDP socket the server multiplexes and demultiplexes packets according to source IP address, negotiates connection requests from potential clients, assigns potential clients to slots, and detects when a connected client disconnects or times out.
+
+Outside the scope of this standard, dedicated servers should keep the web backend informed of their status (ready to accept new clients, full, stopped), how many client slots are free to join, and any additional information required for the web backend to make informed decisions about which servers to send clients to via connect tokens.
+
 ## Server-Side Connection Process
 
-...
+The first thing the server must do is negotiate connection with potential clients.
 
-## Replay Protection
+The server follows these basic rules when processing connection requests:
 
-...
+1. Clients must have a valid connect token to connect
+2. Respond to a client only when necessary. Ignore malformed requests.
+3. Reject an malformed request as soon as possible, with the minimum amount of work.
+4. Make sure any response packet is smaller than the request packet to avoid DDoS amplification.
+
+When a server receives a connection request packet from a client it contains the following data:
+
+    0 (uint8) // prefix byte of zero
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (8 bytes)
+    [connect token expire timestamp] (8 bytes)
+    [connect token sequence number] (8 bytes)
+    [encrypted private connect token data] (1024 bytes)
+
+This packet is not encrypted, however the client and an observer cannot read the encrypted private connect token data, because it is encrypted with a private key shared between the web backend and the dedicated server instances. Also, the important aspects of the packet such as the version info, protocol id and connect token expire timestamp are protected by the AEAD construct, and cannot be modified by a client.
+
+The server takes the following steps, in this exact order, when processing a _connection request packet_:
+
+* If the packet is not the expected size of 1062 bytes, ignore the packet.
+
+* If the version info in the packet doesn't match "NETCODE 1.00" (13 bytes, with null terminator), ignore the packet.
+
+* If the protocol id in the packet doesn't match the expected protocol id of the dedicated server, ignore the packet.
+
+* If the connect token expire timestamp is <= the current timestamp, ignore the packet.
+
+* If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
+
+* _The checks above must be made before allocating any resources for this pending client._
+
+* If the decrypted private connect token fails to be read for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
+
+* If the server public address is not in the list of server addresses in the private connect token, ignore the packet.
+
+* If a client from the packet source address is already connected, ignore the packet.
+
+* If a client with the client id contained in the packet source address is already connected, ignore the packet.
+
+* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet. Otherwise, add the private connect token hmac + packet source IP address to the limited history of connect tokens.
+
+* If the server is full, respond with a _connection denied packet_.
+
+* Add an encryption mapping for the packet source IP address so that read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
+
+* If for some reason this encryption mapping cannot be added, ignore the packet.
+
+* Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
+
+The server takes these steps, in this exact order, when processing a _connection response packet_:
+
+* If the packet is not the correct size of 
+
+* Decrypt the packet. If it fails to decrypt, ignore it.
+
+* ...
