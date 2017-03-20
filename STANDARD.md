@@ -340,7 +340,7 @@ When a server receives a connection request packet from a client it contains the
 
 This packet is not encrypted, however the client and an observer cannot read the encrypted private connect token data, because it is encrypted with a private key shared between the web backend and the dedicated server instances. Also, the important aspects of the packet such as the version info, protocol id and connect token expire timestamp are protected by the AEAD construct, and cannot be modified by a client.
 
-The server takes the following steps when processing a _connection request packet_, in this exact order:
+The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
 * If the packet is not the expected size of 1062 bytes, ignore the packet.
 
@@ -350,11 +350,11 @@ The server takes the following steps when processing a _connection request packe
 
 * If the connect token expire timestamp is <= the current timestamp, ignore the packet.
 
-* If the encrypted private connect token data doesn't decrypted with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
+* If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
 * _The checks above must be made before allocating any resources for this pending client._
 
-* If the decrypted connect token fails to be read in for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
+* If the decrypted private connect token fails to be read for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
 
 * If the server public address is not in the list of server addresses in the private connect token, ignore the packet.
 
@@ -362,11 +362,11 @@ The server takes the following steps when processing a _connection request packe
 
 * If a client with the client id contained in the packet source address is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet. Otherwise, add the connect add the connect token hmac + packet source IP address to the limited history of connect tokens.
+* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet. Otherwise, add the private connect token hmac + packet source IP address to the limited history of connect tokens.
 
 * If the server is full, respond with a _connection denied packet_.
 
-* Add an encryption mapping that says for the packet source IP address to decrypt packets read from that address with the client to server key in the private connect token, and to encrypt packets sent to that address with the server to client key in the private connect token. This encryption mapping expire in _timeout_ seconds of no packets being sent to or received from that address.
+* Add an encryption mapping for the packet source IP address so that read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
