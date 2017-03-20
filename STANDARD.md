@@ -303,7 +303,19 @@ When a server receives a connection request packet from a client it contains the
 
 This packet is not encrypted, however the client and an observer cannot read the encrypted private connect token data, because it is encrypted with a private key shared between the web backend and the dedicated server instances. Also, the important aspects of the packet such as the version info, protocol id and connect token expire timestamp are protected by the AEAD construct, and cannot be modified by a client.
 
-On receiving a connection the server must take the following steps, in order:
+The server takes the following steps when processing a _connection request packet_, in this exact order:
+
+* If the packet is not the expected size of 1062 bytes, ignore the packet.
+
+* If the version info in the packet doesn't match "NETCODE 1.00" (13 bytes, with null terminator), ignore the packet.
+
+* If the protocol id in the packet doesn't match the expected protocol id of the dedicated server, ignore the packet.
+
+* If the connect token expire timestamp is <= the current timestamp, ignore the packet.
+
+* If the encrypted private connect token data doesn't decrypted with the private key, using the additional data constructed from: version info, protocol id and expire timestamp, ignore the packet.
+
+* _The checks above must be made before allocating any resources for this pending client._
 
 * ...
 
