@@ -248,7 +248,7 @@ Client and server follow these steps, in this exact order when reading an encryp
 
 * If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
 
-* Expected per-packet data sizes are:
+* Expected per-packet type data sizes are:
     
     * 0 bytes for _connection denied packet_
     * 308 bytes for _connection challenge packet_
