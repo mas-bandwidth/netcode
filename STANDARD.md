@@ -226,6 +226,16 @@ Post-encryption packets have the following format:
     [encrypted per-packet type data] (variable length according to packet type)
     [hmac of encrypted per-packet type data] (16 bytes)
 
+## Steps For Reading an Encrypted Packet
+
+Client and server follow these steps, in this exact order when reading an encrypted packet:
+
+* ...
+
+* ...
+
+etc.
+
 ## Client State Machine
 
 The client has the following states:
@@ -335,7 +345,13 @@ The server takes the following steps when processing a _connection request packe
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
 
-...
+The server takes these steps, in this exact order, when processing a _connection response packet_:
+
+* If the packet is not the correct size of 
+
+* Decrypt the packet. If it fails to decrypt, ignore it.
+
+* ...
 
 ## Replay Protection
 
