@@ -1826,6 +1826,12 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             
             case NETCODE_CONNECTION_PAYLOAD_PACKET:
             {
+                if ( decrypted_bytes < 1 )
+                {
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. payload is too small\n" );
+                    return NULL;
+                }
+
                 if ( decrypted_bytes > NETCODE_MAX_PAYLOAD_BYTES )
                 {
                     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. payload is too large\n" );

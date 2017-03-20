@@ -14,6 +14,8 @@ DONE
 
     Removed the always 0 "reason" for connection denied. Pointless. There is only one reason :)
 
+    Added some code on read connection payload packet to ignore packets with payload data size < 1. Otherwise, could have performed zero size allocation.
+
 TODO
-
-
+    
+    
