@@ -285,7 +285,12 @@ Outside the scope of this standard, dedicated servers should keep the web backen
 
 The first thing the server must do is negotiate connection with potential clients.
 
-When doing this it follows one rule: _clients must have a valid connect token to be able to connect!_
+In general the server follows these basic rules when processing connection requests:
+
+1. Clients must have a valid connect token to connect
+2. Respond to a client only when necessary. Ignore any malformed requests.
+3. Reject an malformed request as soon as possible, with the minimum amount of work.
+4. Make sure the response is smaller than the request packet to avoid DDoS amplification.
 
 ...
 
