@@ -205,7 +205,7 @@ _connection keep-alive packet_:
     
 _connection payload packet_:
 
-    [user payload data] (0 to 1200 bytes)
+    [user payload data] (1 to 1200 bytes)
     
 _connection disconnect packet_:
     
@@ -230,11 +230,38 @@ Post-encryption packets have the following format:
 
 Client and server follow these steps, in this exact order when reading an encrypted packet:
 
-* ...
+* If the packet size is less than 18 bytes it is to small to possibly be valid, ignore the packet.
 
-* ...
+* If the low 4 bits of the prefix byte is greater than or equal to 7, the packet type is invalid, ignore the packet.
 
-etc.
+* The server ignores packets with type  _connection challenge packet_. 
+
+* The client ignores packets of type _connection request packet_ and _connection response packet_.
+
+* If the high 4 bits of the prefix byte (sequence bytes) is outside the range [1,8], ignore the packet.
+
+* If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
+
+* If the packet type is _connection payload packet_ and a _connection payload packet_ with that sequence number has already been read, or the sequence number is old enough that it is outside the bounds of the replay buffer, ignore the packet. See the section below on replay buffer for details.
+
+* If the per-packet type data fails to decrypt, ignore the packet.
+
+* If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
+
+* Expected per-packet data sizes are:
+    
+    * 0 bytes for _connection denied packet_
+    * 308 bytes for _connection challenge packet_
+    * 308 bytes for _connection response packet_
+    * 8 bytes for _connection keep-alive packet_
+    * [1,1200] bytes for _connection payload packet_
+    * 0 bytes for _connection disconnect packet_
+
+* _All steps above should be performed before performing any allocations for this packet_.
+
+## Replay Protection
+
+...
 
 ## Client State Machine
 
@@ -352,7 +379,3 @@ The server takes these steps, in this exact order, when processing a _connection
 * Decrypt the packet. If it fails to decrypt, ignore it.
 
 * ...
-
-## Replay Protection
-
-...
