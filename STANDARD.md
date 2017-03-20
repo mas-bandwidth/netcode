@@ -317,7 +317,27 @@ The server takes the following steps when processing a _connection request packe
 
 * _The checks above must be made before allocating any resources for this pending client._
 
-* ...
+* If the decrypted connect token fails to be read in for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
+
+* If the server public address is not in the list of server addresses in the private connect token, ignore the packet.
+
+* If a client from the packet source address is already connected, ignore the packet.
+
+* If a client with the client id contained in the packet source address is already connected, ignore the packet.
+
+* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet.
+
+* Otherwise, add the connect add the connect token + packet source IP address to the limited history of connect tokens.
+
+* If the server is full, respond with a _connection denied packet_.
+
+* Add an encryption mapping that says for the packet source IP address to decrypt packets read from that address with the client to server key in the private connect token, and to encrypt packets sent to that address with the server to client key in the private connect token. This encryption mapping expire in _timeout_ seconds of no packets being sent to or received from that address.
+
+* If for some reason this encryption mapping cannot be added, ignore the packet.
+
+* Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
+
+...
 
 ## Replay Protection
 
