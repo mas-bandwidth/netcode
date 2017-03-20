@@ -313,7 +313,7 @@ The server takes the following steps when processing a _connection request packe
 
 * If the connect token expire timestamp is <= the current timestamp, ignore the packet.
 
-* If the encrypted private connect token data doesn't decrypted with the private key, using the additional data constructed from: version info, protocol id and expire timestamp, ignore the packet.
+* If the encrypted private connect token data doesn't decrypted with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
 * _The checks above must be made before allocating any resources for this pending client._
 
