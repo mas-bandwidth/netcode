@@ -285,14 +285,27 @@ Outside the scope of this standard, dedicated servers should keep the web backen
 
 The first thing the server must do is negotiate connection with potential clients.
 
-In general the server follows these basic rules when processing connection requests:
+The server follows these basic rules when processing connection requests:
 
 1. Clients must have a valid connect token to connect
-2. Respond to a client only when necessary. Ignore any malformed requests.
+2. Respond to a client only when necessary. Ignore malformed requests.
 3. Reject an malformed request as soon as possible, with the minimum amount of work.
-4. Make sure the response is smaller than the request packet to avoid DDoS amplification.
+4. Make sure any response packet is smaller than the request packet to avoid DDoS amplification.
 
-...
+When a server receives a connection request packet from a client it contains the following data:
+
+    0 (uint8) // prefix byte of zero
+    [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
+    [protocol id] (8 bytes)
+    [connect token expire timestamp] (8 bytes)
+    [connect token sequence number] (8 bytes)
+    [encrypted private connect token data] (1024 bytes)
+
+This packet is not encrypted, however the client and an observer cannot read the encrypted private connect token data, because it is encrypted with a private key shared between the web backend and the dedicated server instances. Also, the important aspects of the packet such as the version info, protocol id and connect token expire timestamp are protected by the AEAD construct, and cannot be modified by a client.
+
+On receiving a connection the server must take the following steps, in order:
+
+* ...
 
 ## Replay Protection
 
