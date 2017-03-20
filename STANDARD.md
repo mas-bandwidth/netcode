@@ -325,9 +325,7 @@ The server takes the following steps when processing a _connection request packe
 
 * If a client with the client id contained in the packet source address is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet.
-
-* Otherwise, add the connect add the connect token + packet source IP address to the limited history of connect tokens.
+* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet. Otherwise, add the connect add the connect token hmac + packet source IP address to the limited history of connect tokens.
 
 * If the server is full, respond with a _connection denied packet_.
 
