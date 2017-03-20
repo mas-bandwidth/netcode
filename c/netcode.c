@@ -1740,6 +1740,12 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
                 struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) malloc( sizeof( struct netcode_connection_denied_packet_t ) );
 
+                if ( !packet )
+                {
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection denied packet. could not allocate packet struct\n" );
+                    return NULL;
+                }
+                
                 packet->packet_type = NETCODE_CONNECTION_DENIED_PACKET;
                 
                 return packet;
