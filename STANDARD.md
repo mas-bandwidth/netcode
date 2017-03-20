@@ -275,11 +275,11 @@ If the client wishes to disconnect, it sends a number of redundant _connection d
 
 The dedicated server should be on a publicly accessible IP address and port, without NAT.
 
-The server responsible for managing a set of n client slots, where each slot from [0,maxSlots-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may extend this to be any number you wish, provided your server implementation can support that many connected clients efficiently.
+The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may extend this to be any number you wish, provided your implementation can support that many connected clients efficiently.
 
 The server listens on a single UDP socket bound to a specific port. Using this one UDP socket the server multiplexes and demultiplexes packets according to source IP address, negotiates connection requests from potential clients, assigns potential clients to slots, and detects when a connected client disconnects or times out.
 
-Outside the scope of this standard, dedicated servers should keep the web backend informed of their status (ready to accept new clients, stopped), how many client slots are free to join, and any additional information required for the web backend to make informed decisions about which servers to send clients to via connect tokens.
+Outside the scope of this standard, dedicated servers should keep the web backend informed of their status (ready to accept new clients, full, stopped), how many client slots are free to join, and any additional information required for the web backend to make informed decisions about which servers to send clients to via connect tokens.
 
 ## Server-Side Connection Process
 
