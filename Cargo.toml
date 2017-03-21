@@ -14,6 +14,10 @@ description = "Wrapper for netcode.io library"
 libsodium-sys = "0.0.14"
 log = "0.3.6"
 byteorder = "1.0.0"
+mio = "0.6.5"
+
+[dev-dependencies]
+env_logger = "0.4.2"
 
 [build-dependencies]
 gcc = "0.3.43"

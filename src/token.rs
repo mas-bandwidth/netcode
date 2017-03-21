@@ -55,8 +55,6 @@ impl From<crypto::EncryptError> for DecodeError {
 const NETCODE_ADDRESS_IPV4: u8 = 1;
 const NETCODE_ADDRESS_IPV6: u8 = 2;
 
-const NETCODE_VERSION_LEN: usize = 13;
-const NETCODE_VERSION_STRING: &'static [u8; NETCODE_VERSION_LEN] = b"NETCODE 1.00\0";
 const NETCODE_ADDITIONAL_DATA_SIZE: usize = NETCODE_VERSION_LEN + 8 + 8;
 
 /// Token used by clients to connect and authenticate to a netcode `Server`
@@ -170,7 +168,7 @@ impl ConnectToken {
         generate_additional_data(io::Cursor::new(&mut additional_data[..]), self.protocol, self.expire_utc)?;
 
         let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
-        let len = crypto::decode(&mut decoded, &self.private_data, &additional_data, sequence, private_key)?;
+        let len = crypto::decode(&mut decoded, &self.private_data, Some(&additional_data), sequence, private_key)?;
 
         if len != decoded.len() {
             return Err(DecodeError::Decrypt(crypto::EncryptError::Failed))
@@ -269,7 +267,7 @@ impl PrivateData {
         let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
         source.read_exact(&mut encoded)?;
 
-        crypto::decode(&mut decoded, &encoded, additional_data, sequence, private_key)?;
+        crypto::decode(&mut decoded, &encoded, Some(additional_data), sequence, private_key)?;
 
         Ok(PrivateData::read(&mut io::Cursor::new(&decoded[..]))?)
     }
@@ -282,7 +280,7 @@ impl PrivateData {
 
         self.write(&mut io::Cursor::new(&mut scratch[..]))?;
 
-        crypto::encode(&mut out_scratch, &scratch, additional_data, sequence, private_key)?;
+        crypto::encode(&mut out_scratch, &scratch, Some(additional_data), sequence, private_key)?;
 
         out.write_all(&out_scratch)?;
 

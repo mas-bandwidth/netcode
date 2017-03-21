@@ -25,7 +25,7 @@ pub fn random_bytes(out: &mut [u8]) {
     }
 }
 
-pub fn encode(out: &mut [u8], data: &[u8], additional_data: &[u8], nonce: u64, key: &[u8; NETCODE_KEY_BYTES]) -> Result<usize, EncryptError> {
+pub fn encode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce: u64, key: &[u8; NETCODE_KEY_BYTES]) -> Result<usize, EncryptError> {
     if key.len() != NETCODE_KEY_BYTES {
         return Err(EncryptError::InvalidPublicKeySize)
     }
@@ -41,8 +41,8 @@ pub fn encode(out: &mut [u8], data: &[u8], additional_data: &[u8], nonce: u64, k
                 &mut written,
                 data.as_ptr(),
                 data.len() as u64,
-                additional_data.as_ptr(),
-                additional_data.len() as u64,
+                additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
+                additional_data.map_or(0, |v| v.len()) as u64,
                 ::std::ptr::null(),
                 ::std::mem::transmute(&nonce),
                 key);
@@ -56,7 +56,7 @@ pub fn encode(out: &mut [u8], data: &[u8], additional_data: &[u8], nonce: u64, k
     }
 }
 
-pub fn decode(out: &mut [u8], data: &[u8], additional_data: &[u8], nonce: u64, key: &[u8; NETCODE_KEY_BYTES]) -> Result<usize, EncryptError> {
+pub fn decode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce: u64, key: &[u8; NETCODE_KEY_BYTES]) -> Result<usize, EncryptError> {
     if key.len() != NETCODE_KEY_BYTES {
         return Err(EncryptError::InvalidPublicKeySize)
     }
@@ -73,8 +73,8 @@ pub fn decode(out: &mut [u8], data: &[u8], additional_data: &[u8], nonce: u64, k
                 ::std::ptr::null_mut(),
                 data.as_ptr(),
                 data.len() as u64,
-                additional_data.as_ptr(),
-                additional_data.len() as u64,
+                additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
+                additional_data.map_or(0, |v| v.len()) as u64,
                 ::std::mem::transmute(&nonce),
                 key);
 
