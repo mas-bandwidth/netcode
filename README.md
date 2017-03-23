@@ -66,11 +66,13 @@ You can support Glenn's work writing articles and open source code via [Patreon]
 
 **netcode.io** is generously sponsored by:
 
-* Gold Sponsors
+* **Gold Sponsors**
     * [Cloud Imperium Games](https://cloudimperiumgames.com)
-* Silver Sponsors
+    
+* **Silver Sponsors**
     * [The Network Protocol Company](http://www.thenetworkprotocolcompany.com)
-* Bronze Sponsors
+    
+* **Bronze Sponsors**
     * [Kite & Lightning](http://kiteandlightning.la/)
     * [Data Realms](http://datarealms.com)
  
