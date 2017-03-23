@@ -575,6 +575,10 @@ fn interop_write() {
     unsafe {
         let mut output: wrapper::private::netcode_connect_token_t = ::std::mem::uninitialized();
         assert_eq!(wrapper::private::netcode_read_connect_token(scratch.as_mut_ptr(), scratch.len() as i32, &mut output), 1);
+        
+        assert_eq!(output.sequence, sequence);
+        assert_eq!(output.expire_timestamp, output.create_timestamp + expire as u64);
+        assert_eq!(output.protocol_id, protocol);
     }
 }
 

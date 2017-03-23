@@ -10,6 +10,14 @@ pub fn main() {
     println!("cargo:rustc-link-search=native=netcode/c/windows");
     println!("cargo:rustc-link-lib=static=sodium-release");
 
+    gcc::Config::new()
+        .file("netcode/c/netcode.c")
+        .include("netcode/c")
+        .include("netcode/c/windows")
+        .define("NETCODE_ENABLE_TESTS", Some("0"))
+        .define("NDEBUG", Some("0"))
+        .compile("libnetcode.a");
+
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     let pub_path = out_path.join("pub_bindings.rs");
     let private_path = out_path.join("private_bindings.rs");
@@ -35,6 +43,7 @@ pub fn main() {
                 oldest
             }
         });
+
     let newest_source = source.iter()
         .map(|v| {
             File::open(v)
@@ -51,14 +60,6 @@ pub fn main() {
         });
 
     if newest_source > oldest_target {
-        gcc::Config::new()
-            .file("netcode/c/netcode.c")
-            .include("netcode/c")
-            .include("netcode/c/windows")
-            .define("NETCODE_ENABLE_TESTS", Some("0"))
-            .define("NDEBUG", Some("0"))
-            .compile("libnetcode.a");
-
         //Export symbols for netcode
         let pub_bindings = bindgen::Builder::default()
             .no_unstable_rust()
@@ -82,6 +83,9 @@ pub fn main() {
             .whitelisted_function("netcode_read_packet")
             .whitelisted_function("netcode_read_connect_token")
             .whitelisted_function("netcode_server_free_packet")
+            .whitelisted_function("netcode_replay_protection_reset")
+            .whitelisted_function("netcode_server_free_packet")
+            .whitelisted_var("NETCODE_CONNECTION_NUM_PACKETS")
             .generate()
             .expect("Unable to generate bindings");
 

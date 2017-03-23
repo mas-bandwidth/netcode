@@ -337,8 +337,8 @@ fn test_sequence() {
 
 #[cfg(test)]
 fn test_encode_decode<V>(packet: Packet, payload: Option<&[u8]>, verify: V) where V: Fn(Packet) {
-    let sequence = 0xCCDD;
-    let pkey = crypto::generate_key();
+    let mut sequence = 0xCCDD;
+    let mut pkey = crypto::generate_key();
 
     let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
     let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
@@ -352,6 +352,29 @@ fn test_encode_decode<V>(packet: Packet, payload: Option<&[u8]>, verify: V) wher
         for i in 0..in_payload.len() {
             assert_eq!(in_payload[i], out_packet[i]);
         }
+    }
+
+    unsafe {
+        use wrapper;
+
+        let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
+        wrapper::private::netcode_replay_protection_reset(&mut replay);
+
+        let mut allowed_packets = [0; wrapper::private::NETCODE_CONNECTION_NUM_PACKETS as usize];
+
+        let mut result = wrapper::private::netcode_read_packet(
+            scratch.as_mut_ptr(), length as i32, //data
+            &mut sequence,
+            pkey.as_mut_ptr(), //Recv private key
+            0, //Protocol id
+            0, //Current timestamp
+            pkey.as_mut_ptr(), //Private key
+            allowed_packets.as_mut_ptr(), //Allowed packets
+            &mut replay); //Replay protection
+
+        assert!(result != ::std::ptr::null_mut());
+
+        wrapper::private::netcode_server_free_packet(::std::ptr::null_mut(), result);
     }
 }
 
