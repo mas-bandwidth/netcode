@@ -68,10 +68,8 @@ You can support Glenn's work writing articles and open source code via [Patreon]
 
 * Gold Sponsors
  * [Cloud Imperium Games](https://cloudimperiumgames.com)
- 
 * Silver Sponsors
  * [The Network Protocol Company](http://www.thenetworkprotocolcompany.com)
-
 * Bronze Sponsors
  * [Kite & Lightning](http://kiteandlightning.la/)
  * [Data Realms](http://datarealms.com)
