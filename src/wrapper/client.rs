@@ -35,11 +35,13 @@ impl ClientState {
             NETCODE_CLIENT_STATE_CONNECTION_RESPONSE_TIMEOUT => ClientState::ConnectionResponseTimeout,
             NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMEOUT => ClientState::ConnectionRequestTimeout,
             NETCODE_CLIENT_STATE_CONNECTION_DENIED => ClientState::ConnectionDenied,
-            NETCODE_CLIENT_STATE_DISCONNECTED => ClientState::Disconnected,
-            NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST => ClientState::SendingConnectionRequest,
-            NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE => ClientState::SendingConnectionResponse,
-            NETCODE_CLIENT_STATE_CONNECTED => ClientState::Connected,
-            _ => ClientState::Unknown
+            o => match o as u32 {
+                NETCODE_CLIENT_STATE_DISCONNECTED => ClientState::Disconnected,
+                NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST => ClientState::SendingConnectionRequest,
+                NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE => ClientState::SendingConnectionResponse,
+                NETCODE_CLIENT_STATE_CONNECTED => ClientState::Connected,
+                _ => ClientState::Unknown
+            }
        }
     }
 }
@@ -54,7 +56,7 @@ impl Client {
 
         unsafe {
             let cstr_client_address = CString::new(client_address.into()).unwrap();
-            let client_ptr = netcode_client_create(cstr_client_address.as_ptr(), 0.0);
+            let client_ptr = netcode_client_create(::std::mem::transmute(cstr_client_address.as_ptr()), 0.0);
             
             if client_ptr == ::std::ptr::null_mut() {
                 return Err(ClientError::Create)
@@ -65,7 +67,7 @@ impl Client {
                 handle: client_ptr
             };
 
-            netcode_client_connect(client_ptr, token.get_bytes().as_ptr());
+            netcode_client_connect(client_ptr, ::std::mem::transmute(token.get_bytes().as_ptr()));
 
             Ok(client)
         }
@@ -88,12 +90,12 @@ impl Client {
     }
 
     pub fn send(&mut self, data: &[u8]) -> Result<(), SendError> {
-        if data.len() > NETCODE_MAX_PACKET_SIZE {
+        if data.len() > NETCODE_MAX_PACKET_SIZE as usize {
             return Err(SendError::LengthExceeded)
         }
 
         unsafe {
-            netcode_client_send_packet(self.handle, data.as_ptr(), data.len() as i32);
+            netcode_client_send_packet(self.handle, ::std::mem::transmute(data.as_ptr()), data.len() as i32);
         }
 
         Ok(())

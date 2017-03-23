@@ -5,6 +5,9 @@ mod server;
 mod token;
 mod util;
 
+#[cfg(test)]
+mod private;
+
 pub use self::client::*;
 pub use self::server::*;
 pub use self::token::*;

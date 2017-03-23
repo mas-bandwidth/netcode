@@ -21,3 +21,4 @@ env_logger = "0.4.2"
 
 [build-dependencies]
 gcc = "0.3.43"
+bindgen = "0.22.1"

@@ -1,3 +1,4 @@
+/*
 pub const NETCODE_CONNECT_TOKEN_BYTES: usize = 4096;
 pub const NETCODE_KEY_BYTES: usize = 32;
 pub const NETCODE_MAX_SERVERS_PER_CONNECT: usize = 16;
@@ -118,3 +119,9 @@ extern "C" {
     pub fn netcode_server_client_id(server: *mut netcode_server_t, client_index: ::std::os::raw::c_int ) -> u64;
     pub fn netcode_server_destroy(server: *mut netcode_server_t);
 }
+*/
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+include!(concat!(env!("OUT_DIR"), "/pub_bindings.rs"));

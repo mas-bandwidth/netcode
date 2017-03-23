@@ -39,12 +39,12 @@ impl ConnectToken {
 
         let result = unsafe {
             match wrapper::netcode_generate_connect_token(host_count,
-                host_list_ptr.as_ptr() as *const *const i8,
+                host_list_ptr.as_ptr() as *mut *mut i8,
                 expire,
                 client_id,
                 protocol,
                 sequence,
-                private_key.as_ptr(),
+                ::std::mem::transmute(private_key.as_ptr()),
                 token.as_mut_ptr()
                 ) {
                     0 => Err(TokenError::Generate),

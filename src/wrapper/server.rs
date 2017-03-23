@@ -17,7 +17,7 @@ pub struct Server {
 impl Server {
     pub fn new<S>(public_addr: S, bind_addr: S, private_key: &[u8], protocol_id: u64, max_clients: usize) -> Result<Server, ServerError>
             where S: Into<String> {
-        if max_clients > NETCODE_MAX_CLIENTS {
+        if max_clients > NETCODE_MAX_CLIENTS as usize {
             return Err(ServerError::MaxClients)
         }
 
@@ -25,7 +25,12 @@ impl Server {
         let bind_addr_cstr = CString::new(bind_addr.into()).unwrap();
 
         let handle = unsafe {
-            netcode_server_create(bind_addr_cstr.as_ptr(), public_addr_cstr.as_ptr(), protocol_id, private_key.as_ptr(), 0.0)
+            netcode_server_create(
+                ::std::mem::transmute(bind_addr_cstr.as_ptr()),
+                ::std::mem::transmute(public_addr_cstr.as_ptr()),
+                protocol_id,
+                ::std::mem::transmute(private_key.as_ptr()),
+                0.0)
         };
 
         if handle == ::std::ptr::null_mut() {
@@ -46,12 +51,12 @@ impl Server {
     }
 
     pub fn send(&mut self, client_id: i32, data: &[u8]) -> Result<(), SendError> {
-        if data.len() > NETCODE_MAX_PACKET_SIZE {
+        if data.len() > NETCODE_MAX_PACKET_SIZE as usize {
             return Err(SendError::LengthExceeded)
         }
 
         unsafe {
-            netcode_server_send_packet(self.handle, client_id, data.as_ptr(), data.len() as i32);
+            netcode_server_send_packet(self.handle, client_id, ::std::mem::transmute(data.as_ptr()), data.len() as i32);
         }
 
         Ok(())
