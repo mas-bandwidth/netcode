@@ -573,8 +573,8 @@ fn interop_write() {
     token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();
 
     unsafe {
-        let mut output = [0; 4096];
-        assert_eq!(wrapper::private::netcode_read_connect_token(scratch.as_mut_ptr(), scratch.len() as i32, output.as_mut_ptr()), 1);
+        let mut output: wrapper::private::netcode_connect_token_t = ::std::mem::uninitialized();
+        assert_eq!(wrapper::private::netcode_read_connect_token(scratch.as_mut_ptr(), scratch.len() as i32, &mut output), 1);
     }
 }
 

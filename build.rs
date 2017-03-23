@@ -7,6 +7,9 @@ use std::fs::File;
 use std::time::SystemTime;
 
 pub fn main() {
+    println!("cargo:rustc-link-search=native=netcode/c/windows");
+    println!("cargo:rustc-link-lib=static=sodium-release");
+
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     let pub_path = out_path.join("pub_bindings.rs");
     let private_path = out_path.join("private_bindings.rs");
@@ -56,9 +59,6 @@ pub fn main() {
             .define("NDEBUG", Some("0"))
             .compile("libnetcode.a");
 
-        println!("cargo:rustc-link-search=native=netcode/c/windows");
-        println!("cargo:rustc-link-lib=static=sodium-release");
-
         //Export symbols for netcode
         let pub_bindings = bindgen::Builder::default()
             .no_unstable_rust()
@@ -81,6 +81,7 @@ pub fn main() {
             .whitelisted_function("netcode_write_packet")
             .whitelisted_function("netcode_read_packet")
             .whitelisted_function("netcode_read_connect_token")
+            .whitelisted_function("netcode_server_free_packet")
             .generate()
             .expect("Unable to generate bindings");
 
