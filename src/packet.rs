@@ -62,7 +62,7 @@ fn encode_prefix(value: u8, sequence: u64) -> u8 {
 fn sequence_bytes_required(sequence: u64) -> usize
 {
     let mut mask: u64 = 0xFF00000000000000;
-    for i in 0..7 {
+    for i in 0..8 {
         if (sequence & mask) != 0x00 {
             return 8 - i
         }
@@ -70,7 +70,7 @@ fn sequence_bytes_required(sequence: u64) -> usize
         mask >>= 8;
     }
 
-    1
+    0
 }
 
 #[derive(Debug)]
@@ -108,10 +108,25 @@ fn read_sequence<R>(source: &mut R, len: usize) -> Result<u64, io::Error> where 
     io::Cursor::new(&seq_scratch).read_u64::<BigEndian>()
 }
 
-pub fn decode(data: &[u8], private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+fn get_additional_data(prefix: u8, protocol_id: u64) -> Result<[u8; NETCODE_VERSION_LEN + 8 + 1], io::Error> {
+    let mut buffer = [0; NETCODE_VERSION_LEN + 8 + 1];
+
+    {
+        let mut writer = io::Cursor::new(&mut buffer[..]);
+
+        writer.write(&NETCODE_VERSION_STRING[..])?;
+        writer.write_u64::<BigEndian>(protocol_id)?;
+        writer.write_u8(prefix)?;
+    }
+
+    Ok(buffer)
+}
+
+pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PACKET_SIZE])
         -> Result<Packet, PacketError> {
     let mut source = &mut io::Cursor::new(data);
-    let (ty, sequence_len) = decode_prefix(source.read_u8()?);
+    let prefix_byte = source.read_u8()?;
+    let (ty, sequence_len) = decode_prefix(prefix_byte);
 
     if ty == PACKET_CONNECTION {
         Ok(Packet::ConnectionRequest(ConnectionRequestPacket::read(source)?))
@@ -122,7 +137,14 @@ pub fn decode(data: &[u8], private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &
             let sequence = read_sequence(source, sequence_len)?;
 
             let payload = &data[source.position() as usize..];
-            let decoded_len = crypto::decode(out, payload, None, sequence, private_key)?;
+            let additional_data = get_additional_data(prefix_byte, protocol_id)?;
+
+            println!("dc {} {:?}", payload.len(), &payload);
+            println!("ad {:?}", &additional_data);
+            println!("pkey {:?}", &private_key);
+            println!("seq {}", sequence);
+
+            let decoded_len = crypto::decode(out, payload, Some(&additional_data[..]), sequence, private_key)?;
 
             let mut source_data = &mut io::Cursor::new(&out[..decoded_len]);
 
@@ -143,7 +165,7 @@ pub fn decode(data: &[u8], private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &
     }
 }
 
-pub fn encode(out: &mut [u8], packet: &Packet, crypt_info: Option<(u64, &[u8; NETCODE_KEY_BYTES])>, payload: Option<&[u8]>)
+pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Option<(u64, &[u8; NETCODE_KEY_BYTES])>, payload: Option<&[u8]>)
         -> Result<usize, PacketError> {
     if let &Packet::ConnectionRequest(ref req) = packet {
         let mut writer = io::Cursor::new(&mut out[..]);
@@ -152,17 +174,20 @@ pub fn encode(out: &mut [u8], packet: &Packet, crypt_info: Option<(u64, &[u8; NE
         writer.write_u8(encode_prefix(packet.get_type_id(), 0))?;
         req.write(&mut writer)?;
 
-        Ok((writer.position()+1) as usize)
+        Ok(writer.position() as usize)
     } else {
        if let Some((sequence,private_key)) = crypt_info {
-            let offset = {
+            let (prefix_byte, offset) = {
                 let mut write = &mut io::Cursor::new(&mut out[..]);
 
                 //First byte is always id + sequence
-                write.write_u8(encode_prefix(packet.get_type_id(), sequence))?;
+                let prefix_byte = encode_prefix(packet.get_type_id(), sequence);
+                write.write_u8(prefix_byte)?;
                 write_sequence(write, sequence)?;
 
-                write.position()
+                println!("wseq {}", sequence);
+
+                (prefix_byte, write.position())
             };
     
             let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
@@ -177,10 +202,12 @@ pub fn encode(out: &mut [u8], packet: &Packet, crypt_info: Option<(u64, &[u8; NE
                 scratch_write.position()
             };
 
+            let additional_data = get_additional_data(prefix_byte, protocol_id)?;
+
             let crypt_write = crypto::encode(
                 &mut out[offset as usize..],
                 &scratch[0..scratch_written as usize],
-                None,
+                Some(&additional_data[..]),
                 sequence,
                 private_key)?;
 
@@ -300,18 +327,18 @@ impl ResponsePacket {
 }
 
 pub struct KeepAlivePacket {
-    client_idx: u64
+    client_idx: i32
 }
 
 impl KeepAlivePacket {
     pub fn read<R>(source: &mut R) -> Result<KeepAlivePacket, io::Error> where R: io::Read {
         Ok(KeepAlivePacket {
-            client_idx: source.read_u64::<BigEndian>()?
+            client_idx: source.read_i32::<BigEndian>()?
         })
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
-        out.write_u64::<BigEndian>(self.client_idx)?;
+        out.write_i32::<BigEndian>(self.client_idx)?;
 
         Ok(())
     }
@@ -336,14 +363,26 @@ fn test_sequence() {
 }
 
 #[cfg(test)]
-fn test_encode_decode<V>(packet: Packet, payload: Option<&[u8]>, verify: V) where V: Fn(Packet) {
-    let mut sequence = 0xCCDD;
+fn test_encode_decode<V>(
+        packet: Packet,
+        payload: Option<&[u8]>,
+        private_key: Option<[u8; NETCODE_KEY_BYTES]>,
+        verify: V)
+            where V: Fn(Packet)
+        {
+    let mut sequence = if let Packet::ConnectionRequest(_) = packet {
+        0x0
+    } else {
+        0xCCDD
+    };
+
+    let protocol_id = 0xFFCC;
     let mut pkey = crypto::generate_key();
 
     let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
     let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
-    let length = encode(&mut scratch[..], &packet, Some((sequence, &pkey)), payload).unwrap();
-    match decode(&scratch[..length], Some(&pkey), &mut out_packet) {
+    let length = encode(&mut scratch[..], protocol_id, &packet, Some((sequence, &pkey)), payload).unwrap();
+    match decode(&scratch[..length], protocol_id, Some(&pkey), &mut out_packet) {
         Ok(p) => verify(p),
         Err(e) => assert!(false, "{:?}", e)
     }
@@ -357,18 +396,20 @@ fn test_encode_decode<V>(packet: Packet, payload: Option<&[u8]>, verify: V) wher
     unsafe {
         use wrapper;
 
+        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
+
         let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
         wrapper::private::netcode_replay_protection_reset(&mut replay);
 
-        let mut allowed_packets = [0; wrapper::private::NETCODE_CONNECTION_NUM_PACKETS as usize];
+        let mut allowed_packets = [1; wrapper::private::NETCODE_CONNECTION_NUM_PACKETS as usize];
 
-        let mut result = wrapper::private::netcode_read_packet(
+        let result = wrapper::private::netcode_read_packet(
             scratch.as_mut_ptr(), length as i32, //data
             &mut sequence,
             pkey.as_mut_ptr(), //Recv private key
-            0, //Protocol id
+            protocol_id, //Protocol id
             0, //Current timestamp
-            pkey.as_mut_ptr(), //Private key
+            private_key.map(|mut v| v.as_mut_ptr()).unwrap_or(::std::ptr::null_mut()), //Private key
             allowed_packets.as_mut_ptr(), //Allowed packets
             &mut replay); //Replay protection
 
@@ -380,23 +421,34 @@ fn test_encode_decode<V>(packet: Packet, payload: Option<&[u8]>, verify: V) wher
 
 #[test]
 fn test_conn_packet() {
+    use token;
+    use std::net::SocketAddr;
+    use std::str::FromStr;
+
     let protocol_id = 0xFFCC;
-    let token_expire = 0xCCFF;
     let sequence = 0xCCDD;
-    let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
-    for i in 0..NETCODE_CONNECT_TOKEN_PRIVATE_BYTES {
-        private_data[i] = i as u8;
-    }
+    let pkey = crypto::generate_key();
+
+    let token = token::ConnectToken::generate(
+                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+                        &pkey,
+                        30, //Expire
+                        sequence,
+                        protocol_id,
+                        0xFFEE, //Client Id
+                        None).unwrap();
 
     let packet = Packet::ConnectionRequest(ConnectionRequestPacket {
         version: NETCODE_VERSION_STRING.clone(),
         protocol_id: protocol_id,
-        token_expire: token_expire,
+        token_expire: token.expire_utc,
         sequence: sequence,
-        private_data: private_data
+        private_data: token.private_data
     });
 
-    test_encode_decode(packet, None,
+    test_encode_decode(packet,
+        None,
+        Some(pkey),
         |p| {
             match p {
                 Packet::ConnectionRequest(p) => {
@@ -405,11 +457,11 @@ fn test_conn_packet() {
                     }
 
                     assert_eq!(p.protocol_id, protocol_id);
-                    assert_eq!(p.token_expire, token_expire);
+                    assert_eq!(p.token_expire, token.expire_utc);
                     assert_eq!(p.sequence, sequence);
 
                     for i in 0..p.private_data.len() {
-                        assert_eq!(p.private_data[i], private_data[i]);
+                        assert_eq!(p.private_data[i], token.private_data[i]);
                     }
                 },
                 _ => assert!(false)
@@ -425,6 +477,7 @@ fn test_conn_denied_packet() {
         Packet::ConnectionDenied(ConnectionDeniedPacket {
             reason: reason
         }),
+        None,
         None,
         |p| {
             match p {
@@ -449,6 +502,7 @@ fn test_challenge_packet() {
             token_sequence: token_sequence,
             token_data: token_data
         }),
+        None,
         None,
         |p| {
             match p {
@@ -478,6 +532,7 @@ fn test_response_packet() {
             token_data: token_data
         }),
         None,
+        None,
         |p| {
             match p {
                 Packet::Response(p) => {
@@ -501,6 +556,7 @@ fn test_keep_alive_packet() {
             client_idx: client_idx
         }),
         None,
+        None,
         |p| {
             match p {
                 Packet::KeepAlive(p) => {
@@ -520,6 +576,7 @@ fn test_payload_packet() {
         test_encode_decode(
             Packet::Payload(i),
             Some(&data[..]),
+            None,
             |p| {
                 match p {
                     Packet::Payload(c) => {

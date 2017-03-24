@@ -35,6 +35,14 @@ pub fn encode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
     }
 
     let (result, written) = unsafe {
+        use std::io::{Write,Cursor};
+        use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
+        let mut nonce_buf = [0;8];
+        Cursor::new(&mut nonce_buf[..]).write_u64::<BigEndian>(nonce).unwrap();
+
+        println!("nonce {:?}", &nonce_buf);
+
+
         let mut written: u64 = out.len() as u64;
         let result = libsodium_sys::crypto_aead_chacha20poly1305_encrypt(
                 out.as_mut_ptr(),
@@ -44,7 +52,7 @@ pub fn encode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
                 additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
                 additional_data.map_or(0, |v| v.len()) as u64,
                 ::std::ptr::null(),
-                ::std::mem::transmute(&nonce),
+                ::std::mem::transmute(nonce_buf[..].as_ptr()),
                 key);
 
         (result, written)
@@ -67,6 +75,14 @@ pub fn decode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
 
     let (result, read) = unsafe {
         let mut read: u64 = out.len() as u64;
+
+        use std::io::{Write,Cursor};
+        use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
+        let mut nonce_buf = [0;8];
+        Cursor::new(&mut nonce_buf[..]).write_u64::<BigEndian>(nonce).unwrap();
+
+        println!("nonce {:?} {}", &nonce_buf, nonce_buf[0]);
+
         let result = libsodium_sys::crypto_aead_chacha20poly1305_decrypt(
                 out.as_mut_ptr(),
                 &mut read,
@@ -75,7 +91,7 @@ pub fn decode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
                 data.len() as u64,
                 additional_data.map_or(::std::ptr::null_mut(), |v| v.as_ptr()),
                 additional_data.map_or(0, |v| v.len()) as u64,
-                ::std::mem::transmute(&nonce),
+                ::std::mem::transmute(nonce_buf[..].as_ptr()),
                 key);
 
         (result, read)
