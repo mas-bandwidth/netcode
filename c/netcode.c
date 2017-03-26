@@ -1680,7 +1680,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         for ( i = 0; i < sequence_bytes; ++i )
         {
             uint8_t value = netcode_read_uint8( &buffer );
-            (*sequence) |= ( ( (uint64_t) value ) << ( 8 * i ) );
+            (*sequence) |= ( uint64_t) ( value ) << ( 8 * i );
         }
 
         // replay protection (optional)
