@@ -27,7 +27,7 @@ All data in the netcode.io protocol is serialized in a binary format.
 
 Integer values are serialized in little endian byte order.
 
-## Connect Token Structure
+## Connect Token
 
 A _connect token_ ensures that only authenticated clients can connect to dedicated servers.
 
@@ -129,7 +129,7 @@ Together the public and private data form a _connect token_:
 
 This data is variable size but for simplicity is written to a fixed size buffer of 2048 bytes. Unused bytes are zero padded.
 
-## Challenge Token Structure
+## Challenge Token
 
 Challenge tokens are used by netcode.io to stop clients with spoofed IP packet source addresses from connecting to servers.
 
@@ -149,7 +149,7 @@ Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store
     
 Together this is referred to as the _encrypted challenge token data_.
 
-## Packet Structure
+## Packet Types
 
 **netcode.io** has the following packet types:
 
@@ -228,36 +228,32 @@ Post-encryption packets have the following format:
 
 ## Steps For Reading an Encrypted Packet
 
-Client and server follow these steps, in this exact order when reading an encrypted packet:
+Client and server follow these steps, in this exact order, when reading an encrypted packet:
 
-* If the packet size is less than 18 bytes it is to small to possibly be valid, ignore the packet.
+* If the packet size is less than 18 bytes then it is to small to possibly be valid, ignore the packet.
 
 * If the low 4 bits of the prefix byte is greater than or equal to 7, the packet type is invalid, ignore the packet.
 
 * The server ignores packets with type  _connection challenge packet_. 
 
-* The client ignores packets of type _connection request packet_ and _connection response packet_.
+* The client ignores packets with type _connection request packet_ and _connection response packet_.
 
 * If the high 4 bits of the prefix byte (sequence bytes) is outside the range [1,8], ignore the packet.
 
 * If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
 
-* If the packet type is _connection payload packet_ and a _connection payload packet_ with that sequence number has already been read, or the sequence number is old enough that it is outside the bounds of the replay buffer, ignore the packet. See the section below on replay buffer for details.
+* If the packet type is _connection payload packet_ and a _connection payload packet_ with that sequence number has already been read, or the packet sequence number is old enough that it is outside the bounds of the replay buffer, ignore the packet. See the section below on replay buffer for details.
 
 * If the per-packet type data fails to decrypt, ignore the packet.
 
 * If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
 
-* Expected per-packet type data sizes are:
-    
     * 0 bytes for _connection denied packet_
     * 308 bytes for _connection challenge packet_
     * 308 bytes for _connection response packet_
     * 8 bytes for _connection keep-alive packet_
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
-
-* _All steps above should be performed before performing any allocations for this packet_.
 
 ## Replay Protection
 
@@ -324,7 +320,7 @@ The first thing the server must do is negotiate connection with potential client
 
 The server follows these basic rules when processing connection requests:
 
-1. Clients must have a valid connect token to connect
+1. Clients must have a valid connect token to connect.
 2. Respond to a client only when necessary. Ignore malformed requests.
 3. Reject an malformed request as soon as possible, with the minimum amount of work.
 4. Make sure any response packet is smaller than the request packet to avoid DDoS amplification.
@@ -338,7 +334,9 @@ When a server receives a connection request packet from a client it contains the
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
 
-This packet is not encrypted, however the client and an observer cannot read the encrypted private connect token data, because it is encrypted with a private key shared between the web backend and the dedicated server instances. Also, the important aspects of the packet such as the version info, protocol id and connect token expire timestamp are protected by the AEAD construct, and cannot be modified by a client.
+This packet is not encrypted, however both the client and any third party cannot read the encrypted private connect token data, because it is encrypted with a private key known only to the web backend and the dedicated server instances. 
+
+Also, the important aspects of the packet which can be read, such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and cannot be modified. If they are modified the signature check fails when decrypting the private connect token data.
 
 The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
@@ -362,20 +360,20 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If a client with the client id contained in the packet source address is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address, within some limited history (perhaps a sliding window history of encrypted private connect token hmacs), ignore the packet. Otherwise, add the private connect token hmac + packet source IP address to the limited history of connect tokens.
+* If the connect token has already been used by a different packet source IP address, within some limited history sufficient to cover the expected lifetime of connect tokens, ignore the packet. 
+
+* Otherwise, add the private connect token hmac + packet source IP address to the limited history of connect tokens used on this dedicated server.
 
 * If the server is full, respond with a _connection denied packet_.
 
-* Add an encryption mapping for the packet source IP address so that read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
+* Add an encryption mapping for the packet source IP address so that packets read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
 
+When the client receives the _connection challenge packet_ it responds with a _connection response packet_ to the server.
+
 The server takes these steps, in this exact order, when processing a _connection response packet_:
-
-* If the packet is not the correct size of 
-
-* Decrypt the packet. If it fails to decrypt, ignore it.
 
 * ...
