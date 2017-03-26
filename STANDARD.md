@@ -27,6 +27,8 @@ All data in the netcode.io protocol is serialized in a binary format.
 
 Integer values are serialized in little endian byte order.
 
+Sequence numbers passed in to nonce byte arrays are in little endian order.
+
 ## Connect Token
 
 A _connect token_ ensures that only authenticated clients can connect to dedicated servers.
