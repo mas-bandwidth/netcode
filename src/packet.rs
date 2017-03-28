@@ -400,7 +400,7 @@ fn test_encode_decode<V>(
 
         assert!(result != ::std::ptr::null_mut());
 
-        //wrapper::private::netcode_server_free_packet(::std::ptr::null_mut(), result);
+        wrapper::private::free(result);
     }
 }
 
