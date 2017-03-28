@@ -133,7 +133,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Challenge Token
 
-Challenge tokens are used by netcode.io to stop clients with spoofed IP packet source addresses from connecting to servers.
+Challenge tokens stop clients with spoofed IP packet source addresses from connecting to servers.
 
 Prior to encryption, challenge tokens have the following structure:
 
