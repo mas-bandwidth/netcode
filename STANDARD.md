@@ -27,15 +27,15 @@ The sequence of operations for a client connect are:
 
 All data is written in little-endian byte order.
 
-This rule applies not only to packet data, but also to sequence numbers converted to byte arrays when used as nonce values, and to associated data passed in to AEAD encryption primitives.
+This applies not only to packet data, but also to sequence numbers converted to byte array nonce values, and to associated data passed in to AEAD encryption primitives.
 
 ## Connect Token
 
 A _connect token_ ensures that only authenticated clients can connect to dedicated servers.
 
-The connect token has two parts: private and public.
+The connect token has two parts: public and private.
 
-The private portion of a connect token is encrypted and signed with a private key shared between the web backend and dedicated server instances. 
+The private portion is encrypted and signed with a private key shared between the web backend and dedicated server instances.
 
 Prior to encryption the private connect token data has the following binary format.
 
@@ -133,7 +133,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Challenge Token
 
-Challenge tokens stop clients with spoofed IP packet source addresses from connecting to servers.
+Challenge tokens stop clients with spoofed packet source IP addresses from connecting to servers.
 
 Prior to encryption, challenge tokens have the following structure:
 
@@ -221,7 +221,7 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
 
 Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
 
-After encryption packets have the following format:
+Post-encryption, packets have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
@@ -230,7 +230,7 @@ After encryption packets have the following format:
 
 ## Steps For Reading an Encrypted Packet
 
-Client and server follow these steps, in this exact order, when reading an encrypted packet:
+Follow these steps, in this exact order, when reading an encrypted packet:
 
 * If the packet size is less than 18 bytes then it is to small to possibly be valid, ignore the packet.
 
@@ -256,6 +256,8 @@ Client and server follow these steps, in this exact order, when reading an encry
     * 8 bytes for _connection keep-alive packet_
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
+
+* _Packet is OK to process_
 
 ## Replay Protection
 
