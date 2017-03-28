@@ -23,16 +23,14 @@ The sequence of operations for a client connect are:
 
 ## General Conventions
 
-All data in the netcode.io protocol is serialized in a binary format.
-
-Integer values are serialized in little endian byte order.
+All data in the netcode.io protocol is serialized in binary format with integer values in little endian byte order.
 
 This applies to:
 
-* Tokens
-* Packets
-* Sequence numbers converted to nonce bytes arrays
-* Associated data for AEAD encryption primitives
+* Token data
+* Packet data
+* Sequence numbers being converted to nonce bytes arrays
+* Associated data being passed in to AEAD encryption primitives
 
 ## Connect Token
 
