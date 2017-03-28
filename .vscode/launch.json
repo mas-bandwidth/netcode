@@ -7,7 +7,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "target\\debug\\deps\\netcode-682d9aa4606d795a.exe",
-            "args": ["--test-threads 1", "--nocapture", "--", "keep_alive"],
+            "args": ["--test-threads 1", "--nocapture", "--", "conn_packet"],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
             "environment": [],

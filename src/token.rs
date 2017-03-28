@@ -1,7 +1,7 @@
 use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::io;
 use std::time;
-use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
+use byteorder::{WriteBytesExt, ReadBytesExt, ByteOrder, LittleEndian};
 
 use common::*;
 use crypto;
@@ -108,8 +108,8 @@ fn generate_userdata() -> [u8; NETCODE_USER_DATA_BYTES] {
 
 fn generate_additional_data<W>(mut out: W, protocol: u64, expire_utc: u64) -> Result<(), io::Error> where W: io::Write {
     out.write(NETCODE_VERSION_STRING)?;
-    out.write_u64::<BigEndian>(protocol)?;
-    out.write_u64::<BigEndian>(expire_utc)?;
+    out.write_u64::<LittleEndian>(protocol)?;
+    out.write_u64::<LittleEndian>(expire_utc)?;
 
     Ok(())
 }
@@ -142,10 +142,17 @@ impl ConnectToken {
         let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];
         generate_additional_data(io::Cursor::new(&mut additional_data[..]), protocol, expire)?;
 
+        println!("Add data: {:?}", &additional_data);
+        println!("Seq {}", sequence);
+
         let decoded_data = PrivateData::new(client_id, hosts, userdata);
 
         let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
         decoded_data.encode(&mut io::Cursor::new(&mut private_data[..]), &additional_data, sequence, private_key)?;
+
+        println!("Key {:?}", &private_key);
+        println!("Data {:?}", &private_data[..]);
+
 
         Ok(ConnectToken {
             hosts: decoded_data.hosts.clone(),
@@ -182,15 +189,15 @@ impl ConnectToken {
     /// Encodes a ConnectToken into a `io::Write`.
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
         out.write(NETCODE_VERSION_STRING)?;
-        out.write_u64::<BigEndian>(self.protocol)?;
-        out.write_u64::<BigEndian>(self.create_utc)?;
-        out.write_u64::<BigEndian>(self.expire_utc)?;
-        out.write_u64::<BigEndian>(self.sequence)?;
+        out.write_u64::<LittleEndian>(self.protocol)?;
+        out.write_u64::<LittleEndian>(self.create_utc)?;
+        out.write_u64::<LittleEndian>(self.expire_utc)?;
+        out.write_u64::<LittleEndian>(self.sequence)?;
         out.write(&self.private_data)?;
         self.hosts.write(out)?;
         out.write(&self.client_to_server_key)?;
         out.write(&self.server_to_client_key)?;
-        out.write_u32::<BigEndian>(self.timeout_sec)?;
+        out.write_u32::<LittleEndian>(self.timeout_sec)?;
 
         Ok(())
     }
@@ -205,10 +212,10 @@ impl ConnectToken {
             return Err(DecodeError::InvalidVersion)
         }
 
-        let protocol = source.read_u64::<BigEndian>()?;
-        let create_utc = source.read_u64::<BigEndian>()?;
-        let expire_utc = source.read_u64::<BigEndian>()?; 
-        let sequence = source.read_u64::<BigEndian>()?;
+        let protocol = source.read_u64::<LittleEndian>()?;
+        let create_utc = source.read_u64::<LittleEndian>()?;
+        let expire_utc = source.read_u64::<LittleEndian>()?;
+        let sequence = source.read_u64::<LittleEndian>()?;
 
         let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
         source.read_exact(&mut private_data)?;
@@ -221,7 +228,7 @@ impl ConnectToken {
         let mut server_to_client_key = [0; NETCODE_KEY_BYTES];
         source.read_exact(&mut server_to_client_key)?;
 
-        let timeout_sec = source.read_u32::<BigEndian>()?;
+        let timeout_sec = source.read_u32::<LittleEndian>()?;
 
         Ok(ConnectToken {
             hosts: hosts,
@@ -288,7 +295,7 @@ impl PrivateData {
     }
 
     fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
-        out.write_u64::<BigEndian>(self.client_id)?;
+        out.write_u64::<LittleEndian>(self.client_id)?;
 
         self.hosts.write(out)?;
         out.write(&self.client_to_server_key)?;
@@ -300,7 +307,7 @@ impl PrivateData {
     }
 
     fn read<R>(source: &mut R) -> Result<PrivateData, io::Error> where R: io::Read {
-        let client_id = source.read_u64::<BigEndian>()?;
+        let client_id = source.read_u64::<LittleEndian>()?;
         let hosts = HostList::read(source)?;
 
         let mut client_to_server_key = [0; NETCODE_KEY_BYTES];
@@ -336,7 +343,7 @@ impl HostList {
     }
 
     pub fn read<R>(source: &mut R) -> Result<HostList, io::Error> where R: io::Read {
-        let host_count = source.read_u32::<BigEndian>()?;
+        let host_count = source.read_u32::<LittleEndian>()?;
         let mut hosts = [None; NETCODE_MAX_SERVERS_PER_CONNECT];
 
         for i in 0..host_count as usize {
@@ -344,15 +351,15 @@ impl HostList {
 
             match host_type {
                 NETCODE_ADDRESS_IPV4 => {
-                    let ip = source.read_u32::<BigEndian>()?;
-                    let port = source.read_u16::<BigEndian>()?;
+                    let ip = source.read_u32::<LittleEndian>()?;
+                    let port = source.read_u16::<LittleEndian>()?;
 
                     hosts[i] = Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::from(ip)), port))
                 },
                 NETCODE_ADDRESS_IPV6 => {
                     let mut ip = [0; 16];
                     source.read_exact(&mut ip)?;
-                    let port = source.read_u16::<BigEndian>()?;
+                    let port = source.read_u16::<LittleEndian>()?;
 
                     hosts[i] = Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::from(ip)), port))
                 },
@@ -373,7 +380,7 @@ impl HostList {
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
-        out.write_u32::<BigEndian>(self.get().len() as u32)?;
+        out.write_u32::<LittleEndian>(self.get().len() as u32)?;
         for host in self.get() {
             match host {
                 SocketAddr::V4(addr) => {
@@ -381,7 +388,7 @@ impl HostList {
                     let ip = addr.ip().octets();
 
                     for i in 0..4 {
-                        out.write_u8(ip[i])?;
+                        out.write_u8(ip[3-i])?;
                     }
                 },
                 SocketAddr::V6(addr) => {
@@ -389,11 +396,11 @@ impl HostList {
                     let ip = addr.ip().octets();
 
                     for i in 0..16 {
-                        out.write_u8(ip[i])?;
+                        out.write_u8(ip[15-i])?;
                     }
                 }
             }
-            out.write_u16::<BigEndian>(host.port())?;
+            out.write_u16::<LittleEndian>(host.port())?;
         }
 
         Ok(())
