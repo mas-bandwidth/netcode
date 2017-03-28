@@ -221,7 +221,7 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
 
 Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
 
-Post-encryption packets have the following format:
+After encryption packets have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
