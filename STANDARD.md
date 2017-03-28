@@ -133,7 +133,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 ## Challenge Token
 
-Challenge tokens stop clients with spoofed packet source IP addresses from connecting to servers.
+Challenge tokens stop clients with spoofed IP packet source addresses from connecting to servers.
 
 Prior to encryption, challenge tokens have the following structure:
 
@@ -149,7 +149,7 @@ Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store
     [encrypted challenge token] (284 bytes)
     [hmac of encrypted challenge token data] (16 bytes)
     
-Together this is referred to as the _encrypted challenge token data_.
+This is referred to as the _encrypted challenge token data_.
 
 ## Packet Types
 
@@ -221,9 +221,9 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
 
 Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
 
-Post-encryption, packets have the following format:
+Encrypted packets have the following format:
 
-    [prefix byte] (uint8) // non-zero prefix byte
+    [prefix byte] (uint8) // non-zero prefix byte: ( (num_sequence_bytes<<4) | packet_type )
     [sequence number] (variable length 1-8 bytes)
     [encrypted per-packet type data] (variable length according to packet type)
     [hmac of encrypted per-packet type data] (16 bytes)
@@ -236,11 +236,11 @@ Follow these steps, in this exact order, when reading an encrypted packet:
 
 * If the low 4 bits of the prefix byte is greater than or equal to 7, the packet type is invalid, ignore the packet.
 
-* The server ignores packets with type  _connection challenge packet_. 
+* The server ignores packets with type _connection challenge packet_. 
 
 * The client ignores packets with type _connection request packet_ and _connection response packet_.
 
-* If the high 4 bits of the prefix byte (sequence bytes) is outside the range [1,8], ignore the packet.
+* If the high 4 bits of the prefix byte (sequence bytes) are outside the range [1,8], ignore the packet.
 
 * If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
 
@@ -257,7 +257,7 @@ Follow these steps, in this exact order, when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* _Packet is OK to process_
+* _Only after all the checks above is it OK to process the packet!_
 
 ## Replay Protection
 
