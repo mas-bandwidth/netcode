@@ -34,8 +34,6 @@ This applies to:
 * Sequence numbers converted to nonce bytes arrays
 * Associated data for AEAD encryption primitives
 
-In all cases, data is written in a binary format in little-endian order.
-
 ## Connect Token
 
 A _connect token_ ensures that only authenticated clients can connect to dedicated servers.
