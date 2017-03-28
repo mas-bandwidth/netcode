@@ -257,7 +257,7 @@ Follow these steps, in this exact order, when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* _Only after all the checks above is it OK to process the packet!_
+* _Only after all the checks above pass is it OK to process the packet!_
 
 ## Replay Protection
 
