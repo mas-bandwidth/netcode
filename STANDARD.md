@@ -25,9 +25,9 @@ The sequence of operations for a client connect are:
 
 All data in the netcode.io protocol is serialized in binary format.
 
-Byte order is little-endian because the majority of platforms at this point in time are in this format.
+Byte order is little-endian because the majority of computer architectures use this format.
 
-The little-endian byte order rule applies to not only to packet data, but also to 64 bit sequence numbers converted to byte arrays to be used as nonce values, and any associate data passed in to an AEAD encryption primitives.
+The little-endian byte order rule applies to not only to packet data, but also to 64 bit sequence numbers converted to byte arrays to be used as nonce values, and any associated data passed in to AEAD encryption primitives.
 
 ## Connect Token
 
