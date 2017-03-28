@@ -27,7 +27,14 @@ All data in the netcode.io protocol is serialized in a binary format.
 
 Integer values are serialized in little endian byte order.
 
-Sequence numbers passed in to nonce byte arrays are in little endian order.
+This applies to:
+
+* Tokens
+* Packets
+* Sequence numbers converted to nonce bytes arrays
+* Associated data for AEAD encryption primitives
+
+In all cases, data is written in a binary format in little-endian order.
 
 ## Connect Token
 
