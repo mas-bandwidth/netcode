@@ -142,17 +142,10 @@ impl ConnectToken {
         let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];
         generate_additional_data(io::Cursor::new(&mut additional_data[..]), protocol, expire)?;
 
-        println!("Add data: {:?}", &additional_data);
-        println!("Seq {}", sequence);
-
         let decoded_data = PrivateData::new(client_id, hosts, userdata);
 
         let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
         decoded_data.encode(&mut io::Cursor::new(&mut private_data[..]), &additional_data, sequence, private_key)?;
-
-        println!("Key {:?}", &private_key);
-        println!("Data {:?}", &private_data[..]);
-
 
         Ok(ConnectToken {
             hosts: decoded_data.hosts.clone(),
