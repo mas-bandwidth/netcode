@@ -370,21 +370,23 @@ While _connected_ if the client receives a _connection disconnect_ packet from t
 
 If the client wishes to disconnect from the server, it sends a number of redundant _connection disconnect packets_ before transitioning to _disconnected_.
 
-## Server-Side Overview
-
-The dedicated server should be on a publicly accessible IP address and port, without NAT.
-
-The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may set this to any number you wish, provided the implementation can support that many connected clients efficiently.
-
-The server listens on a single UDP socket bound to a specific port. Using this one UDP socket the server multiplexes and demultiplexes packets according to source IP address, negotiates connection requests from potential clients, assigns potential clients to slots, and detects when a connected client disconnects or times out.
-
 ## Server-Side Connection Process
 
-The server follows these basic rules when processing connection requests:
+### Server-Side Overview
+
+The dedicated server must be on a publicly accessible IP address and port.
+
+The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. 
+
+The maximum number of client slots per-server is implementation specific. Typical uses cases are expected in the range of [2,64] but the reference implementation supports up to 256 clients per-server. You may support more clients per-server if your implementation is able to handle them efficiently.
+
+### Processing Connection Requests
+
+The server follows these strict rules when processing connection requests:
 
 1. Clients must have a valid connect token to connect.
-2. Respond to a client only when necessary. Ignore malformed requests.
-3. Reject an malformed request as soon as possible, with the minimum amount of work.
+2. Respond to a client only when absolutely necessary. 
+3. Ignore malformed request as soon as possible, with the minimum amount of work.
 4. Make sure any response packet is smaller than the request packet to avoid DDoS amplification.
 
 When a server receives a connection request packet from a client it contains the following data:
@@ -396,9 +398,11 @@ When a server receives a connection request packet from a client it contains the
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
 
-This packet is not encrypted, however both the client and any third party cannot read the encrypted private connect token data, because it is encrypted with a private key known only to the web backend and the dedicated server instances. 
+This packet is not encrypted, however:
 
-Also, the important aspects of the packet which can be read, such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and cannot be modified. If they are modified the signature check fails when decrypting the private connect token data.
+* Only the dedicated server instance and the web backend can read the encrypted private connect token data, because it is encrypted with a private key known only to the web backend and the dedicated server instances. 
+
+* The important aspects of the packet such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and cannot be modified. If they are modified the signature check fails when decrypting the private connect token data.
 
 The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
@@ -424,7 +428,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the connect token has already been used by a different packet source IP address, within some limited history sufficient to cover the expected lifetime of connect tokens, ignore the packet. 
 
-* Otherwise, add the private connect token hmac + packet source IP address to the limited history of connect tokens used on this dedicated server.
+* Otherwise, add the private connect token hmac + packet source IP address to the history of connect tokens used on this dedicated server.
 
 * If the server is full, respond with a _connection denied packet_.
 
@@ -435,6 +439,8 @@ The server takes the following steps, in this exact order, when processing a _co
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
 
 When the client receives the _connection challenge packet_ it responds with a _connection response packet_ to the server.
+
+## Processing Connection Challenge Packets
 
 The server takes these steps, in this exact order, when processing a _connection response packet_:
 
