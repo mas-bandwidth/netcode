@@ -140,7 +140,6 @@ Challenge tokens stop clients with spoofed IP packet source addresses from conne
 Prior to encryption, challenge tokens have the following structure:
 
     [client id] (uint64)
-    [hmac of encrypted private connect token data] (16 bytes)
     [user data] (256 bytes)
     <zero pad to 300 bytes>
     
@@ -182,7 +181,9 @@ Prior to encryption, packet types >= 1 have the following format:
     [sequence number] (variable length 1-8 bytes)
     [per-packet type data] (variable length according to packet type)
 
-The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8]. 
+The low 4 bits of the prefix byte contain the packet type. 
+
+The high 4 bits contain the number of bytes for the sequence number in the range [1,8]. 
 
 The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x000003E8 and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte are set to 3 and the sequence data written to the packet is:
 
@@ -205,12 +206,12 @@ _connection denied packet_:
 _connection challenge packet_:
 
     [challenge token sequence] (uint64)
-    [encrypted challenge token data] (360 bytes)
+    [encrypted challenge token data] (300 bytes)
     
 _connection response packet_:
 
     [challenge token sequence] (uint64)
-    [encrypted challenge token data] (360 bytes)
+    [encrypted challenge token data] (300 bytes)
 
 _connection keep-alive packet_:
 
@@ -277,7 +278,7 @@ The following steps shall be taken when reading an encrypted packet:
 
 Replay protection stops an attacker from recording a valid packet and replaying it back at a later time in an attempt to break the protocol.
 
-To support replay protection, netcode.io takes the following steps:
+To enable replay protection, netcode.io does the following:
 
 * Encrypted packets are sent with 64 bit sequence numbers that start at zero and increase with each packet sent.
 
@@ -291,7 +292,7 @@ The replay protection algorithm is as follows:
 
 2. When a packet arrives that is newer than the most recent sequence number received, the most recent sequence number is updated on the receiver side and the packet is accepted.
 
-3. If a packet is within _replay buffer size_ of the most recent sequence number, it is accepted only if its sequence number has not already been received, otherwise it is ignored.
+3. If a packet arrives that is within _replay buffer size_ of the most recent sequence number, it is accepted only if its sequence number has not already been received, otherwise it is ignored.
 
 Replay protection is applied to the following packet types on both client and server:
 
@@ -299,7 +300,7 @@ Replay protection is applied to the following packet types on both client and se
 * _connection payload packet_
 * _connection disconnect packet_
 
-The replay buffer is implementation specific, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
+The replay buffer size is implementation specific, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
 
 ## Client State Machine
 
@@ -462,4 +463,3 @@ The server takes these steps, in this exact order, when processing a _connection
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
 * A client slot is available. Assign the packet IP address and client id to that slot, and set that slot to _
-
