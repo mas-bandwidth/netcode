@@ -2969,6 +2969,7 @@ int netcode_client_max_clients( struct netcode_client_t * client )
 struct netcode_encryption_manager_t
 {
     int num_encryption_mappings;
+    double expire_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     double last_access_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     struct netcode_address_t address[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     uint8_t send_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
@@ -2986,6 +2987,7 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
     int i;
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
+        encryption_manager->expire_time[i] = -1.0;
         encryption_manager->last_access_time[i] = -1000.0;
         memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
     }
@@ -2994,13 +2996,14 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
     memset( encryption_manager->receive_key, 0, sizeof( encryption_manager->receive_key ) );
 }
 
-int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, uint8_t * send_key, uint8_t * receive_key, double time )
+int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, uint8_t * send_key, uint8_t * receive_key, double time, double expire_time )
 {
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
         {
+            encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
             memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
             memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
@@ -3010,9 +3013,10 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
-        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time )
+        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time || ( encryption_manager->expire_time[i] >= 0.0 && encryption_manager->expire_time[i] < time ) )
         {
             encryption_manager->address[i] = *address;
+            encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
             memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
             memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
@@ -3035,10 +3039,9 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) )
         {
+            encryption_manager->expire_time[i] = -1.0;
             encryption_manager->last_access_time[i] = -1000.0;
-
             memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
-
             memset( encryption_manager->send_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
             memset( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, 0, NETCODE_KEY_BYTES );
 
@@ -3047,7 +3050,7 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                 int index = i - 1;
                 while ( index >= 0 )
                 {
-                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time )
+                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time && ( encryption_manager->expire_time[index] < 0 || encryption_manager->expire_time[index] > time ) )
                         break;
                     index--;
                 }
@@ -3066,7 +3069,7 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time && ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
         {
             encryption_manager->last_access_time[i] = time;
             return i;
@@ -3084,6 +3087,14 @@ int netcode_encryption_manager_touch( struct netcode_encryption_manager_t * encr
     encryption_manager->last_access_time[index] = time;
     return 1;
 }
+
+void netcode_encryption_manager_set_expire_time( struct netcode_encryption_manager_t * encryption_manager, int index, double expire_time )
+{
+	assert( index >= 0 );
+	assert( index < encryption_manager->num_encryption_mappings );
+	encryption_manager->expire_time[index] = expire_time;
+}
+
 
 uint8_t * netcode_encryption_manager_get_send_key( struct netcode_encryption_manager_t * encryption_manager, int index )
 {
@@ -3610,7 +3621,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token_private.server_to_client_key, connect_token_private.client_to_server_key, server->time ) )
+    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token_private.server_to_client_key, connect_token_private.client_to_server_key, server->time, server->time + NETCODE_TIMEOUT_SECONDS ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
@@ -3666,7 +3677,9 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
 
     assert( server->client_connected[client_index] == 0 );
 
-    server->client_connected[client_index] = 1;
+	netcode_encryption_manager_set_expire_time( &server->encryption_manager, encryption_index, -1.0 );
+
+	server->client_connected[client_index] = 1;
     server->client_encryption_index[client_index] = encryption_index;
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
@@ -5119,7 +5132,7 @@ void test_encryption_manager()
         check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
         check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
 
-        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time, -1.0 ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5175,9 +5188,9 @@ void test_encryption_manager()
 
     // add the encryption mappings back in
     
-    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time, -1.0 ) );
     
-    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, time ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, time, -1.0 ) );
 
     // all encryption mappings should be able to be looked up by address again
 
@@ -5221,7 +5234,7 @@ void test_encryption_manager()
         check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
         check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
 
-        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time ) );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time, -1.0 ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5249,6 +5262,20 @@ void test_encryption_manager()
         check( !send_key );
         check( !receive_key );
     }
+
+	// test the expire time for encryption mapping works as expected
+
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time, time + 1.0 ) );
+
+    int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time );
+
+	check( encryption_index != -1 );
+
+    check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time + 1.1f ) == -1 );
+
+    netcode_encryption_manager_set_expire_time( &encryption_manager, encryption_index, -1.0 );
+
+	check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == encryption_index );
 }
 
 void test_replay_protection()
