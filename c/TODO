@@ -18,4 +18,8 @@ DONE
 
 TODO
     
-    
+    There should be code on the server that kills any encryption mapping if it exceeds the timeout for the connection request token, and hasn't connected.
+
+    Otherwise attackers can establish an encryption mapping with a connect token, and not proceed to connect, but keep draining server resources by spamming packets.
+
+    Think through these possible attacks and make sure they are covered.
