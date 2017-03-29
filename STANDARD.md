@@ -424,11 +424,11 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If a client from the packet source address is already connected, ignore the packet.
 
-* If a client with the client id contained in the packet source address is already connected, ignore the packet.
+* If a client with the client id contained in the private connect token data is already connected, ignore the packet.
 
 * If the connect token has already been used by a different packet source IP address, ignore the packet. 
 
-* Otherwise, add the private connect token hmac + packet source IP address to the history of connect tokens used on this dedicated server.
+* Otherwise, add the private connect token hmac + packet source IP address to the history of connect tokens already used.
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
