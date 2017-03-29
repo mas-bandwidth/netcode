@@ -25,7 +25,7 @@ The sequence of operations for a client connect are:
 
 **netcode.io** is a binary protocol. 
 
-All data is written in little-endian byte order.
+All data is written in little-endian byte order unless otherwise specified.
 
 This applies not only to packet data, but also to sequence numbers converted to byte array nonce values, and to associated data passed in to AEAD encryption primitives.
 
