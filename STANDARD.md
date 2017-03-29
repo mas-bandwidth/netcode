@@ -314,7 +314,9 @@ The client has the following states:
 
 The initial state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
 
-When a client wants to connect to a server, a _connect token_ is requested from the web backend. 
+When a client wants to connect to a server, a _connect token_ is first requested from the web backend. 
+
+### Sending Connection Request
 
 The client stores this connect token and transitions to _sending connection request_ with the first server address in the connect token. The client prepares to encrypt UDP packets sent to the server with the client to server key in the connect token, and decrypt UDP packets received from the server with the server to client key in the connect token.
 
@@ -324,6 +326,8 @@ All other transitions from _sending connection request_ are failure cases. In th
 
 If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
+### Sending Challenge Response
+
 The next state is _sending challenge response_. While in this state the client sends _challenge response packets_ to the server at some rate, like 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_. Any _connection payload packets_ received prior to _connected_ are discarded.
 
 All other transitions from _sending challenge response_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, if there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
@@ -331,6 +335,8 @@ All other transitions from _sending challenge response_ are failure cases. In th
 If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
 
 If the entire client connection process (potentially across multiple server addresses) takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_.
+
+### Connected
 
 While _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
