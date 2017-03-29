@@ -2,6 +2,8 @@
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
+This document describes the standard for this protocol so that people can create their own implementations.
+
 ## Architecture
 
 There are three main components in a netcode.io-based architecture:
