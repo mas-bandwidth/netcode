@@ -151,9 +151,9 @@ Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store
     
 This is referred to as the _encrypted challenge token data_.
 
-## Packet Types
+## Packets
 
-**netcode.io** has the following packet types:
+**netcode.io** has the following packets:
 
 * connection request packet (0)
 * connection denied packet (1)
@@ -163,7 +163,7 @@ This is referred to as the _encrypted challenge token data_.
 * connection payload packet packet (5)
 * connection disconnect packet packet (6)
 
-The first packet type _connection request packet_ (0) is special, as it is not encrypted:
+The first packet type _connection request packet_ (0) is not encrypted:
 
     0 (uint8) // prefix byte of zero
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
@@ -180,9 +180,17 @@ All other packet types are encrypted. Prior to encryption they have the followin
 
 The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
-The sequence number is encoded by omitting high zero bytes, for example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore the high 4 bits of the prefix byte are set to 3 and the sequence data written to the packet is:
+The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte are 3 and the sequence data written to the packet is:
 
-    0x8,0xE,0x3       // sequence bytes reversed for ease of implementation
+    0x8,0xE,0x3
+    
+The order of sequence number bytes are _reversed_ when written to the packet as follows:
+
+    <repeat: sequence_bytes times>
+    {
+        write_byte( sequence_number & 0xFF )
+        sequence_number >>= 8
+    }
 
 Each encrypted packet type writes the following data to the per-packet type data section of the packet.
 
@@ -221,14 +229,14 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
 
 Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
 
-Encrypted packets have the following format:
+Post encryption, packets have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte: ( (num_sequence_bytes<<4) | packet_type )
     [sequence number] (variable length 1-8 bytes)
     [encrypted per-packet type data] (variable length according to packet type)
     [hmac of encrypted per-packet type data] (16 bytes)
 
-## Steps For Reading an Encrypted Packet
+## Reading Encrypted Packets
 
 Follow these steps, in this exact order, when reading an encrypted packet:
 
@@ -257,18 +265,27 @@ Follow these steps, in this exact order, when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* _Only after all the checks above pass is it OK to process the packet!_
+* _If all the above checks pass, then it is OK to process the packet!_
 
 ## Replay Protection
 
 Replay protection stops an attacker from recording a valid packet and replaying it back at a later time in an attempt to break the protocol.
 
-The algorithm is as follows:
+To enable replay protection, netcode.io takes the following steps:
 
-* Packet sequence numbers are 64 bit values that start at zero and increase with each packet sent.
-* Any packet older than the most recent sequence number received, minus the _replay buffer size_, is discarded on the receiver side.
-* When a packet arrives that is newer than the most recent sequence number received, the most recent sequence number is updated on the receiver side and the packet is accepted.
-* If a packet is within the replay buffer size, it is accepted only if that sequence number has not already been received, otherwise it is ignored.
+* Encrypted packets are sent with 64 bit sequence numbers that start at zero and increase with each packet sent.
+
+* The sequence number is included in the packet header and can be read by the receiver of a packet prior to decryption.
+
+* The sequence number is used as the nonce for encryption, so any modification to the sequence number fails the encryption signature check.
+
+The replay protection algorithm is as follows:
+
+1. Any packet older than the most recent sequence number received, minus the _replay buffer size_, is discarded on the receiver side.
+
+2. When a packet arrives that is newer than the most recent sequence number received, the most recent sequence number is updated on the receiver side and the packet is accepted.
+
+3. If a packet is within the _replay buffer size_, it is accepted only if that sequence number has not already been received, otherwise it is ignored.
 
 Replay protection is applied to the following packet types:
 
@@ -276,7 +293,9 @@ Replay protection is applied to the following packet types:
 * _connection payload packet_
 * _connection disconnect packet_
 
-The size of the replay buffer is up to the implementor, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 should be sufficient for most applications.
+As these packets are sent once a particular client slot has been assigned for the client, and that client has its own unique packet sequence number. Sequence numbers during connection negotiation (eg. _challenge response packet_ are global across all clients and are not suitable for replay protection).
+
+The size of the replay buffer is up to the implementor, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
 
 ## Client State Machine
 
