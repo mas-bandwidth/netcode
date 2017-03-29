@@ -1,4 +1,4 @@
-# netcode.io 1.00
+# netcode.io 1.0
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
