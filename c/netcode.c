@@ -1146,7 +1146,6 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
 struct netcode_challenge_token_t
 {
     uint64_t client_id;
-    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
@@ -1165,8 +1164,6 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
     (void) start;
 
     netcode_write_uint64( &buffer, challenge_token->client_id );
-
-    netcode_write_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
 
     netcode_write_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES ); 
 
@@ -1235,11 +1232,9 @@ int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct ne
     
     challenge_token->client_id = netcode_read_uint64( &buffer );
 
-    netcode_read_bytes( &buffer, challenge_token->connect_token_mac, NETCODE_MAC_BYTES );
-
     netcode_read_bytes( &buffer, challenge_token->user_data, NETCODE_USER_DATA_BYTES );
 
-    assert( buffer - start == 8 + NETCODE_MAC_BYTES + NETCODE_USER_DATA_BYTES );
+    assert( buffer - start == 8 + NETCODE_USER_DATA_BYTES );
 
     return 1;
 }
@@ -3623,7 +3618,6 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
 
     struct netcode_challenge_token_t challenge_token;
     challenge_token.client_id = connect_token_private.client_id;
-    memcpy( challenge_token.connect_token_mac, packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, NETCODE_MAC_BYTES );
     memcpy( challenge_token.user_data, connect_token_private.user_data, NETCODE_USER_DATA_BYTES );
 
     struct netcode_connection_challenge_packet_t challenge_packet;
@@ -3740,10 +3734,6 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
         return;
     }
-
-    // todo: there is no code here that checks the HMAC vs. the set of clients connected matching this address. this should be added
-
-    // todo: potential attack connect and gather challenge responses and then play them all back at a later time, therefore need some check here that the connect token has not expired.
 
     int client_index = netcode_server_find_free_client_index( server );
 
@@ -4639,7 +4629,6 @@ static void test_challenge_token()
     struct netcode_challenge_token_t input_token;
 
     input_token.client_id = TEST_CLIENT_ID;
-    netcode_random_bytes( input_token.connect_token_mac, NETCODE_MAC_BYTES );
     netcode_random_bytes( input_token.user_data, NETCODE_USER_DATA_BYTES );
 
     // write it to a buffer
@@ -4669,7 +4658,6 @@ static void test_challenge_token()
     // make sure that everything matches the original challenge token
 
     check( output_token.client_id == input_token.client_id );
-    check( memcmp( output_token.connect_token_mac, input_token.connect_token_mac, NETCODE_MAC_BYTES ) == 0 );
     check( memcmp( output_token.user_data, input_token.user_data, NETCODE_USER_DATA_BYTES ) == 0 );
 }
 
