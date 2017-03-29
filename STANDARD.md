@@ -438,8 +438,28 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
 
-## Processing Connection Challenge Packets
+## Processing Connection Response Packets
+
+When the client receives a _connection challenge packet_ from the server it responds with a _connection response packet_.
+
+The _connection response packet_ contains the following data:
+
+    [prefix byte] (uint8) // non-zero prefix byte: ( (num_sequence_bytes<<4) | packet_type )
+    [sequence number] (variable length 1-8 bytes)
+    [challenge token sequence] (uint64)
+    [encrypted challenge token data] (360 bytes)
 
 The server takes these steps, in this exact order, when processing a _connection response packet_:
 
-* ...
+* If the _encrypted challenge token data_ fails to decrypt, ignore the packet.
+
+* _additional steps here..._
+
+* If a client from the packet source address is already connected, ignore the packet.
+
+* If a client with the client id contained in the encrypted challenge token data is already connected, ignore the packet.
+
+* If no client slots are available, then the server is full. Respond with a _connection denied packet_.
+
+* A client slot is available. Assign the packet IP address and client id to that slot, and set that slot to _
+
