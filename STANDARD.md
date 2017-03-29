@@ -80,14 +80,14 @@ Encryption of the connect token private data is performed with the libsodium AEA
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The nonce for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. 
+The nonce used for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. 
 
-Encryption is performed on the first 1024 - 16 bytes in the buffer only, leaving the last 16 bytes to store the HMAC:
+Encryption is performed on the first 1024 - 16 bytes in the buffer, leaving the last 16 bytes to store the HMAC:
 
     [encrypted private connect token] (1008 bytes)
     [hmac of encrypted private connect token] (16 bytes)
 
-This is referred to as the _encrypted private connect token data_.
+Post encryption, this is referred to as the _encrypted private connect token data_.
 
 Together the public and private data form a _connect token_:
 
@@ -184,15 +184,15 @@ The sequence number is encoded by omitting high zero bytes. For example, a seque
 
     0x8,0xE,0x3
     
-The order of sequence number bytes are _reversed_ when written to the packet as follows:
+The sequence number bytes are _reversed_ when written to the packet like so:
 
-    <repeat: sequence_bytes times>
+    <for each sequence number byte>
     {
         write_byte( sequence_number & 0xFF )
         sequence_number >>= 8
     }
 
-Each encrypted packet type writes the following data to the per-packet type data section of the packet.
+After the packet header comes the per-packet type data:
 
 _connection denied packet_:
 
@@ -227,7 +227,9 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
 
-Packets are encrypted with a 64 sequence number that starts at zero and increases with each packet sent. Packets sent from the client to server are encrypted with the client to server key in the connect token for that client. Packets sent from the server to client are encrypted using the server to client key in the connect token for that client.
+Packets sent from client to server are encrypted with the client to server key in the connect token.
+
+Packets sent from server to client are encrypted using the server to client key in the connect token for that client.
 
 Post encryption, packets have the following format:
 
@@ -271,7 +273,7 @@ Follow these steps, in this exact order, when reading an encrypted packet:
 
 Replay protection stops an attacker from recording a valid packet and replaying it back at a later time in an attempt to break the protocol.
 
-To enable replay protection, netcode.io takes the following steps:
+To support replay protection, netcode.io takes the following steps:
 
 * Encrypted packets are sent with 64 bit sequence numbers that start at zero and increase with each packet sent.
 
@@ -287,13 +289,11 @@ The replay protection algorithm is as follows:
 
 3. If a packet is within the _replay buffer size_, it is accepted only if that sequence number has not already been received, otherwise it is ignored.
 
-Replay protection is applied to the following packet types:
+Replay protection is applied to the following packet types on both client and server:
 
 * _connection keep alive packet_
 * _connection payload packet_
 * _connection disconnect packet_
-
-As these packets are sent once a particular client slot has been assigned for the client, and that client has its own unique packet sequence number. Sequence numbers during connection negotiation (eg. _challenge response packet_ are global across all clients and are not suitable for replay protection).
 
 The size of the replay buffer is up to the implementor, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
 
