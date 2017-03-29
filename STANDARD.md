@@ -318,15 +318,16 @@ The initial state is disconnected (0). Negative states represent error states. T
 
 ### Request Connect Token
 
-When a client wants to connect to a server, a _connect token_ is requested from the web backend. 
+When a client wants to connect to a server, it requests a _connect token_ from the web backend. 
 
-The connect token describes the set of [1,32] server addresses for the client to try to connect to, and the encryption keys to use for client -> server and server to client UDP packets. 
+The following aspects are outside the scope of this standard:
 
-The goal of the client is to establish connection to the first server in the connect token that has a free slot for it to connect to.
+1. The mechanism the client uses to request a connection token from the web backend.
+2. The mechanism the web backend uses to determine the set of server addresses to include in a connect token.
 
-The connect token expires in a short period of time, like 45 seconds, which should be sufficient time for client connection to succeed.
+Once the client has obtained a connect token, its goal is to establish connection to one of the server addresses in the connect token.
 
-Once the client has a connect token, it transitions to _sending connection request_ with the first server address in the connect token.
+To begin this process, it transitions to _sending connection request_ with the first server address in the connect token.
 
 ### Sending Connection Request
 
