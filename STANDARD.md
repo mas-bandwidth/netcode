@@ -269,7 +269,7 @@ The following steps shall be taken when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* _If all the above checks pass, then it is OK to process the packet_
+* If all the above checks pass, then it is OK to process the packet.
 
 ## Replay Protection
 
