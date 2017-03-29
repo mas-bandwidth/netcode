@@ -378,7 +378,9 @@ The dedicated server must be on a publicly accessible IP address and port.
 
 The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. 
 
-The maximum number of client slots per-server is implementation specific. Typical uses cases are expected in the range of [2,64] but the reference implementation supports up to 256 clients per-server. You may support more clients per-server if your implementation is able to handle them efficiently.
+The maximum number of client slots per-server is implementation specific. Typical uses cases are expected in the range of [2,64] but the reference implementation supports up to 256 clients per-server. 
+
+You may support more clients per-server if your implementation is able to handle them efficiently.
 
 ### Processing Connection Requests
 
@@ -386,7 +388,7 @@ The server follows these strict rules when processing connection requests:
 
 1. Clients must have a valid connect token to connect.
 2. Respond to a client only when absolutely necessary. 
-3. Ignore malformed request as soon as possible, with the minimum amount of work.
+3. Ignore any malformed request as soon as possible, with the minimum amount of work.
 4. Make sure any response packet is smaller than the request packet to avoid DDoS amplification.
 
 When a server receives a connection request packet from a client it contains the following data:
@@ -400,9 +402,9 @@ When a server receives a connection request packet from a client it contains the
 
 This packet is not encrypted, however:
 
-* Only the dedicated server instance and the web backend can read the encrypted private connect token data, because it is encrypted with a private key known only to the web backend and the dedicated server instances. 
+* Only the dedicated server instance and the web backend can read the encrypted private connect token data, because it is encrypted with a private key shared between them.
 
-* The important aspects of the packet such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and cannot be modified. If they are modified the signature check fails when decrypting the private connect token data.
+* The important aspects of the packet such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and thus cannot be modified without failing the signature check.
 
 The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
@@ -416,29 +418,25 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
-* _The checks above shall be made before allocating any resources for this pending client._
+* If the decrypted private connect token fails to be read for any reason, for example, having a number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
 
-* If the decrypted private connect token fails to be read for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
-
-* If the server public address is not in the list of server addresses in the private connect token, ignore the packet.
+* If the dedicated server public address is not in the list of server addresses in the private connect token, ignore the packet.
 
 * If a client from the packet source address is already connected, ignore the packet.
 
 * If a client with the client id contained in the packet source address is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address, within some limited history sufficient to cover the expected lifetime of connect tokens, ignore the packet. 
+* If the connect token has already been used by a different packet source IP address, ignore the packet. 
 
 * Otherwise, add the private connect token hmac + packet source IP address to the history of connect tokens used on this dedicated server.
 
-* If the server is full, respond with a _connection denied packet_.
+* If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
 * Add an encryption mapping for the packet source IP address so that packets read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
-
-When the client receives the _connection challenge packet_ it responds with a _connection response packet_ to the server.
 
 ## Processing Connection Challenge Packets
 
