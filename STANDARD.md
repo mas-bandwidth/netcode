@@ -335,8 +335,6 @@ Outside the scope of this standard, dedicated servers should keep the web backen
 
 ## Server-Side Connection Process
 
-The first thing the server must do is negotiate connection with potential clients.
-
 The server follows these basic rules when processing connection requests:
 
 1. Clients must have a valid connect token to connect.
@@ -369,7 +367,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
-* _The checks above must be made before allocating any resources for this pending client._
+* _The checks above shall be made before allocating any resources for this pending client._
 
 * If the decrypted private connect token fails to be read for any reason, for example, having number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
 
