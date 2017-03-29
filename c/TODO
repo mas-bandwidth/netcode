@@ -23,3 +23,12 @@ TODO
     Otherwise attackers can establish an encryption mapping with a connect token, and not proceed to connect, but keep draining server resources by spamming packets.
 
     Think through these possible attacks and make sure they are covered.
+
+    Are these attacks actually worthwhile? I mean the only difference is that the packet will get decrypted, vs. ignored when it can't find an encryption mapping.
+
+    I think adding this check is important, because the general idea is that I should always require a client to get a connect token to be able to send packets.
+
+    So add the check, basically when receiving a packet, in the encryption mapping have both a) a timeout for no packets sent or received, but also b) a timeout against
+    a global time (the connect token expiry time, or possibly, must connect within 5 seconds or whatever), that is cleared when the client successfully transitions to connected.
+
+    This way a client can only exchange packets with the server for a limited time without successfully transitioning to connected.
