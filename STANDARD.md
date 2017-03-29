@@ -261,7 +261,22 @@ Follow these steps, in this exact order, when reading an encrypted packet:
 
 ## Replay Protection
 
-...
+Replay protection stops an attacker from recording a valid packet and replaying it back at a later time in an attempt to break the protocol.
+
+The algorithm is as follows:
+
+* Packet sequence numbers are 64 bit values that start at zero and increase with each packet sent.
+* Any packet older than the most recent sequence number received, minus the _replay buffer size_, is discarded on the receiver side.
+* When a packet arrives that is newer than the most recent sequence number received, the most recent sequence number is updated on the receiver side and the packet is accepted.
+* If a packet is within the replay buffer size, it is accepted only if that sequence number has not already been received, otherwise it is ignored.
+
+Replay protection is applied to the following packet types:
+
+* _connection keep alive packet_
+* _connection payload packet_
+* _connection disconnect packet_
+
+The size of the replay buffer is up to the implementor, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 should be sufficient for most applications.
 
 ## Client State Machine
 
