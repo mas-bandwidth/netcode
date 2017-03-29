@@ -155,15 +155,15 @@ This is referred to as the _encrypted challenge token data_.
 
 **netcode.io** has the following packets:
 
-* connection request packet (0)
-* connection denied packet (1)
-* connection challenge packet (2)
-* connection response packet (3)
-* connection keep alive packet (4)
-* connection payload packet packet (5)
-* connection disconnect packet packet (6)
+* _connection request packet_ (0)
+* _connection denied packet_ (1)
+* _connection challenge packet_ (2)
+* _connection response packet_ (3)
+* _connection keep alive packet_ (4)
+* _connection payload packet packet_ (5)
+* _connection disconnect packet packet_ (6)
 
-The first packet type _connection request packet_ (0) is not encrypted:
+The first packet type _connection request packet_ (0) is not encrypted and has the following format:
 
     0 (uint8) // prefix byte of zero
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
@@ -178,9 +178,9 @@ All other packet types are encrypted. Prior to encryption they have the followin
     [sequence number] (variable length 1-8 bytes)
     [per-packet type data] (variable length according to packet type)
 
-The prefix byte encodes both the packet type and the number of bytes in the variable length sequence number. The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
+The low 4 bits of the prefix byte contain the packet type. The high 4 bits contain the number of bytes for the sequence number in the range [1,8].
 
-The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x3E8 in hex and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte are 3 and the sequence data written to the packet is:
+The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x000003E8 in hex and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte is 3 and the sequence data written to the packet is:
 
     0x8,0xE,0x3
     
@@ -192,7 +192,7 @@ The sequence number bytes are _reversed_ when written to the packet like so:
         sequence_number >>= 8
     }
 
-After the packet header comes the per-packet type data:
+After the sequence number comes the per-packet type data:
 
 _connection denied packet_:
 
@@ -240,7 +240,7 @@ Post encryption, packets have the following format:
 
 ## Reading Encrypted Packets
 
-Follow these steps, in this exact order, when reading an encrypted packet:
+The following steps shall be taken when reading an encrypted packet:
 
 * If the packet size is less than 18 bytes then it is to small to possibly be valid, ignore the packet.
 
@@ -267,7 +267,7 @@ Follow these steps, in this exact order, when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* _If all the above checks pass, then it is OK to process the packet!_
+* _If all the above checks pass, then it is OK to process the packet_
 
 ## Replay Protection
 
@@ -301,56 +301,52 @@ The size of the replay buffer is up to the implementor, but as a guide, at least
 
 The client has the following states:
 
-* connect token expired (-6)
-* invalid connect token (-5)
-* connection timed out (-4)
-* connection response timed out (-3)
-* connection request timed out (-2)
-* connection denied (-1)
-* disconnected (0)
-* sending connection request (1)
-* sending connection response (2)
-* connected (3)
+* _connect token expired_ (-6)
+* _invalid connect token_ (-5)
+* _connection timed out_ (-4)
+* _connection response timed out_ (-3)
+* _connection request timed out_ (-2)
+* _connection denied_ (-1)
+* _disconnected_ (0)
+* _sending connection request_ (1)
+* _sending connection response_ (2)
+* _connected_ (3)
 
-The initial client state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
-
-## Client-Side Connection Process
+The initial state is disconnected (0). Negative states represent error states. The goal state is _connected_ (3).
 
 When a client wants to connect to a server, a _connect token_ is requested from the web backend. 
 
-The client stores this connect token and transitions to the _sending connection request_ state with the first server address in the connect token. The client prepares to encrypt UDP packets sent to the server with the client to server key in the connect token, and decrypt UDP packets received from the server with the server to client key.
+The client stores this connect token and transitions to _sending connection request_ with the first server address in the connect token. The client prepares to encrypt UDP packets sent to the server with the client to server key in the connect token, and decrypt UDP packets received from the server with the server to client key in the connect token.
 
 While in _sending connection request_ the client sends _connection request packets_ to the server at some rate, like 10HZ. When the client receives a _connection challenge packet_ from the server, it stores the challenge token data and transitions to _sending challenge response_. This represents a successful transition to the next stage in the connection process.
 
-All other transitions from _sending connection request_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, when a failure occurs and there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
+All other transitions from _sending connection request_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, if there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
 If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
-While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_. Any _connection payload packets_ received prior to _connected_ are discarded.
+The next state is _sending challenge response_. While in this state the client sends _challenge response packets_ to the server at some rate, like 10HZ. When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_. Any _connection payload packets_ received prior to _connected_ are discarded.
 
-All other transitions from _sending challenge response_ are failure cases. In these cases the client first tries to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, when a failure occurs and there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
+All other transitions from _sending challenge response_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, if there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
 If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
 
-If the entire client connection process takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_. Thus, the connection attempt aborts once the connect token has expired and can no longer possibly succeed, rather than continuing to work through the list of server addresses in the connect token.
+If the entire client connection process (potentially across multiple server addresses) takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_.
 
-While _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ has been received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
+While _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
-While _connected_ the client application may send _connection payload packets_ to the server. If no _connection payload packet_ has been sent by the application for some period of time (for example, 1/10th of a second), the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
+While _connected_ the client application may send _connection payload packets_ to the server. If no _connection payload packet_ has been sent by the application for some period of time (for example, 1/10th of a second), the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ, in the absence of _connection payload packets_ sent by the application.
 
 While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
-If the client wishes to disconnect, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_. This informs the server that the client has disconnected and speeds up the disconnection process.
+If the client wishes to disconnect from the server, it sends a number of redundant _connection disconnect packets_ to the server before transitioning to _disconnected_.
 
 ## Server-Side Overview
 
 The dedicated server should be on a publicly accessible IP address and port, without NAT.
 
-The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may extend this to be any number you wish, provided your implementation can support that many connected clients efficiently.
+The server manages a set of n client slots, where each slot from [0,n-1] represents room for one connected client. The standard does not specify the maximum number of client slots supported by servers, so you may set this to any number you wish, provided the implementation can support that many connected clients efficiently.
 
 The server listens on a single UDP socket bound to a specific port. Using this one UDP socket the server multiplexes and demultiplexes packets according to source IP address, negotiates connection requests from potential clients, assigns potential clients to slots, and detects when a connected client disconnects or times out.
-
-Outside the scope of this standard, dedicated servers should keep the web backend informed of their status (ready to accept new clients, full, stopped), how many client slots are free to join, and any additional information required for the web backend to make informed decisions about which servers to send clients to via connect tokens.
 
 ## Server-Side Connection Process
 
