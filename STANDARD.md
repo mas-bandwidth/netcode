@@ -454,12 +454,16 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * If the _encrypted challenge token data_ fails to decrypt, ignore the packet.
 
-* _additional steps here..._
-
 * If a client from the packet source address is already connected, ignore the packet.
 
 * If a client with the client id contained in the encrypted challenge token data is already connected, ignore the packet.
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* A client slot is available. Assign the packet IP address and client id to that slot, and set that slot to _
+* Assign the packet IP address and client id to a free client slot, and set that client slot to the _confirmed = false_ state.
+
+* Respond with a _connection keep-alive_ packet.
+
+## Server Processing Per-Client Slot
+
+...
