@@ -3741,6 +3741,10 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
         return;
     }
 
+    // todo: there is no code here that checks the HMAC vs. the set of clients connected matching this address. this should be added
+
+    // todo: potential attack connect and gather challenge responses and then play them all back at a later time, therefore need some check here that the connect token has not expired.
+
     int client_index = netcode_server_find_free_client_index( server );
 
     assert( client_index != -1 );
