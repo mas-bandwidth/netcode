@@ -1,8 +1,8 @@
-# Introduction
+# netcode.io 1.00
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-# Architecture
+## Architecture
 
 There are three main components in a netcode.io-based architecture:
 
@@ -21,7 +21,7 @@ The sequence of operations for a client connect are:
 5. The dedicated server runs logic to ensure that only clients with a valid connect token can connect to it
 6. Once a connection is established the client and server exchange encrypted and signed UDP packets
 
-# General Conventions
+## General Conventions
 
 **netcode.io** is a binary protocol. 
 
