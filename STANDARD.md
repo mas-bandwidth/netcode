@@ -172,7 +172,9 @@ The first packet type _connection request packet_ (0) is not encrypted and has t
     [connect token sequence number] (8 bytes)
     [encrypted private connect token data] (1024 bytes)
     
-All other packet types are encrypted. Prior to encryption they have the following format:
+All other packet types are encrypted. 
+
+Prior to encryption they have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
