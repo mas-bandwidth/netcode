@@ -460,7 +460,7 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* Assign the packet IP address and client id to a free client slot, and set that client slot _confirmed_ flag to false.
+* Assign the packet IP address and client id to a free client slot, and set the _confirmed_ flag for that client slot to false.
 
 * Respond with a _connection keep-alive_ packet.
 
