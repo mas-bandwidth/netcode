@@ -439,7 +439,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
 
-## Processing Connection Response Packets
+### Processing Connection Response Packets
 
 When the client receives a _connection challenge packet_ from the server it responds with a _connection response packet_.
 
@@ -460,10 +460,34 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* Assign the packet IP address and client id to a free client slot, and set the _confirmed_ flag for that client slot to false.
+* Assign the packet IP address and client id to a free client slot and mark that client as connected.
+
+* Set the _confirmed_ flag for that client slot to false.
 
 * Respond with a _connection keep-alive_ packet.
 
-## Server Processing Per-Client Slot
+### Processing for Connected Clients
 
-...
+Once a client is asigned to a slot on the server, it is logically connected. 
+
+The index of this slot is used to identify clients on the dedicated server and is called the _client index_.
+
+Packets received by the server from that client's address are mapped to that _client index_ and processed in the context of that client.
+
+These packets include:
+
+* _connection keep-alive packet_
+* _connection payload packet_
+* _connection disconnect packet_
+
+The user may also send _connection payload packets_ from the server to connected clients.
+
+In the absence of _connection payload packets_ sent to a client, the server generates and sends _connection keep-alive packets_ to the client at some rate, like 10HZ.
+
+While the _confirmed_ flag for a client slot is false, each _connection payload packet_ sent to that client has a _connection keep-alive packet_ sent before it. This communicates the _client index_ and the _max clients_ to that client, which it needs to transition to a fully connected state.
+
+When the server receives a _connection payload packet_ or a _connection keep-alive packet_ from an unconfirmed client, it sets the _confirmed_ flag for that client slot to true, and stops prefixing _connection payload packets_ with _connection keep-alive packets_.
+
+If the server wishes to disconnect a client, it sends a number of redundant _connection disconnect packets_ to that client before resetting that client slot.
+
+If the server receives a _connection disconnect_ packet from a client, it resets the client slot so it is available for other clients to connect to.
