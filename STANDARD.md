@@ -470,7 +470,7 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * Respond with a _connection keep-alive_ packet.
 
-### Processing for Connected Clients
+### Connected Clients
 
 Once a client is asigned to a slot on the server, it is logically connected. 
 
