@@ -3213,6 +3213,7 @@ struct netcode_server_t
     uint64_t client_sequence[NETCODE_MAX_CLIENTS];
     double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
     double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
+	uint8_t client_user_data[NETCODE_MAX_CLIENTS][NETCODE_USER_DATA_BYTES];
     struct netcode_replay_protection_t client_replay_protection[NETCODE_MAX_CLIENTS];
     struct netcode_packet_queue_t client_packet_queue[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
@@ -3297,6 +3298,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
+	memset( server->client_user_data, 0, NETCODE_USER_DATA_BYTES );
 
     int i;
     for ( i = 0; i < NETCODE_MAX_CLIENTS; ++i )
@@ -3453,6 +3455,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->client_last_packet_receive_time[client_index] = 0.0;
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
+	memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
 
     server->num_connected_clients--;
 
@@ -3662,7 +3665,7 @@ int netcode_server_find_free_client_index( struct netcode_server_t * server )
     return -1;
 }
 
-void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id, int encryption_index )
+void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id, int encryption_index, void * user_data )
 {
     assert( server );
     assert( server->running );
@@ -3670,6 +3673,7 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     assert( client_index < server->max_clients );
     assert( address );
     assert( encryption_index != -1 );
+    assert( user_data );
 
     server->num_connected_clients++;
 
@@ -3686,6 +3690,7 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     server->client_address[client_index] = *address;
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
+    memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
 
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
@@ -3752,7 +3757,7 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     assert( client_index != -1 );
 
-    netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index );
+    netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index, challenge_token.user_data );
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence, int encryption_index, int client_index )

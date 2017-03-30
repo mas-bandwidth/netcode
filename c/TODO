@@ -20,6 +20,11 @@ DONE
 
     Added code to the encryption manager to expire the encryption manager at a future time. This lets the server to ignore clients who don't establish connection with the server within a short period of time.
 
+    I noticed that I'm not caching the user data anymore. What's the point of providing user data in the binary, if it's not cached anywhere in the reference implementation?
+
+    Added code to cache the user data per-client on connect, and an accessor function: netcode_server_client_user_data
+
 TODO
     
-    I noticed that I'm not caching the user data anymore. What's the point of providing user data in the binary, if it's not cached anywhere in the reference implementation?
+    All done?
+    
