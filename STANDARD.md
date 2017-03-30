@@ -363,9 +363,9 @@ This length of time should be determined by subtracting the create timestamp of 
 
 ### Connected
 
-While _connected_ the client buffers _connection payload packets_ from the server so their payloads of [1,1200] bytes may be received by the application. 
+While _connected_ the client buffers _connection payload packets_ received from the server so their payloads can be delivered to the client application.
 
-While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
+While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
 If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
@@ -464,7 +464,7 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * Assign the packet IP address and client id to a free client slot and mark that client as connected.
 
-* Copy across the user data from the challenge token into the client slot so it is accessible to the application.
+* Copy across the user data from the challenge token into the client slot so it is accessible to the server application.
 
 * Set the _confirmed_ flag for that client slot to false.
 
@@ -484,9 +484,9 @@ These packets include:
 * _connection payload packet_
 * _connection disconnect packet_
 
-Connected clients buffer _connection payload packets_ sent from the client so their payloads of [1,1200] bytes may be received by the application. 
+The server buffers _connection payload packets_ received from connected clients client so their payloads can be delivered to the server application. 
 
-The application may also send _connection payload packets_ from the server to connected clients.
+The server application may also send _connection payload packets_ to connected clients.
 
 In the absence of _connection payload packets_ sent to a client, the server generates and sends _connection keep-alive packets_ to the client at some rate, like 10HZ.
 
