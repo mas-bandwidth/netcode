@@ -470,7 +470,7 @@ The server takes these steps, in this exact order, when processing a _connection
 
 Once a client is asigned to a slot on the server, it is logically connected. 
 
-The index of this slot is used to identify clients on the dedicated server and is called the _client index_.
+The index of this slot is used to identify clients on the server and is called the _client index_.
 
 Packets received by the server from that client's address are mapped to that _client index_ and processed in the context of that client.
 
