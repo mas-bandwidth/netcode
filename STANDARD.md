@@ -220,7 +220,7 @@ _connection keep-alive packet_:
     
 _connection payload packet_:
 
-    [user payload data] (1 to 1200 bytes)
+    [payload data] (1 to 1200 bytes)
     
 _connection disconnect packet_:
     
@@ -247,9 +247,9 @@ Post encryption, packet types >= 1 have the following format:
 
 The following steps shall be taken when reading an encrypted packet:
 
-* If the packet size is less than 18 bytes then it is to small to possibly be valid, ignore the packet.
+* If the packet size is less than 18 bytes then it is too small to possibly be valid, ignore the packet.
 
-* If the low 4 bits of the prefix byte is greater than or equal to 7, the packet type is invalid, ignore the packet.
+* If the low 4 bits of the prefix byte are greater than or equal to 7, the packet type is invalid, ignore the packet.
 
 * The server ignores packets with type _connection challenge packet_. 
 
@@ -300,7 +300,7 @@ Replay protection is applied to the following packet types on both client and se
 * _connection payload packet_
 * _connection disconnect packet_
 
-The replay buffer size is implementation specific, but as a guide, at least a few seconds worth of packets at a typical send rate should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
+The replay buffer size is implementation specific, but as a guide, a few seconds worth of packets at a typical send rate (20-60HZ) should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
 
 ## Client State Machine
 
@@ -347,7 +347,7 @@ If a _connection request denied_ packet is received while in _sending connection
 
 While in _sending challenge respeonse_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
 
-When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_. 
+When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_.
 
 Any _connection payload packets_ received prior to _connected_ are discarded.
 
@@ -359,13 +359,15 @@ If a _connection request denied_ packet is received while in _sending challenge 
 
 If the entire client connection process (potentially across multiple server addresses) takes long enough that the connect token expires before successfully connecting to a server, the client transitions to _connect token expired_.
 
-This length of time is determined by subtracting the connect token create timestamp from its expiry timestamp.
+This length of time should be determined by subtracting the create timestamp of the connect token from its expiry timestamp.
 
 ### Connected
 
-While _connected_ the client buffers _connection payload packets_ received from the server so their payloads may be received by the client application. If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
+While _connected_ the client buffers _connection payload packets_ from the server so their payloads of [1,1200] bytes may be received by the application. 
 
 While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
+
+If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
 While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
@@ -462,6 +464,8 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * Assign the packet IP address and client id to a free client slot and mark that client as connected.
 
+* Copy across the user data from the challenge token into the client slot so it is accessible to the application.
+
 * Set the _confirmed_ flag for that client slot to false.
 
 * Respond with a _connection keep-alive_ packet.
@@ -480,7 +484,9 @@ These packets include:
 * _connection payload packet_
 * _connection disconnect packet_
 
-The user may also send _connection payload packets_ from the server to connected clients.
+Connected clients buffer _connection payload packets_ sent from the client so their payloads of [1,1200] bytes may be received by the application. 
+
+The application may also send _connection payload packets_ from the server to connected clients.
 
 In the absence of _connection payload packets_ sent to a client, the server generates and sends _connection keep-alive packets_ to the client at some rate, like 10HZ.
 
