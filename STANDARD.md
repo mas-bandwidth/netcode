@@ -496,4 +496,4 @@ When the server receives a _connection payload packet_ or a _connection keep-ali
 
 If the server wishes to disconnect a client, it sends a number of redundant _connection disconnect packets_ to that client before resetting that client slot.
 
-If the server receives a _connection disconnect_ packet from a client, it resets the client slot so it is available for other clients to connect to.
+If no _connection payload packet_ or _connection keep-alive packet_ are received from a client within the timeout period specified in the connect token, or the server receives a _connection disconnect_ packet from a client, the client slot is reset and becomes available for other clients to connect to.
