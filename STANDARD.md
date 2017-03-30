@@ -433,7 +433,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* Add an encryption mapping for the packet source IP address so that packets read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address.
+* Add an encryption mapping for the packet source IP address so that packets read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address, or if a client fails to establish a connection with the server within _timeout_ seconds.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
