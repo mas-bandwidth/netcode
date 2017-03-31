@@ -161,8 +161,8 @@ This is referred to as the _encrypted challenge token data_.
 * _connection challenge packet_ (2)
 * _connection response packet_ (3)
 * _connection keep alive packet_ (4)
-* _connection payload packet packet_ (5)
-* _connection disconnect packet packet_ (6)
+* _connection payload packet_ (5)
+* _connection disconnect packet_ (6)
 
 The first packet type _connection request packet_ (0) is not encrypted and has the following format:
 
