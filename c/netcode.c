@@ -797,53 +797,6 @@ void netcode_random_bytes( uint8_t * data, int bytes )
     randombytes_buf( data, bytes );
 }
 
-int netcode_encrypt( uint8_t * message, int message_length, 
-                     uint8_t * encrypted_message, int * encrypted_message_length, 
-                     uint8_t * nonce, 
-                     uint8_t * key )
-{
-    assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
-    assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
-    assert( NETCODE_NONCE_BYTES < crypto_secretbox_NONCEBYTES );
-
-    assert( message );
-    assert( message_length > 0 );
-    assert( encrypted_message );
-    assert( encrypted_message_length );
-
-    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
-    if ( crypto_secretbox_easy( encrypted_message, message, message_length, actual_nonce, key ) != 0 )
-        return 0;
-
-    *encrypted_message_length = message_length + NETCODE_MAC_BYTES;
-
-    return 1;
-}
-
-int netcode_decrypt( uint8_t * encrypted_message, int encrypted_message_length, 
-                     uint8_t * decrypted_message, int * decrypted_message_length, 
-                     uint8_t * nonce, 
-                     uint8_t * key )
-{
-    assert( NETCODE_KEY_BYTES == crypto_secretbox_KEYBYTES );
-    assert( NETCODE_MAC_BYTES == crypto_secretbox_MACBYTES );
-    assert( NETCODE_NONCE_BYTES < crypto_secretbox_NONCEBYTES );
-
-    uint8_t actual_nonce[crypto_secretbox_NONCEBYTES];
-    memset( actual_nonce, 0, sizeof( actual_nonce ) );
-    memcpy( actual_nonce, nonce, NETCODE_NONCE_BYTES );
-
-    if ( crypto_secretbox_open_easy( decrypted_message, encrypted_message, encrypted_message_length, actual_nonce, key ) != 0 )
-        return 0;
-
-    *decrypted_message_length = encrypted_message_length - NETCODE_MAC_BYTES;
-
-    return 1;
-}
-
 int netcode_encrypt_aead( uint8_t * message, uint64_t message_length, 
                           uint8_t * additional, uint64_t additional_length,
                           uint8_t * nonce,
@@ -1184,12 +1137,8 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    int encrypted_bytes = 0;
-
-    if ( !netcode_encrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, buffer, &encrypted_bytes, nonce, key ) )
+    if ( !netcode_encrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, NULL, 0, nonce, key ) )
         return 0;
-
-    assert( encrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES );
 
     return 1;
 }
@@ -1208,12 +1157,8 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    int decrypted_bytes = 0;
-
-    if ( !netcode_decrypt( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, buffer, &decrypted_bytes, nonce, key ) )
+    if ( !netcode_decrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, NULL, 0, nonce, key ) )
         return 0;
-
-    assert( decrypted_bytes == NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 
     return 1;
 }
