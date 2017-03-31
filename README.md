@@ -48,9 +48,9 @@ Here are some things that we think would be helpful:
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
 * Implement additional tests. Find ways to break the code!
-* We welcome anybody who would like to volunteer to perform a security audit of the code
 * Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 * Create bindings for netcode.io for your favorite language
+* We welcome anybody who would like to volunteer to perform a security audit of the code
 * Develop a testing framework to guarantee that different languages implementations conform to the spec.
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
