@@ -114,6 +114,10 @@ fn generate_additional_data<W>(mut out: W, protocol: u64, expire_utc: u64) -> Re
     Ok(())
 }
 
+pub fn get_time_now() -> u64 {
+    time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs()
+}
+
 impl ConnectToken {
     /// Generates a new connection token.
     /// `addrs` - List of allowed hosts to connect to.
@@ -136,7 +140,7 @@ impl ConnectToken {
             return Err(GenerateError::MaxHostCount)
         }
 
-        let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
+        let now = get_time_now();
         let expire = now + expire_sec as u64;
 
         let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];

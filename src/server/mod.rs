@@ -8,6 +8,7 @@ use mio;
 
 use common::*;
 use packet;
+use token;
 
 mod connection;
 use server::connection::*;
@@ -46,32 +47,37 @@ impl From<io::Error> for UpdateError {
     }
 }
 
+pub type ClientId = u64;
+
 /// Enum that describes and event from the server.
 pub enum ServerEvent {
-    /// A client has connected, contains a reference to the client that was just created.
-    ClientConnect(Connection),
+    /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private date from token.
+    ClientConnect(ClientId),
     /// A client has disconnected, contains the clien that was just disconnected.
-    ClientDisconnect(Connection),
+    ClientDisconnect(ClientId),
     /// Called when client tries to connect but all slots are full.
     ClientSlotFull,
-    /// We recieved a packet, out_packet will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
-    Packet(Connection, usize)
+    /// We recieved a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
+    Packet(ClientId, usize)
 }
 
 pub type UdpServer = Server<mio::udp::UdpSocket>;
 
 const SERVER_TOKEN: mio::Token = mio::Token(0);
+const RETRY_TIMEOUT: f64 = 1.0;
 
 pub struct Server<I> {
     listen_socket: I,
     listen_addr: SocketAddr,
     event_queue: mio::Poll,
     event_list: mio::Events,
+    protocol_id: u64,
     private_key: [u8; NETCODE_KEY_BYTES],
     //@todo: We could probably use a free list or something smarter here if
     //we find that performance is an issue.
     clients: Vec<Option<(Connection, I)>>,
     time: f64,
+    next_client_id: u64,
 
     client_event_idx: usize,
     io_event_idx: usize
@@ -79,7 +85,7 @@ pub struct Server<I> {
 
 impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
     /// Constructs a new Server bound to `local_addr` with `max_clients` and supplied `private_key` for authentication.
-    pub fn new<A>(local_addr: A, max_clients: usize, private_key: &[u8; NETCODE_KEY_BYTES]) -> Result<Server<I>, CreateError> where A: ToSocketAddrs {
+    pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES]) -> Result<Server<I>, CreateError> where A: ToSocketAddrs {
         let bind_addr = local_addr.to_socket_addrs().unwrap().next().unwrap();
         match I::bind(&bind_addr) {
             Ok(s) => {
@@ -97,9 +103,11 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                     listen_addr: bind_addr,
                     event_queue: poll,
                     event_list: mio::Events::with_capacity(1024),
+                    protocol_id: protocol_id,
                     private_key: key_copy,
                     clients: clients,
                     time: 0.0,
+                    next_client_id: 0,
                     client_event_idx: 0,
                     io_event_idx: 0
                 })
@@ -124,7 +132,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
     
     /// Checks for incoming packets, client connection and disconnections. Returns `None` when no more events
     /// are pending.
-    pub fn next_event(&mut self, out_packet: &mut [u8]) -> Result<Option<ServerEvent>, UpdateError> {
+    pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         if out_packet.len() < NETCODE_MAX_PACKET_SIZE {
             return Err(UpdateError::PacketBufferTooSmall)
         }
@@ -150,7 +158,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
             }
 
             let (remove, result) = match self.clients[self.client_event_idx] {
-                Some(ref mut c) => Server::handle_client(self.time, c),
+                Some(ref mut c) => Server::tick_client(self.time, c),
                 None => (false, None)
             };
 
@@ -168,7 +176,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         Ok(None)
     }
 
-    fn handle_io(&mut self, io_event: mio::Event, out_packet: &mut [u8]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_io(&mut self, io_event: mio::Event, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         match io_event.token() {
             mio::Token(0) => {
                 trace!("New data on listening socket");
@@ -180,10 +188,11 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
 
                 if let Some(&mut (ref mut client, ref mut socket)) = self.clients[client_idx].as_mut() {
                     let time = self.time;
-                    socket.recv(out_packet)
+                    let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+                    socket.recv(&mut scratch)
                         .map_err(|e| e.into())
                         .and_then(|read| {
-                            Self::handle_packet(time, (client, socket), out_packet, read.unwrap_or(0))
+                            Self::handle_packet(time, (client, socket), &scratch[..read.unwrap_or(0)], out_packet)
                         })
                 } else {
                     Ok(None)
@@ -192,11 +201,12 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         }
     }
 
-    fn handle_client_connect(&mut self, out_packet: &mut [u8]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_client_connect(&mut self, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         //Find open index
         match self.clients.iter().position(|v| v.is_none()) {
             Some(idx) => {
-                match self.listen_socket.recv_from(out_packet)? {
+                let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+                match self.listen_socket.recv_from(&mut scratch)? {
                     Some((size, addr)) => {
                         info!("Accepting connection from {}", &addr);
 
@@ -206,18 +216,22 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                         let mut socket = I::bind(&SocketAddr::from_str(bind_addr.as_str()).unwrap())?;
                         socket.connect(addr)?;
 
+                        self.next_client_id += 1;
+
                         let conn = Connection {
+                            client_id: self.next_client_id,
                             addr: addr,
-                            state: ConnectionState::PendingResponse(self.time)
+                            state: ConnectionState::PendingResponse(RetryState::new(self.time))
                         };
 
-                        self.validate_client_token(&out_packet[..size])?;
-
-                        self.clients[idx] = Some((conn.clone(), socket));
-
-                        trace!("Accepted connection");
-
-                        Ok(Some(ServerEvent::ClientConnect(conn.clone())))
+                        if Self::validate_client_token(self.protocol_id, &scratch[..size], out_packet) {
+                            self.clients[idx] = Some((conn.clone(), socket));
+                            trace!("Accepted connection");
+                            Ok(Some(ServerEvent::ClientConnect(conn.client_id)))
+                        } else {
+                            trace!("Failed to accept client connection");
+                            Ok(None)
+                        }
                     },
                     None => Ok(None)
                 }
@@ -229,44 +243,113 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         }
     }
 
-    fn validate_client_token(&mut self, packet: &[u8]) -> Result<(), UpdateError> {
-        //let packet = packet::decode()
-        Ok(())
-    }
+    fn validate_client_token(protocol_id: u64, packet: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> bool {
+        match packet::decode(packet, protocol_id, None, out_packet) {
+            Ok(packet) => match packet {
+                packet::Packet::ConnectionRequest(req) => {
+                    if req.version != *NETCODE_VERSION_STRING {
+                        trace!("Version mismatch expected {:?} but got {:?}", 
+                            NETCODE_VERSION_STRING, req.version);
 
-    fn handle_client(time: f64, client: &mut (Connection, I)) -> (bool, Option<Result<ServerEvent, UpdateError>>) {
-        match client.0.state {
-            ConnectionState::PendingResponse(n) | ConnectionState::Idle(n) => {
-                if n + NETCODE_TIMEOUT_SECONDS as f64 >= time {
-                    client.0.state = ConnectionState::TimedOut;
-                    (false, Some(Ok(ServerEvent::ClientConnect(client.0.clone()))))
-                } else {
-                    (false, None)
+                        return false;
+                    }
+
+                    let now = token::get_time_now();
+                    if now > req.token_expire {
+                        trace!("Token expired: {} > {}", now, req.token_expire);
+                        return false;
+                    }
+
+                    out_packet[..NETCODE_CONNECT_TOKEN_PRIVATE_BYTES].copy_from_slice(&req.private_data[..]);
+
+                    true
+                },
+                packet => {
+                    trace!("Expected Connection Request but got packet type {}", packet.get_type_id());
+                    false
                 }
             },
-            ConnectionState::Connected => { 
-                client.0.state = ConnectionState::Idle(time); 
-                (false, None)
-            },
-            ConnectionState::TimedOut 
-                | ConnectionState::Disconnected => (true, None),
+            Err(e) => {
+                trace!("Failed to decode connect packet: {:?}", e);
+                false
+            }
         }
     }
 
-    fn handle_packet(time: f64, (client, socket): (&mut Connection, &mut I), packet: &mut [u8], read: usize) -> Result<Option<ServerEvent>, UpdateError> {
-        if read == 0 {
+    fn tick_client(time: f64, client: &mut (Connection, I)) -> (bool, Option<Result<ServerEvent, UpdateError>>) {
+        let client_id = 0;
+        let (new_state, result) = match &mut client.0.state {
+            &mut ConnectionState::PendingResponse(ref mut retry_state) => {
+                let result = Self::process_timeout(time, retry_state, &mut client.1, |socket| {
+                    //socket.write(challenge)?;
+                });
+
+                //If we didn't timeout then persist our retry state
+                if result {
+                    (None, (false, None))
+                } else {    //Timed out, remove client and trigger event
+                    (Some(ConnectionState::TimedOut), (true, Some(Ok(ServerEvent::ClientDisconnect(client_id)))))
+                }
+            },
+            &mut ConnectionState::Idle(ref mut retry_state) => {
+                let result = Self::process_timeout(time, retry_state, &mut client.1, |socket| {
+                });
+
+                //If we didn't timeout then persist our retry state
+                if result {
+                    (None, (false, None))
+                } else {    //Timed out, remove client and trigger event
+                    (Some(ConnectionState::TimedOut), (false, Some(Ok(ServerEvent::ClientDisconnect(client_id)))))
+                }
+            },
+            &mut ConnectionState::Connected => { 
+                (Some(ConnectionState::Idle(RetryState::new(time))), (false, None))
+            },
+            &mut ConnectionState::TimedOut 
+                | &mut ConnectionState::Disconnected => (None, (true, None)),
+        };
+
+        //If we're moving to a new state update it here
+        if let Some(new_state) = new_state {
+            client.0.state = new_state;
+        }
+
+        result
+    }
+
+    fn process_timeout<S>(time: f64, state: &mut RetryState, socket: &mut I, send_func: S) -> bool where S: Fn(&mut I) {
+        if state.last_update + NETCODE_TIMEOUT_SECONDS as f64 <= time {
+            false
+        } else {
+            //Retry if we've hit an expire timeout or if this is the first time we're ticking.
+            if state.last_retry > RETRY_TIMEOUT
+                || (state.last_retry == 0.0 && state.retry_count == 0) {
+                send_func(socket);
+                state.last_retry = 0.0;
+            }
+
+            true
+        }
+    }
+
+    fn handle_packet(time: f64,
+            (client, socket): (&mut Connection, &mut I),
+            packet: &[u8],
+            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+                -> Result<Option<ServerEvent>, UpdateError> {
+        if packet.len() == 0 {
             return Ok(None)
         }
 
         //Update client state with any recieved packet
         client.state = match client.state.clone() {
-            ConnectionState::Connected => ConnectionState::Idle(time),
-            ConnectionState::Idle(_) => ConnectionState::Idle(time),
+            ConnectionState::Connected => ConnectionState::Idle(RetryState::new(time)),
+            ConnectionState::Idle(_) => ConnectionState::Idle(RetryState::new(time)),
             ConnectionState::PendingResponse(_) => ConnectionState::Connected,
             s => s
         };
 
-        Ok(Some(ServerEvent::Packet(client.clone(), read)))
+        Ok(Some(ServerEvent::Packet(client.client_id, 0)))
     }
 
     fn find_client(&mut self, addr: SocketAddr) -> Option<usize> {

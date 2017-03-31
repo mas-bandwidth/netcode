@@ -82,6 +82,8 @@ pub fn main() {
             .whitelisted_function("netcode_write_packet")
             .whitelisted_function("netcode_read_packet")
             .whitelisted_function("netcode_read_connect_token")
+            .whitelisted_function("netcode_decrypt_challenge_token")
+            .whitelisted_function("netcode_read_challenge_token")
             .whitelisted_function("netcode_replay_protection_reset")
             .whitelisted_function("free")
             .whitelisted_var("NETCODE_CONNECTION_NUM_PACKETS")

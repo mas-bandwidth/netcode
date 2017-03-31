@@ -1,7 +1,5 @@
 use std::io;
 use std::io::{Read, Write};
-use std::error;
-use std::fmt;
 
 use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian};
 
@@ -27,7 +25,7 @@ pub enum Packet {
 }
 
 impl Packet {
-    fn get_type_id(&self) -> u8 {
+    pub fn get_type_id(&self) -> u8 {
         match self {
             &Packet::ConnectionRequest(_) => PACKET_CONNECTION,
             &Packet::ConnectionDenied => PACKET_CONNECTION_DENIED,
@@ -212,11 +210,11 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 }
 
 pub struct ConnectionRequestPacket {
-    version: [u8; NETCODE_VERSION_LEN],
-    protocol_id: u64,
-    token_expire: u64,
-    sequence: u64,
-    private_data: [u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES]
+    pub version: [u8; NETCODE_VERSION_LEN],
+    pub protocol_id: u64,
+    pub token_expire: u64,
+    pub sequence: u64,
+    pub private_data: [u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES]
 }
 
 impl ConnectionRequestPacket {
@@ -251,12 +249,104 @@ impl ConnectionRequestPacket {
     }
 }
 
+pub struct ChallengeToken {
+    pub client_id: u64,
+    pub connect_token_mac: [u8; NETCODE_MAC_BYTES],
+    pub user_data: [u8; NETCODE_USER_DATA_BYTES]
+}
+
+impl ChallengeToken {
+    pub fn generate(client_id: u64,
+            connect_private_data: &[u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
+            connect_user_data: &[u8; NETCODE_USER_DATA_BYTES])
+                -> ChallengeToken {
+
+        let mut mac = [0; NETCODE_MAC_BYTES];
+        mac.copy_from_slice(&connect_private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES..]);
+
+        let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+        user_data.copy_from_slice(connect_user_data);
+
+        ChallengeToken {
+            client_id: client_id,
+            connect_token_mac: mac,
+            user_data: user_data
+        }
+    }
+
+    pub fn read<R>(source: &mut R) -> Result<ChallengeToken, io::Error> where R: io::Read {
+        let client_id = source.read_u64::<LittleEndian>()?;
+        let mut token_mac = [0; NETCODE_MAC_BYTES];
+        source.read_exact(&mut token_mac)?;
+        let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+        source.read_exact(&mut user_data)?;
+
+        Ok(ChallengeToken {
+            client_id: client_id,
+            connect_token_mac: token_mac,
+            user_data: user_data
+        })
+    }
+
+    pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
+        out.write_u64::<LittleEndian>(self.client_id)?;
+        out.write(&self.connect_token_mac)?;
+        out.write(&self.user_data)?;
+
+        Ok(())
+    }
+}
+
 pub struct ChallengePacket {
-    token_sequence: u64,
-    token_data: [u8; NETCODE_CHALLENGE_TOKEN_BYTES]
+    pub token_sequence: u64,
+    pub token_data: [u8; NETCODE_CHALLENGE_TOKEN_BYTES]
+}
+
+#[derive(Debug)]
+pub enum ChallengeEncodeError {
+    Io(io::Error),
+    Encrypt(crypto::EncryptError)
+}
+
+impl From<io::Error> for ChallengeEncodeError {
+    fn from(err: io::Error) -> ChallengeEncodeError {
+        ChallengeEncodeError::Io(err)
+    }
+}
+
+impl From<crypto::EncryptError> for ChallengeEncodeError {
+    fn from(err: crypto::EncryptError) -> ChallengeEncodeError {
+        ChallengeEncodeError::Encrypt(err)
+    }
 }
 
 impl ChallengePacket {
+    pub fn generate(client_id: u64,
+            connect_private_data: &[u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
+            connect_user_data: &[u8; NETCODE_USER_DATA_BYTES],
+            challenge_sequence: u64,
+            challenge_key: &[u8; NETCODE_KEY_BYTES])
+            -> Result<ChallengePacket, ChallengeEncodeError> {
+        let token = ChallengeToken::generate(client_id, connect_private_data, connect_user_data);
+        let mut scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES];
+        token.write(&mut io::Cursor::new(&mut scratch[..]))?;
+
+        let mut token_data = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
+        crypto::encode(&mut token_data[..], &scratch[..], None, challenge_sequence, challenge_key)?;
+
+        Ok(ChallengePacket {
+            token_sequence: challenge_sequence,
+            token_data: token_data
+        })
+    }
+
+    pub fn decode(&self, challenge_sequence: u64, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
+        let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
+        crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
+
+        ChallengeToken::read(&mut io::Cursor::new(&decoded[..])).map_err(|e| e.into())
+    }
+
     pub fn read<R>(source: &mut R) -> Result<ChallengePacket, io::Error> where R: io::Read {
         let token_sequence = source.read_u64::<LittleEndian>()?;
         let mut token_data = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
@@ -277,8 +367,8 @@ impl ChallengePacket {
 }
 
 pub struct ResponsePacket {
-    token_sequence: u64,
-    token_data: [u8; NETCODE_CHALLENGE_TOKEN_BYTES]
+    pub token_sequence: u64,
+    pub token_data: [u8; NETCODE_CHALLENGE_TOKEN_BYTES]
 }
 
 impl ResponsePacket {
@@ -302,8 +392,8 @@ impl ResponsePacket {
 }
 
 pub struct KeepAlivePacket {
-    client_idx: i32,
-    max_clients: i32
+    pub client_idx: i32,
+    pub max_clients: i32
 }
 
 impl KeepAlivePacket {
@@ -566,5 +656,75 @@ fn test_payload_packet() {
                     _ => assert!(false)
                 }
             });
+    }
+}
+
+#[test]
+fn test_decode_challenge_token() {
+    use token;
+    use std::net::SocketAddr;
+    use std::str::FromStr;
+
+    let protocol_id = 0xFFCC;
+    let sequence = 0xCCDD;
+    let pkey = crypto::generate_key();
+    let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+    for i in 0..user_data.len() {
+        user_data[i] = i as u8;
+    }
+
+    let conn_token = token::ConnectToken::generate(
+                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+                        &pkey,
+                        30, //Expire
+                        sequence,
+                        protocol_id,
+                        0xFFEE, //Client Id
+                        Some(&user_data)).unwrap();
+
+    let client_id = 5;
+    let challenge_sequence = 0xFED;
+    let mut challenge_key = crypto::generate_key();
+
+    let challenge_packet = ChallengePacket::generate(client_id,
+                            &conn_token.private_data,
+                            &user_data,
+                            challenge_sequence,
+                            &challenge_key).unwrap();
+
+    let decoded = challenge_packet.decode(challenge_sequence, &challenge_key).unwrap();
+    assert_eq!(decoded.client_id, client_id);
+    for i in 0..user_data.len() {
+        assert_eq!(user_data[i], decoded.user_data[i]);
+    }
+
+    unsafe {
+        use wrapper;
+
+        let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
+        capi_scratch.copy_from_slice(&challenge_packet.token_data);
+
+        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
+
+        let decode = wrapper::private::netcode_decrypt_challenge_token(
+            capi_scratch.as_mut_ptr(),
+            capi_scratch.len() as i32,
+            challenge_sequence,
+            challenge_key.as_mut_ptr());
+
+        assert_eq!(decode, 1);
+
+        let mut native_token: wrapper::private::netcode_challenge_token_t = ::std::mem::uninitialized();
+
+        let serialize = wrapper::private::netcode_read_challenge_token(
+            capi_scratch.as_mut_ptr(),
+            capi_scratch.len() as i32,
+            &mut native_token);
+            
+        assert_eq!(serialize, 1);
+        assert_eq!(native_token.client_id, client_id);
+        for i in 0..user_data.len() {
+            assert_eq!(user_data[i], native_token.user_data[i]);
+        }
     }
 }
