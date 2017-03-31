@@ -427,17 +427,17 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the dedicated server public address is not in the list of server addresses in the private connect token, ignore the packet.
 
-* If a client from the packet source address is already connected, ignore the packet.
+* If a client from the packet IP source address and port is already connected, ignore the packet.
 
 * If a client with the client id contained in the private connect token data is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address, ignore the packet. 
+* If the connect token has already been used by a different packet source IP address and port, ignore the packet. 
 
-* Otherwise, add the private connect token hmac + packet source IP address to the history of connect tokens already used.
+* Otherwise, add the private connect token hmac + packet source IP address and port to the history of connect tokens already used.
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* Add an encryption mapping for the packet source IP address so that packets read from that address are decrypted with the client to server key in the private connect token, and packets sent to that address are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address, or if a client fails to establish a connection with the server within _timeout_ seconds.
+* Add an encryption mapping for the packet source IP address and port so that packets read from that address and port are decrypted with the client to server key in the private connect token, and packets sent to that address and port are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address and port, or if a client fails to establish a connection with the server within _timeout_ seconds.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
@@ -458,13 +458,13 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * If the _encrypted challenge token data_ fails to decrypt, ignore the packet.
 
-* If a client from the packet source address is already connected, ignore the packet.
+* If a client from the packet source address and port is already connected, ignore the packet.
 
 * If a client with the client id contained in the encrypted challenge token data is already connected, ignore the packet.
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
-* Assign the packet IP address and client id to a free client slot and mark that client as connected.
+* Assign the packet IP address + port and client id to a free client slot and mark that client as connected.
 
 * Copy across the user data from the challenge token into the client slot so it is accessible to the server application.
 
@@ -478,7 +478,7 @@ Once a client is asigned to a slot on the server, it is logically connected.
 
 The index of this slot is used to identify clients on the server and is called the _client index_.
 
-Packets received by the server from that client's address are mapped to that _client index_ and processed in the context of that client.
+Packets received by the server from that client's address and port are mapped to that _client index_ and processed in the context of that client.
 
 These packets include:
 
