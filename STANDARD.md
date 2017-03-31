@@ -76,7 +76,7 @@ Prior to encryption the private connect token data has the following binary form
 
 This data is variable size but for simplicity is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
-Encryption of the connect token private data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
+Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
@@ -272,7 +272,7 @@ The following steps shall be taken when reading an encrypted packet:
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
-* If all the above checks pass, the packet shall be processed.
+* If all the above checks pass, the packet is processed.
 
 ## Replay Protection
 
@@ -332,6 +332,8 @@ The following aspects are outside the scope of this standard:
 Once the client has obtained a connect token, its goal is to establish connection to one of the server addresses in the connect token.
 
 To begin this process, it transitions to _sending connection request_ with the first server address in the connect token.
+
+Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], the client transitions to _invalid connect token_.
 
 ### Sending Connection Request
 
