@@ -365,7 +365,7 @@ This length of time should be determined by subtracting the create timestamp of 
 
 ### Connected
 
-While _connected_ the client buffers _connection payload packets_ received from the server so their payloads can be delivered to the client application.
+While _connected_ the client buffers _connection payload packets_ received from the server so their payload data can be delivered to the client application as netcode.io packets.
 
 While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
@@ -486,7 +486,7 @@ These packets include:
 * _connection payload packet_
 * _connection disconnect packet_
 
-The server buffers _connection payload packets_ received from connected clients client so their payloads can be delivered to the server application. 
+The server buffers _connection payload packets_ received from connected clients client so their payload data can be delivered to the server application as netcode.io packets.
 
 The server application may also send _connection payload packets_ to connected clients.
 
