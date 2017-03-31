@@ -7,13 +7,13 @@ use std::fs::File;
 use std::time::SystemTime;
 
 pub fn main() {
-    println!("cargo:rustc-link-search=native=netcode/c/windows");
+    println!("cargo:rustc-link-search=native=../c/windows");
     println!("cargo:rustc-link-lib=static=sodium-release");
 
     gcc::Config::new()
-        .file("netcode/c/netcode.c")
-        .include("netcode/c")
-        .include("netcode/c/windows")
+        .file("../c/netcode.c")
+        .include("../c")
+        .include("../c/windows")
         .define("NETCODE_ENABLE_TESTS", Some("0"))
         .define("NDEBUG", Some("0"))
         .compile("libnetcode.a");
@@ -24,7 +24,7 @@ pub fn main() {
 
     //Do some basic dependecy management
     let targets = vec!(&pub_path, &private_path);
-    let source = vec!("build.rs", "netcode/c/netcode.c", "netcode/c/netcode.h").iter()
+    let source = vec!("build.rs", "../c/netcode.c", "../c/netcode.h").iter()
         .map(|v| PathBuf::from(v))
         .collect::<Vec<_>>();
 
@@ -63,7 +63,7 @@ pub fn main() {
         //Export symbols for netcode
         let pub_bindings = bindgen::Builder::default()
             .no_unstable_rust()
-            .header("netcode/c/netcode.h")
+            .header("../c/netcode.h")
             .generate()
             .expect("Unable to generate bindings");
 
@@ -75,8 +75,8 @@ pub fn main() {
 
         let private_bindings = bindgen::Builder::default()
             .no_unstable_rust()
-            .header("netcode/c/netcode.c")
-            .clang_arg("-Inetcode/c")
+            .header("../c/netcode.c")
+            .clang_arg("-I../c")
             .clang_arg(format!("-I{}", include))
             .clang_arg(format!("-I{}", sodium_include))
             .whitelisted_function("netcode_write_packet")
