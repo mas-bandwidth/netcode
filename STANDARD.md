@@ -245,7 +245,7 @@ Post encryption, packet types >= 1 have the following format:
 
 ## Reading Encrypted Packets
 
-The following steps shall be taken when reading an encrypted packet:
+The following steps are taken when reading an encrypted packet, in this exact order:
 
 * If the packet size is less than 18 bytes then it is too small to possibly be valid, ignore the packet.
 
