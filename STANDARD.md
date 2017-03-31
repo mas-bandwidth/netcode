@@ -490,7 +490,7 @@ The server buffers _connection payload packets_ received from connected clients 
 
 The server application may also send _connection payload packets_ to connected clients.
 
-In the absence of _connection payload packets_ sent to a client, the server generates and sends _connection keep-alive packets_ to the client at some rate, like 10HZ.
+In the absence of _connection payload packets_ sent to a client, the server generates and sends _connection keep-alive packets_ to that client at some rate, like 10HZ.
 
 While the _confirmed_ flag for a client slot is false, each _connection payload packet_ sent to that client has a _connection keep-alive packet_ sent before it. This communicates the _client index_ and the _max clients_ to that client, which it needs to transition to a fully connected state.
 
