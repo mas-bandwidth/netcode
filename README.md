@@ -35,7 +35,9 @@ Because netcode.io servers only accept connections from clients with short-lived
 
 # How does it work?
 
-Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://new.gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/)
+Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://new.gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
+
+For a complete technical specification, read the [netcode 1.0 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
 
 # How can I help?
 
@@ -49,7 +51,6 @@ Here are some things that we think would be helpful:
 * We welcome anybody who would like to volunteer to perform a security audit of the code
 * Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 * Create bindings for netcode.io for your favorite language
-* Help me finish writing the spec and provide feedback on the spec!
 * Develop a testing framework to guarantee that different languages implementations conform to the spec.
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.

@@ -142,8 +142,8 @@ Prior to encryption, challenge tokens have the following structure:
     [client id] (uint64)
     [user data] (256 bytes)
     <zero pad to 300 bytes>
-    
-Challenge tokens are encrypted with the libsodium _crypto_secretbox_easy_ primitive, with a random key that is generated each time a dedicated server is started and a sequence number that starts at zero and increases with each challenge token generated.
+
+Encryption of the challenge token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* with no associated data, a random key generated when the dedicated server starts, and a sequence number that starts at zero and increases with each challenge token generated.
 
 Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
 
