@@ -51,7 +51,7 @@ Here are some things that we think would be helpful:
 * Create bindings for netcode.io for your favorite language
 * Port netcode.io to your favorite language (eg. C#, Rust, Golang).
 * We welcome anybody who would like to volunteer to perform a security audit of the code
-* Develop a testing framework to guarantee that different languages implementations conform to the spec.
+* Develop a testing framework to guarantee that different languages implementations conform to the [standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md)
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
 
