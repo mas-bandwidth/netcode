@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "C++ Launch (Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "target\\debug\\deps\\netcode-682d9aa4606d795a.exe",
+            "args": ["--test-threads 1", "--nocapture", "--", ""],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}",
+            "environment": [],
+            "externalConsole": false
+        }
+    ]
+}
