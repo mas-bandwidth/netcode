@@ -7,7 +7,7 @@ Download [premake 5](https://premake.github.io/download.html) and copy the **pre
 
 You need Visual Studio to build the source code. If you don't have Visual Studio 2015 you can [download the community edition for free](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx).
 
-Once you have Visual Studio installed, go to the command line under the netcode.io directory and type:
+Once you have Visual Studio installed, go to the command line under the netcode.io/c directory and type:
 
     premake5 solution
 
@@ -27,7 +27,7 @@ If you don't have Brew, you can install it from <http://brew.sh>.
 
 On Linux, depending on your particular distribution there may be prebuilt packages for libsodium, or you may have to build from source from here [libsodium](https://github.com/jedisct1/libsodium/releases).
 
-Now go to the command line under the netcode.io directory and enter:
+Now go to the command line under the netcode.io/c directory and enter:
 
     premake5 gmake
 
