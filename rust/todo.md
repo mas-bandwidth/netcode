@@ -5,7 +5,7 @@
 - [DONE] Add connect() support to mio.
 - [DONE] Socking mocking scaffold to swap zero-cost implemenations.
 - [DONE] Build on *nix platforms(should be drop-in but need to verify).
-- [TODO] Use better mechansim to find libsodium on linux.
+- [TODO] Use better mechanism to find libsodium on linux.
 - [TODO] Working server implemenation.
 - [TODO] In-place libsodium decode.
 - [TODO] Appveyor/travis.ci auto-build.
