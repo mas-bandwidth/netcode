@@ -333,7 +333,7 @@ Once the client has obtained a connect token, its goal is to establish connectio
 
 To begin this process, it transitions to _sending connection request_ with the first server address in the connect token.
 
-Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], the client transitions to _invalid connect token_.
+Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], or if the create timestamp is more recent than the expire timestamp, the client transitions to _invalid connect token_.
 
 ### Sending Connection Request
 
