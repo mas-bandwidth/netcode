@@ -1,5 +1,5 @@
-Building netcode.io
-===================
+Building netcode.io reference C implementation
+==============================================
 
 ## Building on Windows
 
