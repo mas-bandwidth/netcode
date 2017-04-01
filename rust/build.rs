@@ -4,17 +4,16 @@ extern crate bindgen;
 use std::env;
 use std::path::PathBuf;
 use std::fs::File;
-use std::time::{SystemTime, Duration};
-use std::cmp;
+use std::time::{Duration};
 
 pub fn main() {
-/*
-    #[cfg(not(target_os = "windows"))]
+
+    #[cfg(target_os = "windows")]
     {
         println!("cargo:rustc-link-search=native=../c/windows");
         println!("cargo:rustc-link-lib=static=sodium-release");
     }
-*/
+
     gcc::Config::new()
         .file("../c/netcode.c")
         .include("../c")
