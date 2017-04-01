@@ -8,9 +8,13 @@ use std::time::{SystemTime, Duration};
 use std::cmp;
 
 pub fn main() {
-    println!("cargo:rustc-link-search=native=../c/windows");
-    println!("cargo:rustc-link-lib=static=sodium-release");
-
+/*
+    #[cfg(not(target_os = "windows"))]
+    {
+        println!("cargo:rustc-link-search=native=../c/windows");
+        println!("cargo:rustc-link-lib=static=sodium-release");
+    }
+*/
     gcc::Config::new()
         .file("../c/netcode.c")
         .include("../c")
@@ -60,8 +64,9 @@ pub fn main() {
         pub_bindings.write_to_file(&pub_path)
             .expect("Couldn't write bindings!");
 
-        let include = env::var("INCLUDE").unwrap();
-        let sodium_include = env::var("SODIUM_LIB_DIR").unwrap();
+        let include = env::var("INCLUDE").unwrap_or("".to_string());
+        let sodium_include = env::var("SODIUM_LIB_DIR")
+                                 .unwrap_or("../c/windows/sodium".to_string());
 
         let private_bindings = bindgen::Builder::default()
             .no_unstable_rust()
