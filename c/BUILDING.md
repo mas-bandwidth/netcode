@@ -1,5 +1,5 @@
-Building netcode.io reference C implementation
-==============================================
+netcode.i: How to build the C reference implementation
+======================================================
 
 ## Building on Windows
 
