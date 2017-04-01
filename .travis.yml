@@ -30,7 +30,7 @@ install:
   - sudo make install
   - popd
   - sudo ldconfig
-  - curl -sSf https://sh.rustup.rs | sh -s  --default-toolchain=stable -y
+  - curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain=stable -y
   
 script:
   - cd c
