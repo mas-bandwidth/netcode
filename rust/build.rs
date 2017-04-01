@@ -8,13 +8,13 @@ use std::time::{SystemTime, Duration};
 use std::cmp;
 
 pub fn main() {
-/*
-    #[cfg(not(target_os = "windows"))]
+
+    #[cfg(target_os = "windows")]
     {
         println!("cargo:rustc-link-search=native=../c/windows");
         println!("cargo:rustc-link-lib=static=sodium-release");
     }
-*/
+
     gcc::Config::new()
         .file("../c/netcode.c")
         .include("../c")
