@@ -15,5 +15,4 @@ mod server;
 mod token;
 mod packet;
 
-use server::*;
 use token::{ConnectToken, PrivateData, HostIterator};
