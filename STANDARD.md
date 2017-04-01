@@ -347,9 +347,9 @@ If a _connection request denied_ packet is received while in _sending connection
 
 ### Sending Challenge Response
 
-While in _sending challenge respeonse_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
+While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
 
-When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_.
+When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients in the packet, and transitions to _connected_.
 
 Any _connection payload packets_ received prior to _connected_ are discarded.
 
