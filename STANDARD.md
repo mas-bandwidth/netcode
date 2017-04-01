@@ -191,7 +191,7 @@ The sequence number is encoded by omitting high zero bytes. For example, a seque
     
 The sequence number bytes are _reversed_ when written to the packet like so:
 
-    <for each sequence number byte>
+    <for each sequence byte written>
     {
         write_byte( sequence_number & 0xFF )
         sequence_number >>= 8
