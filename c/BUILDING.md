@@ -1,5 +1,5 @@
-netcode.i: How to build the C reference implementation
-======================================================
+How to build the C reference implementation
+===========================================
 
 ## Building on Windows
 
