@@ -4,8 +4,7 @@ extern crate bindgen;
 use std::env;
 use std::path::PathBuf;
 use std::fs::File;
-use std::time::{SystemTime, Duration};
-use std::cmp;
+use std::time::{Duration};
 
 pub fn main() {
 
