@@ -4,7 +4,8 @@ extern crate bindgen;
 use std::env;
 use std::path::PathBuf;
 use std::fs::File;
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
+use std::cmp;
 
 pub fn main() {
     println!("cargo:rustc-link-search=native=../c/windows");
@@ -28,36 +29,25 @@ pub fn main() {
         .map(|v| PathBuf::from(v))
         .collect::<Vec<_>>();
 
-    let now = SystemTime::now();
-    let oldest_target = targets.iter()
-        .map(|v| {
-            File::open(v)
-                .and_then(|f| f.metadata())
-                .and_then(|m| m.modified())
-                .unwrap_or(now)
-        })
-        .fold(now, |oldest, v| {
-            if oldest > v {
-                v
-            } else {
-                oldest
-            }
-        });
-
     let newest_source = source.iter()
         .map(|v| {
             File::open(v)
                 .and_then(|f| f.metadata())
                 .and_then(|m| m.modified())
-                .unwrap_or(now)
+                .expect(format!("Source file {:?} not found", v).as_str())
         })
-        .fold(oldest_target, |newest, v| {
-            if newest <= v {
-                v
-            } else {
-                newest
-            }
-        });
+        .max()
+        .unwrap();
+
+    let oldest_target = targets.iter()
+        .filter_map(|v| {
+            File::open(v)
+                .and_then(|f| f.metadata())
+                .and_then(|m| m.modified())
+                .ok()
+        })
+        .min()
+        .unwrap_or(newest_source - Duration::from_secs(1));
 
     if newest_source > oldest_target {
         //Export symbols for netcode

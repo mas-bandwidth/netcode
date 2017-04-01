@@ -251,46 +251,36 @@ impl ConnectionRequestPacket {
 
 pub struct ChallengeToken {
     pub client_id: u64,
-    pub connect_token_mac: [u8; NETCODE_MAC_BYTES],
     pub user_data: [u8; NETCODE_USER_DATA_BYTES]
 }
 
 impl ChallengeToken {
     pub fn generate(client_id: u64,
-            connect_private_data: &[u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
             connect_user_data: &[u8; NETCODE_USER_DATA_BYTES])
                 -> ChallengeToken {
-
-        let mut mac = [0; NETCODE_MAC_BYTES];
-        mac.copy_from_slice(&connect_private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES..]);
 
         let mut user_data = [0; NETCODE_USER_DATA_BYTES];
         user_data.copy_from_slice(connect_user_data);
 
         ChallengeToken {
             client_id: client_id,
-            connect_token_mac: mac,
             user_data: user_data
         }
     }
 
     pub fn read<R>(source: &mut R) -> Result<ChallengeToken, io::Error> where R: io::Read {
         let client_id = source.read_u64::<LittleEndian>()?;
-        let mut token_mac = [0; NETCODE_MAC_BYTES];
-        source.read_exact(&mut token_mac)?;
         let mut user_data = [0; NETCODE_USER_DATA_BYTES];
         source.read_exact(&mut user_data)?;
 
         Ok(ChallengeToken {
             client_id: client_id,
-            connect_token_mac: token_mac,
             user_data: user_data
         })
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
         out.write_u64::<LittleEndian>(self.client_id)?;
-        out.write(&self.connect_token_mac)?;
         out.write(&self.user_data)?;
 
         Ok(())
@@ -322,12 +312,11 @@ impl From<crypto::EncryptError> for ChallengeEncodeError {
 
 impl ChallengePacket {
     pub fn generate(client_id: u64,
-            connect_private_data: &[u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
             connect_user_data: &[u8; NETCODE_USER_DATA_BYTES],
             challenge_sequence: u64,
             challenge_key: &[u8; NETCODE_KEY_BYTES])
             -> Result<ChallengePacket, ChallengeEncodeError> {
-        let token = ChallengeToken::generate(client_id, connect_private_data, connect_user_data);
+        let token = ChallengeToken::generate(client_id, connect_user_data);
         let mut scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES];
         token.write(&mut io::Cursor::new(&mut scratch[..]))?;
 
@@ -687,7 +676,6 @@ fn test_decode_challenge_token() {
     let mut challenge_key = crypto::generate_key();
 
     let challenge_packet = ChallengePacket::generate(client_id,
-                            &conn_token.private_data,
                             &user_data,
                             challenge_sequence,
                             &challenge_key).unwrap();
@@ -698,8 +686,7 @@ fn test_decode_challenge_token() {
         assert_eq!(user_data[i], decoded.user_data[i]);
     }
 
-    /*
-    unsafe {
+   unsafe {
         use wrapper;
 
         let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
@@ -728,5 +715,4 @@ fn test_decode_challenge_token() {
             assert_eq!(user_data[i], native_token.user_data[i]);
         }
     }
-    */
 }
