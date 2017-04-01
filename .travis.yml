@@ -39,5 +39,5 @@ script:
   - make clean && make all config=debug_x64 && ./bin/test
   - make clean && make all config=release_x64 && ./bin/test
   - cd ../rust
-#  - cargo build --verbose
-#  - cargo test --verbose
+  - cargo build --verbose
+  - cargo test --verbose
