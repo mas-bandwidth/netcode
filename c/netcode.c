@@ -1937,6 +1937,9 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     connect_token->expire_timestamp = netcode_read_uint64( &buffer );
 
+    if ( connect_token->create_timestamp > connect_token->expire_timestamp )
+        return 0;
+    
     connect_token->sequence = netcode_read_uint64( &buffer );
 
     netcode_read_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
