@@ -2,7 +2,7 @@
 
 # netcode.io
 [![](http://meritbadge.herokuapp.com/netcode)](https://crates.io/crates/netcode)
-![](https://docs.rs/netcode/badge.svg) (https://docs.rs/netcode)
+[![](https://docs.rs/netcode/badge.svg)](https://docs.rs/netcode)
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
