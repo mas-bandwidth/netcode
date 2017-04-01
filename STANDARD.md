@@ -343,7 +343,7 @@ When the client receives a _connection challenge packet_ from the server, it sto
 
 All other transitions from _sending connection request_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, if there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
+If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
 ### Sending Challenge Response
 
@@ -355,7 +355,7 @@ Any _connection payload packets_ received prior to _connected_ are discarded.
 
 All other transitions from _sending challenge response_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, if there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _challenge response timed out_.
 
 ### Connect Token Expired
 
@@ -367,9 +367,9 @@ This length of time should be determined by subtracting the create timestamp of 
 
 While _connected_ the client buffers _connection payload packets_ received from the server so their payload data can be delivered to the client application as netcode.io packets.
 
-While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
+While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packets_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
-If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
+If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
 While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
