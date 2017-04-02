@@ -73,6 +73,7 @@ func (token *ConnectToken) Encrypt(protocolId, sequence uint64, privateKey []byt
 	return nil
 }
 
+// Decrypts the tokendata and assigns it back to the backing buffer
 func (token *ConnectToken) Decrypt(protocolId, sequence uint64, privateKey []byte) error {
 	var err error
 
@@ -84,6 +85,7 @@ func (token *ConnectToken) Decrypt(protocolId, sequence uint64, privateKey []byt
 	return nil
 }
 
+// builds the additional data and nonce necessary for encryption and decryption.
 func buildCryptData(protocolId, expireTimestamp, sequence uint64) (*Buffer, *Buffer) {
 	additionalData := NewBuffer(VERSION_INFO_BYTES+8+8)
 	additionalData.WriteBytes([]byte(VERSION_INFO))
@@ -162,10 +164,9 @@ func ReadToken(tokenBuffer []byte) (*ConnectToken, error) {
 		return nil, errors.New("too many servers")
 	}
 
-	var i uint32
 	token.ServerAddresses = make([]net.UDPAddr, servers)
 
-	for i = 0; i < servers; i+=1 {
+	for i := 0; i < int(servers); i+=1 {
 		serverType, err := buffer.GetUint8()
 		if err != nil {
 			return nil, err
