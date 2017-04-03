@@ -4032,6 +4032,14 @@ int netcode_server_num_clients_connected( struct netcode_server_t * server )
     return server->num_connected_clients;
 }
 
+void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index )
+{
+    assert( server );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    return server->client_user_data[client_index];
+}
+
 void netcode_server_update( struct netcode_server_t * server, double time )
 {
     assert( server );
