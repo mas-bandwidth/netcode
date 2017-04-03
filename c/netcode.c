@@ -1444,7 +1444,7 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
 {
     assert( replay_protection );
 
-    if ( sequence & ( 1LL << 63 ) )
+    if ( sequence & ( 1ULL << 63 ) )
         return 0;
 
     if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
@@ -4524,8 +4524,8 @@ static void test_address()
     }
 }
 
-#define TEST_PROTOCOL_ID            0x1122334455667788LL
-#define TEST_CLIENT_ID              0x1LL
+#define TEST_PROTOCOL_ID            0x1122334455667788ULL
+#define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
 #define TEST_CONNECT_TOKEN_EXPIRY   30
 
