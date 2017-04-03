@@ -12,7 +12,6 @@ type Client struct {
 
 func NewClient(config *Config) *Client {
 	c := &Client{config: config}
-
 	return c
 }
 

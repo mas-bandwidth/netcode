@@ -5,34 +5,46 @@ import (
 	"io"
 )
 
+// Buffer is a helper struct for serializing and deserializing as the caller
+// does not need to externally manage where in the buffer they are currently reading
+// or writing to.
 type Buffer struct {
-	Buf []byte
-	Pos int
+	Buf []byte // the backing byte slice
+	Pos int // current position in read/write
 }
-
+// Creates a new Buffer with a backing byte slice of the provided size
 func NewBuffer(size int) *Buffer {
 	b := &Buffer{}
 	b.Buf = make([]byte, size)
 	return b
 }
 
+// Creates a new buffer from a byte slice
 func NewBufferFromBytes(buf []byte) *Buffer {
 	b := &Buffer{}
 	b.Buf = buf
 	return b
 }
 
+// Returns a copy of Buffer
 func (b *Buffer) Copy() *Buffer {
 	c := NewBufferFromBytes(b.Buf)
 	return c
 }
 
+// Gets the length of the backing byte slice
 func (b *Buffer) Len() int {
 	return len(b.Buf)
 }
 
+// Returns the backing byte slice
 func (b *Buffer) Bytes() []byte {
 	return b.Buf
+}
+
+// Resets the position back to beginning of buffer
+func (b *Buffer) Reset() {
+	b.Pos = 0
 }
 
 // GetByte decodes a little-endian byte

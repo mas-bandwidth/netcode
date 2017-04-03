@@ -15,7 +15,6 @@ const USER_DATA_BYTES = 256
 const MAX_PACKET_BYTES = 1220
 const MAX_PAYLOAD_BYTES = 1200
 const MAX_ADDRESS_STRING_LENGTH = 256
-const PACKET_QUEUE_SIZE = 256
 const REPLAY_PROTECTION_BUFFER_SIZE = 256
 const CLIENT_MAX_RECEIVE_PACKETS = 64
 const SERVER_MAX_RECEIVE_PACKETS = ( 64 * MAX_CLIENTS )
@@ -109,8 +108,11 @@ func (p *PayloadPacket) GetType() PacketType {
 	return ConnectionPayload
 }
 
-func NewPayloadPacket(payload_bytes uint32) *PayloadPacket {
-	return &PayloadPacket{Type: ConnectionPayload, PayloadBytes: payload_bytes}
+func NewPayloadPacket(payloadBytes uint32) *PayloadPacket {
+	packet := &PayloadPacket{Type: ConnectionPayload}
+	packet.PayloadBytes = payloadBytes
+	packet.PayloadData = make([]byte, payloadBytes)
+	return packet
 }
 
 type DisconnectPacket struct {
@@ -120,57 +122,6 @@ type DisconnectPacket struct {
 type Context struct {
 	WritePacketKey []byte
 	ReadPacketKey []byte
-}
-
-type ReplayProtection struct {
-	MostRecentSequence uint64
-	ReceivedPacket []uint64
-}
-
-func (r *ReplayProtection) Reset() {
-	r.MostRecentSequence = 0
-	//MemsetUint64(r.ReceivedPacket, 0xFF)
-}
-
-func (r *ReplayProtection) AlreadyReceived(sequence uint64) int {
-	if (sequence & 1 << 63) == 0 {
-		return 0
-	}
-
-	if sequence + REPLAY_PROTECTION_BUFFER_SIZE <= r.MostRecentSequence {
-		return 1
-	}
-
-	if  sequence > r.MostRecentSequence {
-		r.MostRecentSequence = sequence
-	}
-
-	index := ( sequence % REPLAY_PROTECTION_BUFFER_SIZE)
-
-	if r.ReceivedPacket[index] == 0xFFFFFFFFFFFFFFFF {
-		r.ReceivedPacket[index] = sequence
-		return 0
-	}
-
-	if r.ReceivedPacket[index] >= sequence {
-		return 1
-	}
-
-	r.ReceivedPacket[index] = sequence
-	return 0
-}
-
-func SequenceNumberBytesRequired(sequence uint64) int {
-	var mask uint64
-	mask = 0xFF00000000000000
-	i := 0
-	for ; i < 7; i+=1 {
-		if (sequence & mask == 0) {
-			break
-		}
-		mask >>= 8
-	}
-	return 8 - i
 }
 
 func WritePacket(packet Packet, buffer *Buffer, buffer_length uint, sequence uint64, write_packet_key []byte, protocol_id uint64) (int, error) {
@@ -199,7 +150,7 @@ func WritePacket(packet Packet, buffer *Buffer, buffer_length uint, sequence uin
 
 	// write the prefix byte (this is a combination of the packet type and number of sequence bytes)
 	start = NewBufferFromBytes(buffer.Bytes())
-	sequence_bytes := SequenceNumberBytesRequired(sequence)
+	sequence_bytes := sequenceNumberBytesRequired(sequence)
 
 	prefix_byte := uint8(p.GetType()) | uint8(sequence_bytes << 4)
 	buffer.WriteUint8(prefix_byte)
@@ -321,4 +272,18 @@ func ReadPacket(buffer *Buffer, buffer_length int, sequence uint64, read_packet_
 		return packet, nil
 	}
 	return packet, nil
+}
+
+
+func sequenceNumberBytesRequired(sequence uint64) int {
+	var mask uint64
+	mask = 0xFF00000000000000
+	i := 0
+	for ; i < 7; i+=1 {
+		if (sequence & mask == 0) {
+			break
+		}
+		mask >>= 8
+	}
+	return 8 - i
 }
