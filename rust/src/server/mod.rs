@@ -9,6 +9,7 @@ use mio;
 use common::*;
 use packet;
 use token;
+use crypto;
 
 mod connection;
 use server::connection::*;
@@ -22,7 +23,7 @@ pub enum CreateError {
     AddrInUse,
     /// Address is not available(and probably already bound).
     AddrNotAvailable,
-    /// Generic(other) io error occured.
+    /// Generic(other) io error occurred.
     GenericIo(io::Error)
 }
 
@@ -38,12 +39,57 @@ pub enum UpdateError {
     /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PACKET_SIZE` = 1200)
     PacketBufferTooSmall,
     /// Generic io error.
+    SocketError(io::Error),
+    /// An error when sending(usually challenge response)
+    SendError(SendError),
+    /// An internal error occurred
+    Internal(InternalError)
+}
+
+#[derive(Debug)]
+/// Errors internal to netcode.
+pub enum InternalError {
+    ChallengeEncodeError(packet::ChallengeEncodeError)
+}
+
+//Errors from sending packets
+#[derive(Debug)]
+pub enum SendError {
+    /// Client Id used for sending didn't exist.
+    InvalidClientId,
+    /// Failed to encode the packet for sending.
+    PacketEncodeError(packet::PacketError),
+    /// Generic io error.
     SocketError(io::Error)
 }
 
 impl From<io::Error> for UpdateError {
     fn from(err: io::Error) -> UpdateError {
         UpdateError::SocketError(err)
+    }
+}
+
+impl From<packet::ChallengeEncodeError> for UpdateError {
+    fn from(err: packet::ChallengeEncodeError) -> UpdateError {
+        UpdateError::Internal(InternalError::ChallengeEncodeError(err))
+    }
+}
+
+impl From<SendError> for UpdateError {
+    fn from(err: SendError) -> UpdateError {
+        UpdateError::SendError(err)
+    }
+}
+
+impl From<packet::PacketError> for SendError {
+    fn from(err: packet::PacketError) -> SendError {
+        SendError::PacketEncodeError(err)
+    }
+}
+
+impl From<io::Error> for SendError {
+    fn from(err: io::Error) -> SendError {
+        SendError::SocketError(err)
     }
 }
 
@@ -72,12 +118,16 @@ pub struct Server<I> {
     event_queue: mio::Poll,
     event_list: mio::Events,
     protocol_id: u64,
-    private_key: [u8; NETCODE_KEY_BYTES],
+    connect_key: [u8; NETCODE_KEY_BYTES],
     //@todo: We could probably use a free list or something smarter here if
     //we find that performance is an issue.
     clients: Vec<Option<(Connection, I)>>,
     time: f64,
-    next_client_id: u64,
+
+    send_sequence: u64,
+
+    challenge_sequence: u64,
+    challenge_key: [u8; NETCODE_KEY_BYTES],
 
     client_event_idx: usize,
     io_event_idx: usize
@@ -104,10 +154,12 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                     event_queue: poll,
                     event_list: mio::Events::with_capacity(1024),
                     protocol_id: protocol_id,
-                    private_key: key_copy,
+                    connect_key: key_copy,
                     clients: clients,
                     time: 0.0,
-                    next_client_id: 0,
+                    send_sequence: 0,
+                    challenge_sequence: 0,
+                    challenge_key: crypto::generate_key(),
                     client_event_idx: 0,
                     io_event_idx: 0
                 })
@@ -202,48 +254,98 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
     }
 
     fn handle_client_connect(&mut self, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
-        //Find open index
-        match self.clients.iter().position(|v| v.is_none()) {
-            Some(idx) => {
-                let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
-                match self.listen_socket.recv_from(&mut scratch)? {
-                    Some((size, addr)) => {
-                        info!("Accepting connection from {}", &addr);
+        let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+        match self.listen_socket.recv_from(&mut scratch)? {
+            Some((size, addr)) => {
+                info!("Accepting connection from {}", &addr);
 
-                        use std::str::FromStr;
-                        //@todo: pick ipv6 if we are using ipv6
-                        let bind_addr = format!("0.0.0.0:{}", self.listen_addr.port());
-                        let mut socket = I::bind(&SocketAddr::from_str(bind_addr.as_str()).unwrap())?;
-                        socket.connect(addr)?;
-
-                        self.next_client_id += 1;
-
-                        let conn = Connection {
-                            client_id: self.next_client_id,
-                            addr: addr,
-                            state: ConnectionState::PendingResponse(RetryState::new(self.time))
-                        };
-
-                        if Self::validate_client_token(self.protocol_id, &scratch[..size], out_packet) {
-                            self.clients[idx] = Some((conn.clone(), socket));
-                            trace!("Accepted connection");
-                            Ok(Some(ServerEvent::ClientConnect(conn.client_id)))
-                        } else {
-                            trace!("Failed to accept client connection");
-                            Ok(None)
+                if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &scratch[..size], out_packet) {
+                   //See if we already have this connection
+                    if let Some(idx) = self.find_client_by_id(private_data.client_id) {
+                        if let Some((ref mut client,_)) = self.clients[idx] {
+                            match client.state {
+                                ConnectionState::PendingResponse(ref mut retry) => {
+                                    retry.last_retry = 0.0;
+                                    retry.retry_count += 1;
+                                }
+                                _ => ()
+                            }
                         }
-                    },
-                    None => Ok(None)
+                    } else {
+                        //Find open index
+                        match self.clients.iter().position(|v| v.is_none()) {
+                            Some(idx) => {
+                                use std::str::FromStr;
+                                //@todo: pick ipv6 if we are using ipv6
+                                let bind_addr = format!("0.0.0.0:{}", self.listen_addr.port());
+                                let mut socket = I::bind(&SocketAddr::from_str(bind_addr.as_str()).unwrap())?;
+                                socket.connect(addr)?;
+
+                                let conn = Connection {
+                                    client_id: private_data.client_id,
+                                    state: ConnectionState::PendingResponse(RetryState::new(self.time)),
+                                    server_to_client_key: private_data.server_to_client_key,
+                                    client_to_server_key: private_data.client_to_server_key,
+                                    addr: addr,
+                                };
+
+                                self.clients[idx] = Some((conn.clone(), socket));
+                                trace!("Accepted connection");
+                            },
+                            None => {
+                                trace!("Tried to accept new client but max clients connected: {}", self.clients.len());
+                                return Ok(Some(ServerEvent::ClientSlotFull))
+                            }
+                        }
+                    }
+
+                    self.challenge_sequence += 1;
+
+                    let challenge = packet::ChallengePacket::generate(
+                        private_data.client_id,
+                        &private_data.user_data,
+                        self.challenge_sequence,
+                        &self.challenge_key)?;
+
+                    //Send challenge token
+                    self.send_packet(private_data.client_id, &packet::Packet::Challenge(challenge))?;
+
+                    Ok(Some(ServerEvent::ClientConnect(private_data.client_id)))
+                } else {
+                    trace!("Failed to accept client connection");
+                    Ok(None)
                 }
             },
-            None => {
-                trace!("Tried to accept new client but max clients connected: {}", self.clients.len());
-                Ok(Some(ServerEvent::ClientSlotFull))
-            }
+            None => Ok(None)
         }
     }
 
-    fn validate_client_token(protocol_id: u64, packet: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> bool {
+    fn send_packet(&mut self, client_id: ClientId, packet: &packet::Packet) -> Result<(), SendError> {
+        self.send_sequence += 1;
+
+        let sequence = self.send_sequence;
+        let protocol_id = self.protocol_id;
+
+        if let Some(&mut Some((ref client, ref mut socket))) = self.find_client_by_id(client_id).map(|v| &mut self.clients[v]) {
+            let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
+            packet::encode(&mut out_packet[..], 
+                            protocol_id,
+                            &packet,
+                            Some((sequence, &client.server_to_client_key)),
+                            None)?;
+
+           socket.send(&out_packet[..]).map(|_| ()).map_err(|e| e.into())
+        } else {
+            trace!("Tried to send packet to invalid client id: {}", client_id);
+            Err(SendError::InvalidClientId)
+        }
+    }
+
+    fn validate_client_token(
+            protocol_id: u64,
+            private_key: &[u8; NETCODE_KEY_BYTES],
+            packet: &[u8],
+            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
             Ok(packet) => match packet {
                 packet::Packet::ConnectionRequest(req) => {
@@ -251,27 +353,32 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                         trace!("Version mismatch expected {:?} but got {:?}", 
                             NETCODE_VERSION_STRING, req.version);
 
-                        return false;
+                        return None;
                     }
 
                     let now = token::get_time_now();
                     if now > req.token_expire {
                         trace!("Token expired: {} > {}", now, req.token_expire);
-                        return false;
+                        return None;
                     }
 
-                    out_packet[..NETCODE_CONNECT_TOKEN_PRIVATE_BYTES].copy_from_slice(&req.private_data[..]);
+                    if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
+                        //Validate hosts
 
-                    true
+                        Some(v)
+                    } else {
+                        info!("Unable to decode connection token");
+                        None
+                    }
                 },
                 packet => {
                     trace!("Expected Connection Request but got packet type {}", packet.get_type_id());
-                    false
+                    None
                 }
             },
             Err(e) => {
                 trace!("Failed to decode connect packet: {:?}", e);
-                false
+                None
             }
         }
     }
@@ -280,8 +387,8 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         let client_id = 0;
         let (new_state, result) = match &mut client.0.state {
             &mut ConnectionState::PendingResponse(ref mut retry_state) => {
-                let result = Self::process_timeout(time, retry_state, &mut client.1, |socket| {
-                    //socket.write(challenge)?;
+                let result = Self::process_timeout(time, retry_state, &mut client.1, |_socket| {
+                    //We let client connection tokens drive retry so do nothing here
                 });
 
                 //If we didn't timeout then persist our retry state
@@ -352,7 +459,11 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         Ok(Some(ServerEvent::Packet(client.client_id, 0)))
     }
 
-    fn find_client(&mut self, addr: SocketAddr) -> Option<usize> {
-        self.clients.iter().cloned().filter_map(|c| c).position(|(c,_)| c.addr == addr)
+    fn find_client_by_id(&self, id: ClientId) -> Option<usize> {
+        self.clients.iter().position(|v| v.as_ref().map_or(false, |&(ref c,_)| c.client_id == id))
+    }
+
+    fn find_client_by_addr(&self, addr: &SocketAddr) -> Option<usize> {
+        self.clients.iter().position(|v| v.as_ref().map_or(false, |&(ref c,_)| c.addr == *addr))
     }
 }

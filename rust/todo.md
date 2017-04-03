@@ -10,3 +10,4 @@
 - [TODO] In-place libsodium decode.
 - [TODO] Appveyor/travis.ci auto-build.
 - [TODO] Socket mocking layer to introduce latency/dropped packets for testing.
+- [TODO] Run AFL fuzzer against Rust+C impl.

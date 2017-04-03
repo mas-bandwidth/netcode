@@ -1,5 +1,6 @@
 use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::io;
+use std::io::Write;
 use std::time;
 use byteorder::{WriteBytesExt, ReadBytesExt, ByteOrder, LittleEndian};
 
@@ -89,7 +90,7 @@ pub struct PrivateData {
     /// Private key for server -> client communcation.
     pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
     /// Server-specific user data.
-    pub userdata: [u8; NETCODE_USER_DATA_BYTES]
+    pub user_data: [u8; NETCODE_USER_DATA_BYTES]
 }
 
 #[derive(Clone,Debug)]
@@ -97,21 +98,27 @@ pub struct HostList {
     hosts: [Option<SocketAddr>; NETCODE_MAX_SERVERS_PER_CONNECT]
 }
 
-fn generate_userdata() -> [u8; NETCODE_USER_DATA_BYTES] {
-    let mut userdata: [u8; NETCODE_USER_DATA_BYTES] = 
+fn generate_user_data() -> [u8; NETCODE_USER_DATA_BYTES] {
+    let mut user_data: [u8; NETCODE_USER_DATA_BYTES] = 
         [0; NETCODE_USER_DATA_BYTES];
 
-    crypto::random_bytes(&mut userdata);
+    crypto::random_bytes(&mut user_data);
 
-    userdata
+    user_data
 }
 
-fn generate_additional_data<W>(mut out: W, protocol: u64, expire_utc: u64) -> Result<(), io::Error> where W: io::Write {
-    out.write(NETCODE_VERSION_STRING)?;
-    out.write_u64::<LittleEndian>(protocol)?;
-    out.write_u64::<LittleEndian>(expire_utc)?;
+fn generate_additional_data(protocol: u64, expire_utc: u64) -> Result<[u8; NETCODE_ADDITIONAL_DATA_SIZE], io::Error> {
+    let mut scratch = [0; NETCODE_ADDITIONAL_DATA_SIZE];
 
-    Ok(())
+    {
+        let mut out = io::Cursor::new(&mut scratch[..]);
+
+        out.write(NETCODE_VERSION_STRING)?;
+        out.write_u64::<LittleEndian>(protocol)?;
+        out.write_u64::<LittleEndian>(expire_utc)?;
+    }
+
+    Ok(scratch)
 }
 
 pub fn get_time_now() -> u64 {
@@ -126,14 +133,14 @@ impl ConnectToken {
     /// `sequence` - Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
     /// `protocol` - Client specific protocol.
     /// `client_id` - Unique client identifier.
-    /// `userdata` - Client specific userdata.
+    /// `user_data` - Client specific userdata.
     pub fn generate<H>(hosts: H,
                        private_key: &[u8; NETCODE_KEY_BYTES],
                        expire_sec: usize,
                        sequence: u64,
                        protocol: u64,
                        client_id: u64,
-                       userdata: Option<&[u8; 256]>)
+                       user_data: Option<&[u8; 256]>)
                        -> Result<ConnectToken, GenerateError>
                           where H: ExactSizeIterator<Item=SocketAddr> {
         if hosts.len() > NETCODE_MAX_SERVERS_PER_CONNECT {
@@ -143,13 +150,10 @@ impl ConnectToken {
         let now = get_time_now();
         let expire = now + expire_sec as u64;
 
-        let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];
-        generate_additional_data(io::Cursor::new(&mut additional_data[..]), protocol, expire)?;
-
-        let decoded_data = PrivateData::new(client_id, hosts, userdata);
+        let decoded_data = PrivateData::new(client_id, hosts, user_data);
 
         let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
-        decoded_data.encode(&mut io::Cursor::new(&mut private_data[..]), &additional_data, sequence, private_key)?;
+        decoded_data.encode(&mut private_data, protocol, expire, sequence, private_key)?;
 
         Ok(ConnectToken {
             hosts: decoded_data.hosts.clone(),
@@ -167,20 +171,8 @@ impl ConnectToken {
     /// Decodes the private data stored by this connection token.
     /// `private_key` - Server's private key used to generate this token.
     /// `sequence` - Nonce sequence used to generate this token.
-    pub fn decode(&mut self, private_key: &[u8; NETCODE_KEY_BYTES], sequence: u64) -> Result<PrivateData, DecodeError> {
-        let mut additional_data = [0; NETCODE_ADDITIONAL_DATA_SIZE];
-        generate_additional_data(io::Cursor::new(&mut additional_data[..]), self.protocol, self.expire_utc)?;
-
-        let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
-        let len = crypto::decode(&mut decoded, &self.private_data, Some(&additional_data), sequence, private_key)?;
-
-        if len != decoded.len() {
-            return Err(DecodeError::Decrypt(crypto::EncryptError::Failed))
-        }
-
-        let private_data = PrivateData::read(&mut io::Cursor::new(&decoded[..]))?;
-
-        Ok(private_data)
+    pub fn decode(&mut self, private_key: &[u8; NETCODE_KEY_BYTES]) -> Result<PrivateData, DecodeError> {
+        PrivateData::decode(&self.private_data, self.protocol, self.expire_utc, self.sequence, private_key)
     }
 
     /// Encodes a ConnectToken into a `io::Write`.
@@ -242,14 +234,14 @@ impl ConnectToken {
 }
 
 impl PrivateData {
-    pub fn new<H>(client_id: u64, hosts: H, userdata: Option<&[u8; NETCODE_USER_DATA_BYTES]>) -> PrivateData where H: Iterator<Item=SocketAddr> {
-        let final_userdata = match userdata {
+    pub fn new<H>(client_id: u64, hosts: H, user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>) -> PrivateData where H: Iterator<Item=SocketAddr> {
+        let final_user_data = match user_data {
             Some(u) => {
                 let mut copy_ud: [u8; NETCODE_USER_DATA_BYTES] = [0; NETCODE_USER_DATA_BYTES];
                 copy_ud[..u.len()].copy_from_slice(u);
                 copy_ud
             },
-            None => generate_userdata()
+            None => generate_user_data()
         };
 
         let client_to_server_key = crypto::generate_key();
@@ -258,35 +250,39 @@ impl PrivateData {
         PrivateData {
             client_id: client_id,
             hosts: HostList::new(hosts),
-            userdata: final_userdata,
+            user_data: final_user_data,
             client_to_server_key: client_to_server_key,
             server_to_client_key: server_to_client_key
         }
     }
 
-    pub fn decode<R>(source: &mut R, additional_data: &[u8; NETCODE_ADDITIONAL_DATA_SIZE], sequence: u64, private_key: &[u8; NETCODE_KEY_BYTES])
-            -> Result<PrivateData, DecodeError>
-               where R: io::Read {
-        let mut encoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    pub fn decode(encoded: &[u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
+                  protocol_id: u64,
+                  expire_utc: u64,
+                  sequence: u64,
+                  private_key: &[u8; NETCODE_KEY_BYTES])
+                  -> Result<PrivateData, DecodeError> {
+        let additional_data = generate_additional_data(protocol_id, expire_utc)?;
         let mut decoded = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
-        source.read_exact(&mut encoded)?;
 
-        crypto::decode(&mut decoded, &encoded, Some(additional_data), sequence, private_key)?;
+        crypto::decode(&mut decoded, encoded, Some(&additional_data), sequence, private_key)?;
 
         Ok(PrivateData::read(&mut io::Cursor::new(&decoded[..]))?)
     }
 
-    pub fn encode<W>(&self, out: &mut W, additional_data: &[u8; NETCODE_ADDITIONAL_DATA_SIZE], sequence: u64, private_key: &[u8; NETCODE_KEY_BYTES])
-            -> Result<(), GenerateError> 
-            where W: io::Write {
+    pub fn encode(&self, 
+                  out: &mut [u8; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES],
+                  protocol_id: u64,
+                  expire_utc: u64,
+                  sequence: u64,
+                  private_key: &[u8; NETCODE_KEY_BYTES])
+                  -> Result<(), GenerateError> {
+        let additional_data = generate_additional_data(protocol_id, expire_utc)?;
         let mut scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - crypto::NETCODE_ENCRYPT_EXTA_BYTES];
-        let mut out_scratch = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
 
         self.write(&mut io::Cursor::new(&mut scratch[..]))?;
 
-        crypto::encode(&mut out_scratch, &scratch, Some(additional_data), sequence, private_key)?;
-
-        out.write_all(&out_scratch)?;
+        crypto::encode(&mut out[..], &scratch, Some(&additional_data), sequence, private_key)?;
 
         Ok(())
     }
@@ -298,7 +294,7 @@ impl PrivateData {
         out.write(&self.client_to_server_key)?;
         out.write(&self.server_to_client_key)?;
 
-        out.write(&self.userdata)?;
+        out.write(&self.user_data)?;
 
         Ok(())
     }
@@ -313,15 +309,15 @@ impl PrivateData {
         let mut server_to_client_key = [0; NETCODE_KEY_BYTES];
         source.read_exact(&mut server_to_client_key)?;
 
-        let mut userdata = [0; NETCODE_USER_DATA_BYTES];
-        source.read_exact(&mut userdata)?;
+        let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+        source.read_exact(&mut user_data)?;
 
         Ok(PrivateData {
             hosts: hosts,
             client_id: client_id,
             client_to_server_key: client_to_server_key,
             server_to_client_key: server_to_client_key,
-            userdata: userdata
+            user_data: user_data
         })
     }
 }
@@ -452,8 +448,8 @@ fn read_write() {
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
 
-    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
-    crypto::random_bytes(&mut userdata);
+    let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut user_data);
 
     let expire = 30;
     let sequence = 1;
@@ -467,7 +463,7 @@ fn read_write() {
                         sequence,
                         protocol,
                         client_id,
-                        Some(&userdata)).unwrap();
+                        Some(&user_data)).unwrap();
 
     let mut scratch = [0; NETCODE_CONNECT_TOKEN_BYTES];
     token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();
@@ -490,8 +486,8 @@ fn decode() {
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
 
-    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
-    crypto::random_bytes(&mut userdata);
+    let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut user_data);
 
     let expire = 30;
     let sequence = 1;
@@ -505,17 +501,17 @@ fn decode() {
                         sequence,
                         protocol,
                         client_id,
-                        Some(&userdata)).unwrap();
+                        Some(&user_data)).unwrap();
     
-    let decoded = token.decode(&private_key, sequence).unwrap();
+    let decoded = token.decode(&private_key).unwrap();
 
     assert_eq!(decoded.hosts, token.hosts);
     assert_eq!(decoded.client_id, client_id);
     assert_eq!(decoded.client_to_server_key, token.client_to_server_key);
     assert_eq!(decoded.server_to_client_key, token.server_to_client_key);
 
-    for i in 0..userdata.len() {
-        assert_eq!(decoded.userdata[i], userdata[i]);
+    for i in 0..user_data.len() {
+        assert_eq!(decoded.user_data[i], user_data[i]);
     }
 }
 
@@ -526,8 +522,8 @@ fn interop_read() {
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
 
-    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
-    crypto::random_bytes(&mut userdata);
+    let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut user_data);
 
     let expire = 30;
     let sequence = 1;
@@ -556,8 +552,8 @@ fn interop_write() {
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
 
-    let mut userdata = [0; NETCODE_USER_DATA_BYTES];
-    crypto::random_bytes(&mut userdata);
+    let mut user_data = [0; NETCODE_USER_DATA_BYTES];
+    crypto::random_bytes(&mut user_data);
 
     let expire = 30;
     let sequence = 1;
@@ -571,7 +567,7 @@ fn interop_write() {
                         sequence,
                         protocol,
                         client_id,
-                        Some(&userdata)).unwrap();
+                        Some(&user_data)).unwrap();
 
     let mut scratch = [0; NETCODE_CONNECT_TOKEN_BYTES];
     token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();

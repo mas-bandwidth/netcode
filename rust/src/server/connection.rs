@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use common::*;
 use server;
 
 /// Current state of the client connection.
@@ -39,5 +40,7 @@ impl RetryState {
 pub struct Connection {
     pub client_id: server::ClientId,
     pub state: ConnectionState,
+    pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
+    pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
     pub addr: SocketAddr
 }
