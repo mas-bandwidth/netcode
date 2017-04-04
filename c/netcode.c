@@ -1444,7 +1444,7 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
 {
     assert( replay_protection );
 
-    if ( sequence & ( 1LL << 63 ) )
+    if ( sequence & ( 1ULL << 63 ) )
         return 0;
 
     if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
@@ -1937,6 +1937,9 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     connect_token->expire_timestamp = netcode_read_uint64( &buffer );
 
+    if ( connect_token->create_timestamp > connect_token->expire_timestamp )
+        return 0;
+    
     connect_token->sequence = netcode_read_uint64( &buffer );
 
     netcode_read_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
@@ -4029,6 +4032,14 @@ int netcode_server_num_clients_connected( struct netcode_server_t * server )
     return server->num_connected_clients;
 }
 
+void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index )
+{
+    assert( server );
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    return server->client_user_data[client_index];
+}
+
 void netcode_server_update( struct netcode_server_t * server, double time )
 {
     assert( server );
@@ -4521,8 +4532,8 @@ static void test_address()
     }
 }
 
-#define TEST_PROTOCOL_ID            0x1122334455667788LL
-#define TEST_CLIENT_ID              0x1LL
+#define TEST_PROTOCOL_ID            0x1122334455667788ULL
+#define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
 #define TEST_CONNECT_TOKEN_EXPIRY   30
 

@@ -191,7 +191,7 @@ The sequence number is encoded by omitting high zero bytes. For example, a seque
     
 The sequence number bytes are _reversed_ when written to the packet like so:
 
-    <for each sequence number byte>
+    <for each sequence byte written>
     {
         write_byte( sequence_number & 0xFF )
         sequence_number >>= 8
@@ -333,7 +333,7 @@ Once the client has obtained a connect token, its goal is to establish connectio
 
 To begin this process, it transitions to _sending connection request_ with the first server address in the connect token.
 
-Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], the client transitions to _invalid connect token_.
+Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], or if the create timestamp is more recent than the expire timestamp, the client transitions to _invalid connect token_.
 
 ### Sending Connection Request
 
@@ -343,19 +343,19 @@ When the client receives a _connection challenge packet_ from the server, it sto
 
 All other transitions from _sending connection request_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, if there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _connection request timed out_.
+If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
 ### Sending Challenge Response
 
-While in _sending challenge respeonse_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
+While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
 
-When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients from the keep-alive packet, and transitions to _connected_.
+When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients in the packet, and transitions to _connected_.
 
 Any _connection payload packets_ received prior to _connected_ are discarded.
 
 All other transitions from _sending challenge response_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, if there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the client timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _challenge response timed out_.
 
 ### Connect Token Expired
 
@@ -367,9 +367,9 @@ This length of time should be determined by subtracting the create timestamp of 
 
 While _connected_ the client buffers _connection payload packets_ received from the server so their payload data can be delivered to the client application as netcode.io packets.
 
-While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packet_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
+While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packets_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
-If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the client timeout period specified in the connect token, the client transitions to _connection timed out_. 
+If no _connection payload packet_ or _connection keep-alive packet_ are received from the server within the timeout period specified in the connect token, the client transitions to _connection timed out_. 
 
 While _connected_ if the client receives a _connection disconnect_ packet from the server, it transitions to _disconnected_.
 
