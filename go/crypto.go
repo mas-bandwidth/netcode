@@ -19,22 +19,21 @@ func GenerateKey() ([]byte, error) {
 }
 
 // Encrypts the message in place with the nonce and key and optional additional buffer
-func EncryptAead(message *[]byte, additional []byte, nonce, key []byte) error {
+func EncryptAead(message *[]byte, additional, nonce, key []byte) error {
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
 		return err
 	}
-	log.Printf("before seal: %#v\n", message)
+	log.Printf("before encrypt len: %d\n", len(*message))
 	*message = aead.Seal(nil, nonce, *message, additional)
-	log.Printf("after seal: %#v\n", message)
+
 	return nil
 }
 
-// Encrypts the message with the nonce and key and optional additional buffer returning a copy
+// Decrypts the message with the nonce and key and optional additional buffer returning a copy
 // byte slice
-func DecryptAead(message []byte, additional []byte, nonce, key []byte) ([]byte, error) {
+func DecryptAead(message []byte, additional, nonce, key []byte) ([]byte, error) {
 	aead, err := chacha20poly1305.New(key)
-
 	if err != nil {
 		return nil, err
 	}
