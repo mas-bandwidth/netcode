@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"log"
+	"go/token"
 )
 
 const (
@@ -13,6 +14,7 @@ const (
 	ADDRESS_IPV6
 )
 
+const CONNECT_TOKEN_BYTES = 2048
 
 // Token used for connecting
 type ConnectToken struct {
@@ -48,96 +50,24 @@ func (token *ConnectToken) ClientId() uint64 {
 	return token.PrivateData.ClientId
 }
 
+func (token *ConnectToken) Write() ([]byte, error) {
+	buffer := NewBuffer(CONNECT_TOKEN_BYTES)
+	buffer.WriteBytes([]byte(VERSION_INFO))
+	buffer.WriteUint64(token.ProtocolId)
+	buffer.WriteUint64(token.CreateTimestamp)
+	buffer.WriteUint64(token.ExpireTimestamp)
+	buffer.WriteUint64(token.Sequence)
 
-type ConnectTokenPrivate struct {
-	ClientId uint64
-	ServerAddrs []net.UDPAddr // list of server addresses this client may connect to
-	ClientKey []byte // client to server key
-	ServerKey []byte // server to client key
-	UserData []byte // used to store user data
-	TokenData *Buffer // used to store the serialized buffer
-}
-
-func NewConnectTokenPrivate() *ConnectTokenPrivate {
-	p := &ConnectTokenPrivate{}
-	p.TokenData = NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES)
-	return p
-}
-
-func (p *ConnectTokenPrivate) Read() error {
-	var err error
-
-
-	if p.ClientId, err = p.TokenData.GetUint64(); err != nil {
-		return err
-	}
-
-	if err := p.readServerData(); err != nil {
-		return err
-	}
-
-	if p.ClientKey, err = p.TokenData.GetBytes(KEY_BYTES); err != nil {
-		return errors.New("error reading client to server key")
-	}
-
-	if p.ServerKey, err = p.TokenData.GetBytes(KEY_BYTES); err != nil {
-		return errors.New("error reading server to client key")
-	}
-
-	if p.UserData, err = p.TokenData.GetBytes(USER_DATA_BYTES); err != nil {
-		return errors.New("error reading user data")
-	}
-
-	return nil
-}
-
-func (p *ConnectTokenPrivate) readServerData() error {
-	var err error
-	var servers uint32
-	var ipBytes []byte
-
-	servers, err = p.TokenData.GetUint32()
+	privateData, err := token.PrivateData.Write()
 	if err != nil {
-		return err
+		return nil, err
 	}
+	buffer.WriteBytes(privateData)
 
-	if servers <= 0 {
-		return errors.New("empty servers")
+	if err := writeServerData(buffer, token.PrivateData.ServerAddrs, token.PrivateData.ClientKey, token.PrivateData.ServerKey, token.PrivateData.UserData); err != nil {
+		return nil, err
 	}
-
-	if servers > MAX_SERVERS_PER_CONNECT {
-		log.Printf("got %d expected %d\n", servers, MAX_SERVERS_PER_CONNECT)
-		return errors.New("too many servers")
-	}
-
-	p.ServerAddrs = make([]net.UDPAddr, servers)
-
-	for i := 0; i < int(servers); i+=1 {
-		serverType, err := p.TokenData.GetUint8()
-		if err != nil {
-			return err
-		}
-
-		if serverType == ADDRESS_IPV4 {
-			ipBytes, err = p.TokenData.GetBytes(4)
-		} else if serverType == ADDRESS_IPV6 {
-			ipBytes, err = p.TokenData.GetBytes(16)
-		} else {
-			return errors.New("unknown ip address")
-		}
-
-		if err != nil {
-			return err
-		}
-
-		ip := net.IP(ipBytes)
-		port, err := p.TokenData.GetUint16()
-		if err != nil {
-			return errors.New("invalid port")
-		}
-		p.ServerAddrs[i] = net.UDPAddr{IP: ip, Port: int(port)}
-	}
-	return nil
+	return buffer.Buf, nil
 }
 
 // Generates the token with the supplied configuration values
@@ -167,45 +97,7 @@ func (token *ConnectToken) Generate(config *Config, clientId, currentTimestamp, 
 	return nil
 }
 
-// Writes the token data to a byte slice and returns to caller
-func (token *ConnectToken) Write() ([]byte, error) {
-	data := NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES)
-	data.WriteUint64(token.PrivateData.ClientId)
-	data.WriteUint32(uint32(len(token.PrivateData.ServerAddrs)))
 
-	for _, addr := range token.ServerAddresses() {
-		host, port, err := net.SplitHostPort(addr.String())
-		if err != nil {
-			return nil, errors.New("invalid port for host: " + addr.String())
-		}
-
-		parsed := net.ParseIP(host)
-		if parsed == nil {
-			return nil, errors.New("invalid ip address")
-		}
-
-		if len(parsed) == 4 {
-			data.WriteUint8(uint8(ADDRESS_IPV4))
-
-		} else {
-			data.WriteUint8(uint8(ADDRESS_IPV6))
-		}
-
-		for i := 0; i < len(parsed); i +=1 {
-			data.WriteUint8(parsed[i])
-		}
-
-		p, err := strconv.ParseUint(port, 10, 16)
-		if err != nil {
-			return nil, err
-		}
-		data.WriteUint16(uint16(p))
-	}
-	data.WriteBytesN(token.PrivateData.ClientKey, KEY_BYTES)
-	data.WriteBytesN(token.PrivateData.ServerKey, KEY_BYTES)
-	data.WriteBytesN(token.PrivateData.UserData, USER_DATA_BYTES)
-	return data.Buf, nil
-}
 
 // Takes in a slice of bytes and generates a new ConnectToken after decryption.
 func ReadConnectToken(tokenBuffer []byte, protocolId, expireTimestamp, sequence uint64, privateKey []byte) (*ConnectToken, error) {
@@ -255,4 +147,41 @@ func buildCryptData(protocolId, expireTimestamp, sequence uint64) ([]byte, []byt
 	nonce.WriteUint64(sequence)
 
 	return additionalData.Buf, nonce.Buf
+}
+
+func writeServerData(buffer *Buffer, serverAddrs []net.UDPAddr, clientKey, serverKey, userData []byte) error {
+	buffer.WriteUint32(uint32(len(serverAddrs)))
+
+	for _, addr := range serverAddrs {
+		host, port, err := net.SplitHostPort(addr.String())
+		if err != nil {
+			return errors.New("invalid port for host: " + addr.String())
+		}
+
+		parsed := net.ParseIP(host)
+		if parsed == nil {
+			return errors.New("invalid ip address")
+		}
+
+		if len(parsed) == 4 {
+			buffer.WriteUint8(uint8(ADDRESS_IPV4))
+
+		} else {
+			buffer.WriteUint8(uint8(ADDRESS_IPV6))
+		}
+
+		for i := 0; i < len(parsed); i +=1 {
+			buffer.WriteUint8(parsed[i])
+		}
+
+		p, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return err
+		}
+		buffer.WriteUint16(uint16(p))
+	}
+	buffer.WriteBytesN(clientKey, KEY_BYTES)
+	buffer.WriteBytesN(serverKey, KEY_BYTES)
+	buffer.WriteBytesN(userData, USER_DATA_BYTES)
+	return nil
 }

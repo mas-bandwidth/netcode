@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strconv"
 	"log"
-	"crypto/sha1"
 )
 
 const MAX_CLIENTS = 60
@@ -142,12 +141,12 @@ func WritePacket(packet Packet, buffer *Buffer, sequence uint64, writePacketKey 
 		buffer.WriteUint64(p.ConnectTokenExpireTimestamp)
 		buffer.WriteUint64(p.ConnectTokenSequence)
 		buffer.WriteBytes(p.ConnectTokenData) // write the encrypted connection token private data
-			if buffer.Pos != 1 + 13 + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES {
+		if buffer.Pos != 1 + 13 + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES {
 			return -1, errors.New("invalid buffer size written")
 		}
 		return buffer.Pos, nil
 	}
-	panic("WritePacket should not get here")
+
 	// *** encrypted packets ***
 	prefixByte, err := writePacketPrefix(packet, buffer, sequence)
 	if err != nil {
@@ -161,20 +160,24 @@ func WritePacket(packet Packet, buffer *Buffer, sequence uint64, writePacketKey 
 	encryptedFinish := buffer.Pos
 
 	additionalData, nonce := packetCryptData(prefixByte, protocolId, sequence)
-
+	log.Printf("data to encrypt size: %d = %d - %d\n", encryptedFinish-encryptedStart, encryptedFinish, encryptedStart)
 	// slice up the buffer for the bits we will encrypt
 	encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
 	if err := EncryptAead(&encryptedBuffer, additionalData, nonce, writePacketKey); err != nil {
 		return -1, err
 	}
 
-	return buffer.Pos + MAC_BYTES, nil
+	// hack to reset Pos to write in the encrypted buffer to avoid allocations/append() calls
+	buffer.Pos = encryptedStart
+	buffer.WriteBytes(encryptedBuffer)
+	log.Printf("buffer written so far plus mac: %d\n", buffer.Pos)
+	return buffer.Pos, nil // in c, we do Pos + MAC_BYTES but the WriteBytes will update Pos to include it
 }
 
 // write the prefix byte (this is a combination of the packet type and number of sequence bytes)
 func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error) {
 	sequenceBytes := sequenceNumberBytesRequired(sequence)
-	if (sequenceBytes < 1 || sequenceBytes > 8) {
+	if sequenceBytes < 1 || sequenceBytes > 8 {
 		return 0, errors.New("invalid sequence bytes, must be between [1-8]")
 	}
 
@@ -183,7 +186,8 @@ func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error)
 
 	sequenceTemp := sequence
 
-	for i := 0; i < sequenceBytes; i+=1 {
+	var i uint8
+	for ; i < sequenceBytes; i+=1 {
 		buffer.WriteUint8(uint8(sequenceTemp & 0xFF))
 		sequenceTemp >>= 8
 	}
@@ -221,7 +225,9 @@ func writePacketData(packet Packet, buffer *Buffer) error {
 		if !ok {
 			return errors.New("invalid packet type")
 		}
+		log.Printf("writing %d payload bytes pre: %d\n", p.PayloadBytes, buffer.Pos)
 		buffer.WriteBytesN([]byte(p.PayloadData), int(p.PayloadBytes))
+		log.Printf("writing %d payload bytes post: %d\n", p.PayloadBytes, buffer.Pos)
 	case ConnectionDisconnect:
 		// ...
 	}
@@ -241,7 +247,6 @@ func packetCryptData(prefixByte uint8, protocolId, sequence uint64) ([]byte, []b
 }
 
 func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey []byte, protocolId uint64, currentTimestamp uint64, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) (Packet, error) {
-
 	if packetLen < 1 {
 		return nil, errors.New("invalid buffer length")
 	}
@@ -256,9 +261,8 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	if PacketType(prefixByte) == ConnectionRequest {
 		return readRequestPacket(packetBuffer, packetLen, protocolId, currentTimestamp, allowedPackets, privateKey)
 	}
-	panic("ReadPacket should not get here")
-	// *** encrypted packets ***
 
+	// *** encrypted packets ***
 	if readPacketKey == nil {
 		return nil, errors.New("empty packet key")
 	}
@@ -305,13 +309,7 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	}
 
 	// decrypt the per-packet type data
-	additionalData := NewBuffer(VERSION_INFO_BYTES+8+1)
-	additionalData.WriteBytes([]byte(VERSION_INFO))
-	additionalData.WriteUint64(protocolId)
-	additionalData.WriteUint8(prefixByte)
-
-	nonce := NewBuffer(SizeUint64)
-	nonce.WriteUint64(sequence)
+	additionalData, nonce := packetCryptData(prefixByte, protocolId, sequence)
 
 	encryptedSize := packetLen - packetBuffer.Pos
 	if encryptedSize < MAC_BYTES {
@@ -322,8 +320,8 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	if err != nil {
 		return nil, errors.New("ignored encrypted packet. encrypted payload is too small")
 	}
-	log.Printf("encryptedBuff: %#v\n", encryptedBuff)
-	decryptedBuff, err := DecryptAead(encryptedBuff, additionalData.Bytes(), nonce.Bytes(), readPacketKey)
+
+	decryptedBuff, err := DecryptAead(encryptedBuff, additionalData, nonce, readPacketKey)
 	if err != nil {
 		return nil, errors.New("ignored encrypted packet. failed to decrypt: " + err.Error())
 	}
@@ -334,11 +332,12 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	return processPacket(PacketType(packetType), decryptedBuff, decryptedSize)
 }
 
+// Processes the packet after decryption has occurred.
 func processPacket(packetType PacketType, decrypted []byte, decryptedSize int) (Packet, error) {
 	var err error
 	decryptedBuff := NewBufferFromBytes(decrypted)
 
-	switch (packetType) {
+	switch packetType {
 	case ConnectionDenied:
 		if decryptedSize != 0 {
 			return nil, errors.New("ignored connection denied packet. decrypted packet data is wrong size")
@@ -424,7 +423,6 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 	}
 
 	if packetLen != 1 + VERSION_INFO_BYTES + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES {
-		log.Printf("packetLen: %d, expected: %d\n", packetLen, 1 + VERSION_INFO_BYTES + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES)
 		return nil, errors.New("ignored connection request packet. bad packet length")
 	}
 
@@ -455,7 +453,6 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("expireTime %d sequence %d\n", packet.ConnectTokenExpireTimestamp, packet.ConnectTokenSequence)
 
 	if packetBuffer.Pos != 1 + VERSION_INFO_BYTES + 8 + 8 + 8 {
 		return nil, errors.New(" invalid length of packet buffer read")
@@ -466,7 +463,6 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("len of tokenBuffer: %d hash: %x\n", len(tokenBuffer), sha1.Sum(tokenBuffer))
 
 	packet.Token, err = ReadConnectToken(tokenBuffer, packet.ProtocolId, packet.ConnectTokenExpireTimestamp, packet.ConnectTokenSequence, privateKey)
 	if err != nil {
@@ -477,12 +473,12 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 }
 
 
-func sequenceNumberBytesRequired(sequence uint64) int {
+func sequenceNumberBytesRequired(sequence uint64) uint8 {
 	var mask uint64
 	mask = 0xFF00000000000000
-	i := 0
+	var i uint8
 	for ; i < 7; i+=1 {
-		if (sequence & mask == 0) {
+		if (sequence & mask != 0) {
 			break
 		}
 		mask >>= 8

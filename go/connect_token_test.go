@@ -5,6 +5,7 @@ import (
 	"net"
 	"bytes"
 	"time"
+	"go/token"
 )
 
 const (
@@ -58,6 +59,47 @@ func TestNewConnectToken(t *testing.T) {
 	if bytes.Compare(private, private2) != 0 {
 		t.Fatalf("encrypted private bits didn't match %v and %v\n", private, private2)
 	}
+}
+
+func TestConnectTokenPublic(t *testing.T) {
+	token1 := NewConnectToken()
+	server := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000}
+	servers := make([]net.UDPAddr, 1)
+	servers[0] = server
+
+	key, err := GenerateKey()
+	if err != nil {
+		t.Fatalf("error generating key %s\n", key)
+	}
+
+	config := NewConfig(servers, TEST_CONNECT_TOKEN_EXPIRY, TEST_PROTOCOL_ID, key)
+	currentTimestamp := uint64(time.Now().Unix())
+
+	err = token1.Generate(config, TEST_CLIENT_ID, currentTimestamp, TEST_SEQUENCE_START)
+	if err != nil {
+		t.Fatalf("error generating and encrypting token")
+	}
+
+	private, err := token1.Write()
+	if err != nil {
+		t.Fatalf("error writing token private data")
+	}
+
+	// write it to a buffer
+	EncryptConnectTokenPrivate(&private, TEST_PROTOCOL_ID, uint64(currentTimestamp + config.TokenExpiry), TEST_SEQUENCE_START, config.PrivateKey)
+
+	// set misc public token properties
+	token1.TimeoutSeconds = int(TIMEOUT_SECONDS)
+
+	tokenData, err := token1.Write()
+	if err != nil {
+		t.Fatalf("error writing token: %s\n", err)
+	}
+
+
+
+
+
 }
 
 func compareTokens(token1, token2 *ConnectToken, t *testing.T) {
