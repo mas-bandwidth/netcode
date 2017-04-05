@@ -3,6 +3,8 @@ package netcode
 import (
 	"crypto/rand"
 	"github.com/codahale/chacha20poly1305"
+	//"log"
+	"crypto/sha1"
 	"log"
 )
 
@@ -24,9 +26,8 @@ func EncryptAead(message *[]byte, additional, nonce, key []byte) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("before encrypt len: %d\n", len(*message))
 	*message = aead.Seal(nil, nonce, *message, additional)
-
+	log.Printf("AFTER ENCRYPT: %x %x %x %x\n", sha1.Sum(*message), sha1.Sum(additional), sha1.Sum(nonce), sha1.Sum(key))
 	return nil
 }
 
@@ -37,5 +38,6 @@ func DecryptAead(message []byte, additional, nonce, key []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("BEFORE DECRYPT: %x %x %x %x\n", sha1.Sum(message), sha1.Sum(additional), sha1.Sum(nonce), sha1.Sum(key))
 	return aead.Open(nil, nonce, message, additional)
 }

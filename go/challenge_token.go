@@ -12,38 +12,35 @@ func NewChallengeToken(clientId uint64) *ChallengeToken {
 	token := &ChallengeToken{}
 	token.ClientId = clientId
 	token.UserData = NewBuffer(USER_DATA_BYTES)
-	token.TokenData = NewBuffer(CHALLENGE_TOKEN_BYTES)
 	return token
 }
 
 // Encrypts the TokenData buffer with the sequence nonce and provided key
-func (t *ChallengeToken) Encrypt(sequence uint64, key []byte) error {
+func EncryptChallengeToken(tokenBuffer *[]byte, sequence uint64, key []byte) error {
 	nonce := NewBuffer(SizeUint64)
 	nonce.WriteUint64(sequence)
-
-	return EncryptAead(&t.TokenData.Buf, nil, nonce.Bytes(), key)
+	return EncryptAead(tokenBuffer, nil, nonce.Bytes(), key)
 }
 
 // Decrypts the TokenData buffer with the sequence nonce and provided key, updating the
 // internal TokenData buffer
-func (t *ChallengeToken) Decrypt(sequence uint64, key []byte) error {
-	var err error
+func DecryptChallengeToken(tokenBuffer []byte, sequence uint64, key []byte) ([]byte, error) {
 	nonce := NewBuffer(SizeUint64)
 	nonce.WriteUint64(sequence)
-	t.TokenData.Buf, err = DecryptAead(t.TokenData.Buf, nil, nonce.Bytes(), key)
-	return err
+	return DecryptAead(tokenBuffer, nil, nonce.Bytes(), key)
 }
 
 // Serializes the client id and userData, also sets the UserData buffer.
-func (t *ChallengeToken) Write(userData []byte) {
+func (t *ChallengeToken) Write(userData []byte) []byte {
+	tokenData := NewBuffer(CHALLENGE_TOKEN_BYTES)
 	t.UserData.WriteBytes(userData)
-
-	t.TokenData.WriteUint64(t.ClientId)
-	t.TokenData.WriteBytes(userData)
+	tokenData.WriteUint64(t.ClientId)
+	tokenData.WriteBytes(userData)
+	return tokenData.Buf
 }
 
 // Generates a new ChallengeToken from the provided buffer byte slice. Only sets the ClientId
-// and UserData buffer, does not update the TokenData buffer.
+// and UserData buffer.
 func ReadChallengeToken(buffer []byte) (*ChallengeToken, error) {
 	var err error
 	var clientId uint64

@@ -8,12 +8,13 @@ import (
 func TestNewChallengeToken(t *testing.T) {
 	var err error
 	var userData []byte
+	var decryptedBuffer []byte
 
 	token := NewChallengeToken(TEST_CLIENT_ID)
 	if userData, err = RandomBytes(USER_DATA_BYTES); err != nil {
 		t.Fatalf("error generating random data\n")
 	}
-	token.Write(userData)
+	tokenBuffer := token.Write(userData)
 
 	var sequence uint64
 	sequence = 1000
@@ -22,15 +23,15 @@ func TestNewChallengeToken(t *testing.T) {
 		t.Fatalf("error generating key\n")
 	}
 
-	if err := token.Encrypt(sequence, key); err != nil {
+	if err := EncryptChallengeToken(&tokenBuffer, sequence, key); err != nil {
 		t.Fatalf("error encrypting challenge token: %s\n", err)
 	}
 
-	if err := token.Decrypt(sequence, key); err != nil {
+	if decryptedBuffer, err = DecryptChallengeToken(tokenBuffer, sequence, key); err != nil {
 		t.Fatalf("error decrypting challenge token: %s\n", err)
 	}
 
-	newToken, err := ReadChallengeToken(token.TokenData.Buf)
+	newToken, err := ReadChallengeToken(decryptedBuffer)
 	if err != nil {
 		t.Fatalf("error reading token data %s\n", err)
 	}
@@ -42,7 +43,4 @@ func TestNewChallengeToken(t *testing.T) {
 	if bytes.Compare(newToken.UserData.Buf, token.UserData.Buf) != 0 {
 		t.Fatalf("user data did not match expected\n %#v\ngot\n%#v!", token.UserData.Buf, newToken.UserData.Buf)
 	}
-
-
-
 }

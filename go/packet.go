@@ -4,9 +4,8 @@ import (
 	"errors"
 	"strconv"
 	"log"
+	"crypto/sha1"
 )
-
-type PacketType uint8
 
 const MAX_CLIENTS = 60
 const CONNECT_TOKEN_PRIVATE_BYTES = 1024
@@ -26,10 +25,9 @@ const NONCE_BYTES = 8
 const MAX_SERVERS_PER_CONNECT = 32
 
 const VERSION_INFO = "NETCODE 1.00\x00"
-const PACKET_SEND_RATE = 10.0
-const TIMEOUT_SECONDS = 5.0
-const NUM_DISCONNECT_PACKETS = 10
 
+
+type PacketType uint8
 
 const (
 	ConnectionRequest PacketType = iota
@@ -39,8 +37,10 @@ const (
 	ConnectionKeepAlive
 	ConnectionPayload
 	ConnectionDisconnect
-	ConnectionNumPackets
+
 )
+// not a packet type, but value is last packetType+1
+const ConnectionNumPackets = ConnectionDisconnect+1
 
 var packetTypeMap = map[PacketType]string {
 	ConnectionRequest: "CONNECTION_REQUEST",
@@ -50,7 +50,6 @@ var packetTypeMap = map[PacketType]string {
 	ConnectionKeepAlive: "CONNECTION_KEEPALIVE",
 	ConnectionPayload: "CONNECTION_PAYLOAD",
 	ConnectionDisconnect: "CONNECTION_DISCONNECT",
-	ConnectionNumPackets: "CONNECTION_NUMPACKETS",
 }
 
 type Packet interface {
@@ -58,13 +57,12 @@ type Packet interface {
 }
 
 type RequestPacket struct {
-	Type PacketType
 	VersionInfo []byte
 	ProtocolId uint64
 	ConnectTokenExpireTimestamp uint64
 	ConnectTokenSequence uint64
 	Token *ConnectToken
-	ConnectTokenData []byte
+	ConnectTokenData []byte // the encrypted Token after Write -> Encrypt
 }
 
 func (p *RequestPacket) GetType() PacketType {
@@ -79,7 +77,6 @@ func (p *DeniedPacket) GetType() PacketType {
 }
 
 type ChallengePacket struct {
-	Type PacketType
 	ChallengeTokenSequence uint64
 	ChallengeTokenData []byte
 }
@@ -89,7 +86,6 @@ func (p *ChallengePacket) GetType() PacketType {
 }
 
 type ResponsePacket struct {
-	Type PacketType
 	ChallengeTokenSequence uint64
 	ChallengeTokenData []byte
 }
@@ -99,7 +95,6 @@ func (p *ResponsePacket) GetType() PacketType {
 }
 
 type KeepAlivePacket struct {
-	Type PacketType
 	ClientIndex uint32
 	MaxClients uint32
 }
@@ -110,10 +105,8 @@ func (p *KeepAlivePacket) GetType() PacketType {
 
 
 type PayloadPacket struct {
-	Type PacketType
 	PayloadBytes uint32
 	PayloadData []byte
-	// ...
 }
 
 func (p *PayloadPacket) GetType() PacketType {
@@ -121,30 +114,22 @@ func (p *PayloadPacket) GetType() PacketType {
 }
 
 func NewPayloadPacket(payloadBytes uint32) *PayloadPacket {
-	packet := &PayloadPacket{Type: ConnectionPayload}
+	packet := &PayloadPacket{}
 	packet.PayloadBytes = payloadBytes
 	packet.PayloadData = make([]byte, payloadBytes)
 	return packet
 }
 
 type DisconnectPacket struct {
-	Type PacketType
 }
 
 func (p *DisconnectPacket) GetType() PacketType {
 	return ConnectionDisconnect
 }
 
-type Context struct {
-	WritePacketKey []byte
-	ReadPacketKey []byte
-}
-
 func WritePacket(packet Packet, buffer *Buffer, sequence uint64, writePacketKey []byte, protocolId uint64) (int, error) {
-	var p Packet
-
 	packetType := packet.GetType()
-
+	// TODO: this should be moved to writePacketData provided packet prefix can be safely ignored/added
 	if packetType == ConnectionRequest {
 		// connection request packet: first byte is zero
 		p, ok := packet.(*RequestPacket)
@@ -156,19 +141,41 @@ func WritePacket(packet Packet, buffer *Buffer, sequence uint64, writePacketKey 
 		buffer.WriteUint64(p.ProtocolId)
 		buffer.WriteUint64(p.ConnectTokenExpireTimestamp)
 		buffer.WriteUint64(p.ConnectTokenSequence)
-		buffer.WriteBytesN(p.ConnectTokenData, CONNECT_TOKEN_PRIVATE_BYTES)
-		if buffer.Pos != 1 + 13 + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES {
-			return -1, errors.New("invalid buffer size")
+		buffer.WriteBytes(p.ConnectTokenData) // write the encrypted connection token private data
+			if buffer.Pos != 1 + 13 + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES {
+			return -1, errors.New("invalid buffer size written")
 		}
 		return buffer.Pos, nil
 	}
-
+	panic("WritePacket should not get here")
 	// *** encrypted packets ***
+	prefixByte, err := writePacketPrefix(packet, buffer, sequence)
+	if err != nil {
+		return -1, err
+	}
 
-	// write the prefix byte (this is a combination of the packet type and number of sequence bytes)
+	encryptedStart := buffer.Pos
+	if err := writePacketData(packet, buffer); err != nil {
+		return -1, err
+	}
+	encryptedFinish := buffer.Pos
+
+	additionalData, nonce := packetCryptData(prefixByte, protocolId, sequence)
+
+	// slice up the buffer for the bits we will encrypt
+	encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
+	if err := EncryptAead(&encryptedBuffer, additionalData, nonce, writePacketKey); err != nil {
+		return -1, err
+	}
+
+	return buffer.Pos + MAC_BYTES, nil
+}
+
+// write the prefix byte (this is a combination of the packet type and number of sequence bytes)
+func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error) {
 	sequenceBytes := sequenceNumberBytesRequired(sequence)
 	if (sequenceBytes < 1 || sequenceBytes > 8) {
-		return -1, errors.New("invalid sequence bytes, must be between [1-8]")
+		return 0, errors.New("invalid sequence bytes, must be between [1-8]")
 	}
 
 	prefixByte := uint8(p.GetType()) | uint8(sequenceBytes << 4)
@@ -180,58 +187,57 @@ func WritePacket(packet Packet, buffer *Buffer, sequence uint64, writePacketKey 
 		buffer.WriteUint8(uint8(sequenceTemp & 0xFF))
 		sequenceTemp >>= 8
 	}
+	return prefixByte, nil
+}
 
-	encryptedStart := buffer.Pos
-	// write packet data according to type. this data will be encrypted.
-	switch p.GetType() {
+// write packet data according to type. this data will be encrypted.
+func writePacketData(packet Packet, buffer *Buffer) error {
+	switch packet.GetType() {
 	case ConnectionDenied:
 		// ...
 	case ConnectionChallenge:
 		p, ok := packet.(*ChallengePacket)
 		if !ok {
-			return -1, nil
+			return errors.New("invalid packet type")
 		}
 		buffer.WriteUint64(p.ChallengeTokenSequence)
 		buffer.WriteBytesN(p.ChallengeTokenData, CHALLENGE_TOKEN_BYTES)
 	case ConnectionResponse:
 		p, ok := packet.(*ResponsePacket)
 		if !ok {
-			return -1, nil
+			return errors.New("invalid packet type")
 		}
 		buffer.WriteUint64(p.ChallengeTokenSequence)
 		buffer.WriteBytesN(p.ChallengeTokenData, CHALLENGE_TOKEN_BYTES)
 	case ConnectionKeepAlive:
 		p, ok := packet.(*KeepAlivePacket)
 		if !ok {
-			return -1, nil
+			return errors.New("invalid packet type")
 		}
 		buffer.WriteUint32(uint32(p.ClientIndex))
 		buffer.WriteUint32(uint32(p.MaxClients))
 	case ConnectionPayload:
 		p, ok := packet.(*PayloadPacket)
 		if !ok {
-			return -1, nil
+			return errors.New("invalid packet type")
 		}
 		buffer.WriteBytesN([]byte(p.PayloadData), int(p.PayloadBytes))
 	case ConnectionDisconnect:
 		// ...
 	}
-	encryptedFinish := buffer.Pos
+	return nil
+}
 
-	// encrypt the per-packet packet written with the prefix byte, protocol id and version as the associated data. this must match to decrypt.
+// used for encrypting the per-packet packet written with the prefix byte, protocol id and version as the associated data. this must match to decrypt.
+func packetCryptData(prefixByte uint8, protocolId, sequence uint64) ([]byte, []byte) {
 	additionalData := NewBuffer(VERSION_INFO_BYTES+8+1)
 	additionalData.WriteBytesN([]byte(VERSION_INFO), VERSION_INFO_BYTES)
 	additionalData.WriteUint64(protocolId)
 	additionalData.WriteUint8(prefixByte)
 
-	nonce := NewBuffer(8)
+	nonce := NewBuffer(SizeUint64)
 	nonce.WriteUint64(sequence)
-
-	err := EncryptAead(&buffer.Buf[encryptedStart:encryptedFinish], additionalData.Bytes(), nonce.Bytes(), writePacketKey)
-	if err != nil {
-		return -1, err
-	}
-	return buffer.Pos + MAC_BYTES, nil
+	return additionalData.Buf, nonce.Buf
 }
 
 func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey []byte, protocolId uint64, currentTimestamp uint64, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) (Packet, error) {
@@ -250,6 +256,7 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	if PacketType(prefixByte) == ConnectionRequest {
 		return readRequestPacket(packetBuffer, packetLen, protocolId, currentTimestamp, allowedPackets, privateKey)
 	}
+	panic("ReadPacket should not get here")
 	// *** encrypted packets ***
 
 	if readPacketKey == nil {
@@ -315,7 +322,7 @@ func ReadPacket(packetData []byte, packetLen int, sequence uint64, readPacketKey
 	if err != nil {
 		return nil, errors.New("ignored encrypted packet. encrypted payload is too small")
 	}
-
+	log.Printf("encryptedBuff: %#v\n", encryptedBuff)
 	decryptedBuff, err := DecryptAead(encryptedBuff, additionalData.Bytes(), nonce.Bytes(), readPacketKey)
 	if err != nil {
 		return nil, errors.New("ignored encrypted packet. failed to decrypt: " + err.Error())
@@ -416,7 +423,7 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 		return nil, errors.New("ignored connection request packet. packet type is not allowed")
 	}
 
-	if packetLen != 1 + VERSION_INFO_BYTES + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES {
+	if packetLen != 1 + VERSION_INFO_BYTES + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES {
 		log.Printf("packetLen: %d, expected: %d\n", packetLen, 1 + VERSION_INFO_BYTES + 8 + 8 + 8 + CONNECT_TOKEN_PRIVATE_BYTES)
 		return nil, errors.New("ignored connection request packet. bad packet length")
 	}
@@ -448,20 +455,24 @@ func readRequestPacket(packetBuffer *Buffer, packetLen int, protocolId, currentT
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("expireTime %d sequence %d\n", packet.ConnectTokenExpireTimestamp, packet.ConnectTokenSequence)
+
+	if packetBuffer.Pos != 1 + VERSION_INFO_BYTES + 8 + 8 + 8 {
+		return nil, errors.New(" invalid length of packet buffer read")
+	}
 
 	var tokenBuffer []byte
-	tokenBuffer, err = packetBuffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES)
+	tokenBuffer, err = packetBuffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES+MAC_BYTES)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("len tokenBuffer: %d, pos: %d\n", len(tokenBuffer), packetBuffer.Pos)
-	log.Printf("tokenBuffer: %x %#v\n", packet.ConnectTokenExpireTimestamp, tokenBuffer)
+	log.Printf("len of tokenBuffer: %d hash: %x\n", len(tokenBuffer), sha1.Sum(tokenBuffer))
+
 	packet.Token, err = ReadConnectToken(tokenBuffer, packet.ProtocolId, packet.ConnectTokenExpireTimestamp, packet.ConnectTokenSequence, privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	packet.ConnectTokenData = packet.Token.PrivateData.TokenData.Buf
 	return packet, nil
 }
 
