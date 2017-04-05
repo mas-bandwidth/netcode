@@ -133,9 +133,11 @@ pub struct Server<I> {
     io_event_idx: usize
 }
 
-impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
+impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
     /// Constructs a new Server bound to `local_addr` with `max_clients` and supplied `private_key` for authentication.
-    pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES]) -> Result<Server<I>, CreateError> where A: ToSocketAddrs {
+    pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES]) 
+            -> Result<Server<I>, CreateError>
+            where A: ToSocketAddrs {
         let bind_addr = local_addr.to_socket_addrs().unwrap().next().unwrap();
         match I::bind(&bind_addr) {
             Ok(s) => {
@@ -143,7 +145,9 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                 key_copy.copy_from_slice(private_key);
 
                 let mut clients = Vec::with_capacity(max_clients);
-                clients.resize(max_clients, None);
+                for _ in 0..max_clients {
+                    clients.push(None);
+                }
 
                 let poll = mio::Poll::new()?;
                 poll.register(&s, SERVER_TOKEN, mio::Ready::readable(), mio::PollOpt::edge())?;
@@ -172,6 +176,11 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                 }
             }
         }
+    }
+
+    /// Gets the local port that this server is bound to.
+    pub fn get_local_addr(&self) -> Result<SocketAddr, io::Error> {
+        self.listen_socket.local_addr()
     }
 
     /// Updates time elapsed since last server iteration.
@@ -237,6 +246,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
             },
             mio::Token(n) => {
                 let client_idx = n-1;
+                let protocol_id = self.protocol_id;
 
                 if let Some(&mut (ref mut client, ref mut socket)) = self.clients[client_idx].as_mut() {
                     let time = self.time;
@@ -244,7 +254,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                     socket.recv(&mut scratch)
                         .map_err(|e| e.into())
                         .and_then(|read| {
-                            Self::handle_packet(time, (client, socket), &scratch[..read.unwrap_or(0)], out_packet)
+                            Self::handle_packet(time, protocol_id, (client, socket), &scratch[..read.unwrap_or(0)], out_packet)
                         })
                 } else {
                     Ok(None)
@@ -293,6 +303,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                                 trace!("Accepted connection");
                             },
                             None => {
+                                self.send_denied_packet(&addr, &private_data.server_to_client_key)?;
                                 trace!("Tried to accept new client but max clients connected: {}", self.clients.len());
                                 return Ok(Some(ServerEvent::ClientSlotFull))
                             }
@@ -341,6 +352,16 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
         }
     }
 
+    fn send_denied_packet(&mut self, addr: &SocketAddr, key: &[u8; NETCODE_KEY_BYTES]) -> Result<(), SendError> {
+        self.send_sequence += 1;
+
+        //id + sequence
+        let mut packet = [0; 1 + 8];
+        packet::encode(&mut packet[..], self.protocol_id, &packet::Packet::ConnectionDenied, Some((self.send_sequence, key)), None)?;
+
+        self.listen_socket.send_to(&packet[..], addr).map_err(|e| e.into()).map(|_| ())
+    }
+
     fn validate_client_token(
             protocol_id: u64,
             private_key: &[u8; NETCODE_KEY_BYTES],
@@ -363,7 +384,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                     }
 
                     if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
-                        //Validate hosts
+                        //todo: Validate hosts
 
                         Some(v)
                     } else {
@@ -395,7 +416,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
                 if result {
                     (None, (false, None))
                 } else {    //Timed out, remove client and trigger event
-                    (Some(ConnectionState::TimedOut), (true, Some(Ok(ServerEvent::ClientDisconnect(client_id)))))
+                    (Some(ConnectionState::TimedOut), (true, None))
                 }
             },
             &mut ConnectionState::Idle(ref mut retry_state) => {
@@ -440,6 +461,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
     }
 
     fn handle_packet(time: f64,
+            protocol_id: u64,
             (client, socket): (&mut Connection, &mut I),
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE])
@@ -448,15 +470,47 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
             return Ok(None)
         }
 
-        //Update client state with any recieved packet
-        client.state = match client.state.clone() {
-            ConnectionState::Connected => ConnectionState::Idle(RetryState::new(time)),
-            ConnectionState::Idle(_) => ConnectionState::Idle(RetryState::new(time)),
-            ConnectionState::PendingResponse(_) => ConnectionState::Connected,
-            s => s
+        let decoded = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
+            Ok(p) => p,
+            Err(e) => {
+                info!("Failed to decode packet: {:?}", e);
+                client.state = ConnectionState::Disconnected;
+
+                return Ok(Some(ServerEvent::ClientDisconnect(client.client_id)))
+            }
         };
 
-        Ok(Some(ServerEvent::Packet(client.client_id, 0)))
+        //Update client state with any recieved packet
+        let (event, new_state) = match &client.state {
+            &ConnectionState::Connected |
+            &ConnectionState::Idle(_) => {
+                match decoded {
+                    packet::Packet::Payload(len) => (Some(ServerEvent::Packet(client.client_id, len)), ConnectionState::Idle(RetryState::new(time))),
+                    packet::Packet::KeepAlive(_) => (None, ConnectionState::Idle(RetryState::new(time))),
+                    packet::Packet::Disconnect => (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected),
+                    other => {
+                        info!("Unexpected packet type when waiting for repsonse {}", other.get_type_id());
+                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                    }
+                }
+             },
+            &ConnectionState::PendingResponse(_) => {
+                match decoded {
+                    packet::Packet::Response(resp) => {
+                        (None, ConnectionState::Idle(RetryState::new(time)))
+                    },
+                    p => {
+                        info!("Unexpected packet type when waiting for repsonse {}", p.get_type_id());
+                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                    }
+                }
+            },
+            s => (None, s.clone())
+        };
+
+        client.state = new_state;
+
+        Ok(event)
     }
 
     fn find_client_by_id(&self, id: ClientId) -> Option<usize> {
@@ -466,4 +520,52 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented + Clone {
     fn find_client_by_addr(&self, addr: &SocketAddr) -> Option<usize> {
         self.clients.iter().position(|v| v.as_ref().map_or(false, |&(ref c,_)| c.addr == *addr))
     }
+}
+
+#[test]
+fn test_socket_impl() {
+    use std::net::UdpSocket;
+
+    let protocol_id = 0xFFCC;
+
+    let mut server = UdpServer::new("127.0.0.1:0", 256, protocol_id, &crypto::generate_key()).unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    socket.connect(server.get_local_addr().unwrap()).unwrap();
+
+    use token;
+    use packet::*;
+    use std::net::SocketAddr;
+    use std::str::FromStr;
+
+    let sequence = 0xCCDD;
+    let pkey = crypto::generate_key();
+
+    let token = token::ConnectToken::generate(
+                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+                        &pkey,
+                        30, //Expire
+                        sequence,
+                        protocol_id,
+                        0xFFEE, //Client Id
+                        None).unwrap();
+
+    let packet = Packet::ConnectionRequest(ConnectionRequestPacket {
+        version: NETCODE_VERSION_STRING.clone(),
+        protocol_id: protocol_id,
+        token_expire: token.expire_utc,
+        sequence: sequence,
+        private_data: token.private_data
+    });
+
+    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+    let len = packet::encode(&mut data, protocol_id, &packet, None, None).unwrap();
+    socket.send(&data[..len]).unwrap();
+
+    server.update(0.0, time::Duration::from_secs(0)).unwrap();
+    assert!(server.next_event(&mut data).is_ok());
+
+    socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
+    let read = socket.recv_from(&mut data).unwrap();
+
+    assert!(read.0 != 0);
 }
