@@ -3,11 +3,10 @@ package netcode
 import (
 	"crypto/rand"
 	"math/big"
-	"time"
 )
 
 type Client struct {
-	Id uint64
+	Id     uint64
 	config *Config
 }
 
@@ -23,10 +22,9 @@ func (c *Client) Init(sequence uint64) error {
 	}
 
 	c.Id = id.Uint64()
-	currentTimestamp := uint64(time.Now().Unix())
 
 	token := NewConnectToken()
-	if err := token.Generate(c.config, c.Id, currentTimestamp, sequence); err != nil {
+	if err := token.Generate(c.config, sequence); err != nil {
 		return err
 	}
 
@@ -36,4 +34,3 @@ func (c *Client) Init(sequence uint64) error {
 func (c *Client) Connect() error {
 	return nil
 }
-

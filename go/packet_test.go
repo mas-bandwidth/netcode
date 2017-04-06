@@ -1,15 +1,11 @@
 package netcode
 
 import (
-	"testing"
-	"net"
-	"time"
 	"bytes"
+	"net"
+	"testing"
+	"time"
 )
-
-func TestReadPacket(t *testing.T) {
-
-}
 
 func TestSequence(t *testing.T) {
 	seq := sequenceNumberBytesRequired(0)
@@ -65,8 +61,8 @@ func TestConnectionRequestPacket(t *testing.T) {
 		t.Fatalf("error generating connect token key: %s\n", err)
 	}
 	inputPacket, decryptedToken := testBuildRequestPacket(connectTokenKey, t)
-	// write the connection request packet to a buffer
 
+	// write the connection request packet to a buffer
 	buffer := NewBuffer(2048)
 
 	packetKey, err := GenerateKey()
@@ -74,7 +70,7 @@ func TestConnectionRequestPacket(t *testing.T) {
 		t.Fatalf("error generating key")
 	}
 
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -83,48 +79,35 @@ func TestConnectionRequestPacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	// read the connection request packet back in from the buffer (the connect token data is decrypted as part of the read packet validation)
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
+	outputPacket := &RequestPacket{}
+
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), connectTokenKey, allowedPackets, nil)
-	if err != nil {
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, connectTokenKey, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
-
 	}
 
-	if outputPacket.GetType() != ConnectionRequest {
-		t.Fatal("packet output was not a connection request")
-	}
-
-	output, ok := outputPacket.(*RequestPacket)
-	if !ok {
-		t.Fatalf("error casting to connection request packet")
-	}
-
-	if bytes.Compare(inputPacket.VersionInfo, output.VersionInfo) != 0 {
+	if bytes.Compare(inputPacket.VersionInfo, outputPacket.VersionInfo) != 0 {
 		t.Fatalf("version info did not match")
 	}
 
-	if inputPacket.ProtocolId != output.ProtocolId {
+	if inputPacket.ProtocolId != outputPacket.ProtocolId {
 		t.Fatalf("ProtocolId did not match")
 	}
 
-	if inputPacket.ConnectTokenExpireTimestamp != output.ConnectTokenExpireTimestamp {
+	if inputPacket.ConnectTokenExpireTimestamp != outputPacket.ConnectTokenExpireTimestamp {
 		t.Fatalf("ConnectTokenExpireTimestamp did not match")
 	}
 
-	if inputPacket.ConnectTokenSequence != output.ConnectTokenSequence {
+	if inputPacket.ConnectTokenSequence != outputPacket.ConnectTokenSequence {
 		t.Fatalf("ConnectTokenSequence did not match")
 	}
 
-	if bytes.Compare(decryptedToken, output.Token.PrivateData.TokenData.Buf) != 0 {
+	if bytes.Compare(decryptedToken, outputPacket.Token.TokenData.Buf) != 0 {
 		t.Fatalf("TokenData did not match")
 	}
 }
@@ -141,7 +124,7 @@ func TestConnectionDeniedPacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -150,19 +133,17 @@ func TestConnectionDeniedPacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
+	outputPacket := &DeniedPacket{}
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
+
 	if outputPacket.GetType() != ConnectionDenied {
 		t.Fatalf("did not get a denied packet after read")
 	}
@@ -187,7 +168,7 @@ func TestConnectionChallengePacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -196,30 +177,22 @@ func TestConnectionChallengePacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
+	outputPacket := &ChallengePacket{}
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	challenge, ok := outputPacket.(*ChallengePacket)
-	if !ok {
-		t.Fatalf("did not get a challenge packet after read")
+	if inputPacket.ChallengeTokenSequence != outputPacket.ChallengeTokenSequence {
+		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, outputPacket.ChallengeTokenSequence)
 	}
 
-	if inputPacket.ChallengeTokenSequence != challenge.ChallengeTokenSequence {
-		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, challenge.ChallengeTokenSequence)
-	}
-
-	if bytes.Compare(inputPacket.ChallengeTokenData, challenge.ChallengeTokenData) != 0 {
+	if bytes.Compare(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) != 0 {
 		t.Fatalf("challenge token data was not equal\n")
 	}
 }
@@ -227,7 +200,7 @@ func TestConnectionChallengePacket(t *testing.T) {
 func TestConnectionResponsePacket(t *testing.T) {
 	var err error
 
-	// setup a connection challenge packet
+	// setup a connection response packet
 	inputPacket := &ResponsePacket{}
 	inputPacket.ChallengeTokenSequence = 0
 	inputPacket.ChallengeTokenData, err = RandomBytes(CHALLENGE_TOKEN_BYTES)
@@ -243,7 +216,7 @@ func TestConnectionResponsePacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -252,34 +225,25 @@ func TestConnectionResponsePacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
+	outputPacket := &ResponsePacket{}
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	response, ok := outputPacket.(*ResponsePacket)
-	if !ok {
-		t.Fatalf("did not get a response packet after read")
+	if inputPacket.ChallengeTokenSequence != outputPacket.ChallengeTokenSequence {
+		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, outputPacket.ChallengeTokenSequence)
 	}
 
-	if inputPacket.ChallengeTokenSequence != response.ChallengeTokenSequence {
-		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, response.ChallengeTokenSequence)
-	}
-
-	if bytes.Compare(inputPacket.ChallengeTokenData, response.ChallengeTokenData) != 0 {
-		t.Fatalf("challenge token data was not equal\n")
+	if bytes.Compare(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) != 0 {
+		t.Fatalf("response challenge token data was not equal\n")
 	}
 }
-
 
 func TestConnectionKeepAlivePacket(t *testing.T) {
 	var err error
@@ -297,7 +261,7 @@ func TestConnectionKeepAlivePacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -306,43 +270,34 @@ func TestConnectionKeepAlivePacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
+	outputPacket := &KeepAlivePacket{}
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	keepalive, ok := outputPacket.(*KeepAlivePacket)
-	if !ok {
-		t.Fatalf("did not get a response packet after read")
+	if inputPacket.ClientIndex != outputPacket.ClientIndex {
+		t.Fatalf("input and output index differed, expected %d got %d\n", inputPacket.ClientIndex, outputPacket.ClientIndex)
 	}
 
-	if inputPacket.ClientIndex != keepalive.ClientIndex {
-		t.Fatalf("input and output index differed, expected %d got %d\n", inputPacket.ClientIndex, keepalive.ClientIndex)
-	}
-
-	if inputPacket.MaxClients != keepalive.MaxClients {
-		t.Fatalf("input and output maxclients differed, expected %d got %d\n", inputPacket.MaxClients, keepalive.MaxClients)
+	if inputPacket.MaxClients != outputPacket.MaxClients {
+		t.Fatalf("input and output maxclients differed, expected %d got %d\n", inputPacket.MaxClients, outputPacket.MaxClients)
 	}
 }
 
 func TestConnectionPayloadPacket(t *testing.T) {
 	var err error
-
-	// setup a connection challenge packet
-	inputPacket := 	NewPayloadPacket(MAX_PAYLOAD_BYTES)
-	inputPacket.PayloadData, err = RandomBytes(MAX_PAYLOAD_BYTES)
+	payloadData, err := RandomBytes(MAX_PAYLOAD_BYTES)
 	if err != nil {
 		t.Fatalf("error generating random payload data: %s\n", err)
 	}
+
+	inputPacket := NewPayloadPacket(payloadData)
 
 	buffer := NewBuffer(MAX_PACKET_BYTES)
 
@@ -352,7 +307,7 @@ func TestConnectionPayloadPacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -361,31 +316,24 @@ func TestConnectionPayloadPacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	outputPacket := &PayloadPacket{}
+
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	payload, ok := outputPacket.(*PayloadPacket)
-	if !ok {
-		t.Fatalf("did not get a payload packet after read")
+	if inputPacket.PayloadBytes != outputPacket.PayloadBytes {
+		t.Fatalf("input and output index differed, expected %d got %d\n", inputPacket.PayloadBytes, outputPacket.PayloadBytes)
 	}
 
-	if inputPacket.PayloadBytes != payload.PayloadBytes {
-		t.Fatalf("input and output index differed, expected %d got %d\n", inputPacket.PayloadBytes, payload.PayloadBytes)
-	}
-
-	if bytes.Compare(inputPacket.PayloadData, payload.PayloadData) != 0 {
-		t.Fatalf("input and output payload differed, expected %v got %v\n", inputPacket.PayloadData, payload.PayloadData)
+	if bytes.Compare(inputPacket.PayloadData, outputPacket.PayloadData) != 0 {
+		t.Fatalf("input and output payload differed, expected %v got %v\n", inputPacket.PayloadData, outputPacket.PayloadData)
 	}
 }
 
@@ -399,7 +347,7 @@ func TestDisconnectPacket(t *testing.T) {
 	}
 
 	// write the packet to a buffer
-	bytesWritten, err := WritePacket(inputPacket, buffer, TEST_SEQUENCE_START, packetKey, TEST_PROTOCOL_ID)
+	bytesWritten, err := inputPacket.Write(buffer, TEST_PROTOCOL_ID, TEST_SEQUENCE_START, packetKey)
 	if err != nil {
 		t.Fatalf("error writing packet: %s\n", err)
 	}
@@ -408,66 +356,52 @@ func TestDisconnectPacket(t *testing.T) {
 		t.Fatalf("did not write any bytes for this packet")
 	}
 
-	var sequence uint64
-	sequence = TEST_SEQUENCE_START
-
 	allowedPackets := make([]byte, ConnectionNumPackets)
-	for i := 0; i < len(allowedPackets); i+=1 {
+	for i := 0; i < len(allowedPackets); i += 1 {
 		allowedPackets[i] = 1
 	}
 
 	buffer.Reset()
-	outputPacket, err := ReadPacket(buffer.Buf, bytesWritten, sequence, packetKey, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), nil, allowedPackets, nil)
-	if err != nil {
+	outputPacket := &DisconnectPacket{}
+	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	_, ok := outputPacket.(*DisconnectPacket)
-	if !ok {
-		t.Fatalf("did not get a disconnect packet after read")
-	}
 }
 
 func testBuildRequestPacket(connectTokenKey []byte, t *testing.T) (*RequestPacket, []byte) {
 	addr := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: TEST_SERVER_PORT}
 	serverAddrs := make([]net.UDPAddr, 1)
 	serverAddrs[0] = addr
-	config := NewConfig(serverAddrs, TEST_CONNECT_TOKEN_EXPIRY, TEST_PROTOCOL_ID, TEST_PRIVATE_KEY)
+	config := NewConfig(serverAddrs, TEST_TIMEOUT_SECONDS, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, connectTokenKey)
 
 	connectToken := NewConnectToken()
-	currentTimestamp := uint64(time.Now().Unix())
-	expireTimestamp := uint64(time.Now().Unix()) + config.TokenExpiry
 
-	if err := connectToken.Generate(config, TEST_CLIENT_ID, currentTimestamp, TEST_SEQUENCE_START); err != nil {
+	if err := connectToken.Generate(config, TEST_SEQUENCE_START); err != nil {
 		t.Fatalf("error generating connect token: %s\n", err)
 	}
 
-	privateData, err := connectToken.Write()
+	_, err := connectToken.Write()
 	if err != nil {
 		t.Fatalf("error writing private data: %s\n", err)
 	}
 
-	if err := EncryptConnectTokenPrivate(&privateData, TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, connectTokenKey); err != nil {
-		t.Fatalf("error encrypting connect token private %s\n", err)
-	}
-
-	decryptedToken, err := DecryptConnectTokenPrivate(privateData, TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
+	decryptedToken, err := connectToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
 	if err != nil {
 		t.Fatalf("error decrypting connect token: %s", err)
 	}
-
-	_, err = ReadConnectToken(privateData, TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
-	if err != nil {
-		t.Fatalf("error reading connect token: %s\n", err)
+	// need to re-encrypt the private data
+	if err := connectToken.PrivateData.Encrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey); err != nil {
+		t.Fatalf("error re-encrypting connect private token: %s\n", err)
 	}
 
 	// setup a connection request packet wrapping the encrypted connect token
 	inputPacket := &RequestPacket{}
 	inputPacket.VersionInfo = []byte(VERSION_INFO)
 	inputPacket.ProtocolId = TEST_PROTOCOL_ID
-	inputPacket.ConnectTokenExpireTimestamp = expireTimestamp
+	inputPacket.ConnectTokenExpireTimestamp = connectToken.ExpireTimestamp
 	inputPacket.ConnectTokenSequence = TEST_SEQUENCE_START
-	inputPacket.Token = connectToken
-	inputPacket.ConnectTokenData = privateData
+	inputPacket.Token = connectToken.PrivateData
+	inputPacket.ConnectTokenData = connectToken.PrivateData.Buffer()
 	return inputPacket, decryptedToken
 }

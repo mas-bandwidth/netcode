@@ -1,11 +1,9 @@
 package netcode
 
 import (
-	"net"
 	"errors"
-	"strconv"
-	"log"
-	"go/token"
+	"strings"
+	"time"
 )
 
 const (
@@ -18,170 +16,129 @@ const CONNECT_TOKEN_BYTES = 2048
 
 // Token used for connecting
 type ConnectToken struct {
-	VersionInfo []byte
-	ProtocolId uint64
+	sharedTokenData
+	VersionInfo     []byte
+	ProtocolId      uint64
 	CreateTimestamp uint64
 	ExpireTimestamp uint64
-	Sequence uint64
-	PrivateData *ConnectTokenPrivate
-	TimeoutSeconds int
+	Sequence        uint64
+	PrivateData     *ConnectTokenPrivate
+	TimeoutSeconds  uint32
 }
 
-// create a new empty token
+// Create a new empty token and empty private token
 func NewConnectToken() *ConnectToken {
 	token := &ConnectToken{}
+	token.PrivateData = NewConnectTokenPrivate()
 	return token
 }
 
-func (token *ConnectToken) ServerKey() []byte {
-	return token.PrivateData.ServerKey
+// Generates the token and private token data with the supplied config values and sequence id.
+func (token *ConnectToken) Generate(config *Config, sequence uint64) error {
+	token.CreateTimestamp = uint64(time.Now().Unix())
+	token.ExpireTimestamp = token.CreateTimestamp + config.TokenExpiry
+	token.VersionInfo = []byte(VERSION_INFO)
+	token.ProtocolId = config.ProtocolId
+	token.TimeoutSeconds = config.TimeoutSeconds
+	token.Sequence = sequence
+
+	userData, err := RandomBytes(USER_DATA_BYTES)
+	if err != nil {
+		return err
+	}
+
+	if err = token.PrivateData.Generate(config, userData); err != nil {
+		return err
+	}
+
+	// copy directly from the private token since we don't want to generate 2 different keys
+	token.ClientKey = token.PrivateData.ClientKey
+	token.ServerKey = token.PrivateData.ServerKey
+	token.ServerAddrs = token.PrivateData.ServerAddrs
+
+	if _, err = token.PrivateData.Write(); err != nil {
+		return err
+	}
+
+	if err = token.PrivateData.Encrypt(token.ProtocolId, token.ExpireTimestamp, sequence, config.PrivateKey); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (token *ConnectToken) ClientKey() []byte {
-	return token.PrivateData.ClientKey
-}
-
-// list of server addresses this client may connect to
-func (token *ConnectToken) ServerAddresses() []net.UDPAddr {
-	return token.PrivateData.ServerAddrs
-}
-
-func (token *ConnectToken) ClientId() uint64 {
-	return token.PrivateData.ClientId
-}
-
+// Writes the ConnectToken and previously encrypted ConnectTokenPrivate data to a byte slice
 func (token *ConnectToken) Write() ([]byte, error) {
 	buffer := NewBuffer(CONNECT_TOKEN_BYTES)
-	buffer.WriteBytes([]byte(VERSION_INFO))
+	buffer.WriteBytes(token.VersionInfo)
 	buffer.WriteUint64(token.ProtocolId)
 	buffer.WriteUint64(token.CreateTimestamp)
 	buffer.WriteUint64(token.ExpireTimestamp)
 	buffer.WriteUint64(token.Sequence)
 
-	privateData, err := token.PrivateData.Write()
-	if err != nil {
-		return nil, err
-	}
-	buffer.WriteBytes(privateData)
+	// assumes private token has already been encrypted
+	buffer.WriteBytes(token.PrivateData.Buffer())
 
-	if err := writeServerData(buffer, token.PrivateData.ServerAddrs, token.PrivateData.ClientKey, token.PrivateData.ServerKey, token.PrivateData.UserData); err != nil {
+	if err := token.WriteShared(buffer); err != nil {
 		return nil, err
 	}
+
+	buffer.WriteUint32(token.TimeoutSeconds)
 	return buffer.Buf, nil
 }
 
-// Generates the token with the supplied configuration values
-func (token *ConnectToken) Generate(config *Config, clientId, currentTimestamp, sequence uint64) error {
-	var err error
-
-	privateData := &ConnectTokenPrivate{}
-	token.PrivateData = privateData
-
-	privateData.ClientId = clientId
-	privateData.ServerAddrs = config.ServerAddrs
-
-	if privateData.UserData, err = RandomBytes(USER_DATA_BYTES); err != nil {
-		return err
-	}
-
-	if privateData.ClientKey, err = GenerateKey(); err != nil {
-		return err
-	}
-
-	if privateData.ServerKey, err = GenerateKey(); err != nil {
-		return err
-	}
-
-	token.CreateTimestamp = currentTimestamp
-	token.ExpireTimestamp = token.CreateTimestamp + config.TokenExpiry
-	return nil
-}
-
-
-
-// Takes in a slice of bytes and generates a new ConnectToken after decryption.
-func ReadConnectToken(tokenBuffer []byte, protocolId, expireTimestamp, sequence uint64, privateKey []byte) (*ConnectToken, error) {
+// Takes in a slice of decrypted connect token bytes and generates a new ConnectToken.
+// Note that the ConnectTokenPrivate is still encrypted at this point.
+func ReadConnectToken(tokenBuffer []byte) (*ConnectToken, error) {
 	var err error
 	var privateData []byte
 
+	buffer := NewBufferFromBytes(tokenBuffer)
 	token := NewConnectToken()
-	token.ExpireTimestamp = expireTimestamp
 
-	if privateData, err = DecryptConnectTokenPrivate(tokenBuffer, protocolId, expireTimestamp, sequence, privateKey); err != nil {
-		return nil, errors.New("error decrypting connection token: " + err.Error())
+	if token.VersionInfo, err = buffer.GetBytes(VERSION_INFO_BYTES); err != nil {
+		return nil, errors.New("read connect token data has bad version info " + err.Error())
 	}
 
-	private := NewConnectTokenPrivate()
-	private.TokenData = NewBufferFromBytes(privateData)
-	if err = private.Read(); err != nil {
+	if strings.Compare(VERSION_INFO, string(token.VersionInfo)) != 0 {
+		return nil, errors.New("read connect token data has bad version info: " + string(token.VersionInfo))
+	}
+
+	if token.ProtocolId, err = buffer.GetUint64(); err != nil {
+		return nil, errors.New("read connect token data has bad protocol id " + err.Error())
+	}
+
+	if token.CreateTimestamp, err = buffer.GetUint64(); err != nil {
+		return nil, errors.New("read connect token data has bad create timestamp " + err.Error())
+	}
+
+	if token.ExpireTimestamp, err = buffer.GetUint64(); err != nil {
+		return nil, errors.New("read connect token data has bad expire timestamp " + err.Error())
+	}
+
+	if token.CreateTimestamp > token.ExpireTimestamp {
+		return nil, errors.New("expire timestamp is > create timestamp")
+	}
+
+	if token.Sequence, err = buffer.GetUint64(); err != nil {
+		return nil, errors.New("read connect data has bad sequence " + err.Error())
+	}
+
+	if privateData, err = buffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES); err != nil {
+		return nil, errors.New("read connect data has bad private data " + err.Error())
+	}
+
+	// it is still encrypted at this point.
+	token.PrivateData.TokenData = NewBufferFromBytes(privateData)
+
+	// reads servers, client and server key
+	if err = token.ReadShared(buffer); err != nil {
 		return nil, err
 	}
-	token.PrivateData = private
+
+	if token.TimeoutSeconds, err = buffer.GetUint32(); err != nil {
+		return nil, err
+	}
+
 	return token, nil
-}
-
-// Encrypts the supplied buffer for the token private parts
-func EncryptConnectTokenPrivate(privateData *[]byte, protocolId, expireTimestamp, sequence uint64, privateKey []byte) error {
-	additionalData, nonce := buildCryptData(protocolId, expireTimestamp, sequence)
-
-	if err := EncryptAead(privateData, additionalData, nonce, privateKey); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Decrypts the supplied privateData buffer and generates a new ConnectTokenPrivate instance
-func DecryptConnectTokenPrivate(privateData []byte, protocolId, expireTimestamp, sequence uint64, privateKey []byte) ([]byte, error) {
-	additionalData, nonce := buildCryptData(protocolId, expireTimestamp, sequence)
-	return DecryptAead(privateData, additionalData, nonce, privateKey)
-}
-
-// builds the additional data and nonce necessary for encryption and decryption.
-func buildCryptData(protocolId, expireTimestamp, sequence uint64) ([]byte, []byte) {
-	additionalData := NewBuffer(VERSION_INFO_BYTES+8+8)
-	additionalData.WriteBytes([]byte(VERSION_INFO))
-	additionalData.WriteUint64(protocolId)
-	additionalData.WriteUint64(expireTimestamp)
-
-	nonce := NewBuffer(SizeUint64)
-	nonce.WriteUint64(sequence)
-
-	return additionalData.Buf, nonce.Buf
-}
-
-func writeServerData(buffer *Buffer, serverAddrs []net.UDPAddr, clientKey, serverKey, userData []byte) error {
-	buffer.WriteUint32(uint32(len(serverAddrs)))
-
-	for _, addr := range serverAddrs {
-		host, port, err := net.SplitHostPort(addr.String())
-		if err != nil {
-			return errors.New("invalid port for host: " + addr.String())
-		}
-
-		parsed := net.ParseIP(host)
-		if parsed == nil {
-			return errors.New("invalid ip address")
-		}
-
-		if len(parsed) == 4 {
-			buffer.WriteUint8(uint8(ADDRESS_IPV4))
-
-		} else {
-			buffer.WriteUint8(uint8(ADDRESS_IPV6))
-		}
-
-		for i := 0; i < len(parsed); i +=1 {
-			buffer.WriteUint8(parsed[i])
-		}
-
-		p, err := strconv.ParseUint(port, 10, 16)
-		if err != nil {
-			return err
-		}
-		buffer.WriteUint16(uint16(p))
-	}
-	buffer.WriteBytesN(clientKey, KEY_BYTES)
-	buffer.WriteBytesN(serverKey, KEY_BYTES)
-	buffer.WriteBytesN(userData, USER_DATA_BYTES)
-	return nil
 }
