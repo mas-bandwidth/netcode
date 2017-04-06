@@ -169,7 +169,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
         Ok(writer.position() as usize)
     } else {
-       if let Some((sequence,private_key)) = crypt_info {
+        if let Some((sequence,private_key)) = crypt_info {
             let (prefix_byte, offset) = {
                 let mut write = &mut io::Cursor::new(&mut out[..]);
 
@@ -180,7 +180,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
                 (prefix_byte, write.position())
             };
-    
+
             let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
             let scratch_written = {
                 let mut scratch_write = io::Cursor::new(&mut scratch[..]);
@@ -197,7 +197,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
             let crypt_write = crypto::encode(
                 &mut out[offset as usize..],
-                &scratch[0..scratch_written as usize],
+                &scratch[..scratch_written as usize],
                 Some(&additional_data[..]),
                 sequence,
                 private_key)?;

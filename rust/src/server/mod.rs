@@ -272,6 +272,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                 if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &scratch[..size], out_packet) {
                    //See if we already have this connection
                     if let Some(idx) = self.find_client_by_id(private_data.client_id) {
+                        trace!("Client already exists, skipping socket creation");
                         if let Some((ref mut client,_)) = self.clients[idx] {
                             match client.state {
                                 ConnectionState::PendingResponse(ref mut retry) => {
@@ -287,9 +288,11 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                             Some(idx) => {
                                 use std::str::FromStr;
                                 //@todo: pick ipv6 if we are using ipv6
-                                let bind_addr = format!("0.0.0.0:{}", self.listen_addr.port());
+                                let local_port = self.listen_socket.local_addr().unwrap_or(self.listen_addr).port();
+                                let bind_addr = format!("0.0.0.0:{}", local_port);
                                 let mut socket = I::bind(&SocketAddr::from_str(bind_addr.as_str()).unwrap())?;
                                 socket.connect(addr)?;
+                                self.event_queue.register(&socket, mio::Token(idx+1), mio::Ready::readable(), mio::PollOpt::edge())?;
 
                                 let conn = Connection {
                                     client_id: private_data.client_id,
@@ -299,8 +302,8 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                                     addr: addr,
                                 };
 
+                                trace!("Accepted connection {} {:?} {:?}", local_port, socket.local_addr(), addr);
                                 self.clients[idx] = Some((conn.clone(), socket));
-                                trace!("Accepted connection");
                             },
                             None => {
                                 self.send_denied_packet(&addr, &private_data.server_to_client_key)?;
@@ -339,13 +342,14 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
 
         if let Some(&mut Some((ref client, ref mut socket))) = self.find_client_by_id(client_id).map(|v| &mut self.clients[v]) {
             let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
-            packet::encode(&mut out_packet[..], 
+            let len = packet::encode(&mut out_packet[..], 
                             protocol_id,
                             &packet,
                             Some((sequence, &client.server_to_client_key)),
                             None)?;
 
-           socket.send(&out_packet[..]).map(|_| ()).map_err(|e| e.into())
+            trace!("Sending packet with id {} and length {}", packet.get_type_id(), out_packet.len());
+            socket.send(&out_packet[..len]).map(|_| ()).map_err(|e| e.into())
         } else {
             trace!("Tried to send packet to invalid client id: {}", client_id);
             Err(SendError::InvalidClientId)
@@ -522,50 +526,109 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
     }
 }
 
-#[test]
-fn test_socket_impl() {
-    use std::net::UdpSocket;
-
-    let protocol_id = 0xFFCC;
-
-    let mut server = UdpServer::new("127.0.0.1:0", 256, protocol_id, &crypto::generate_key()).unwrap();
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    socket.connect(server.get_local_addr().unwrap()).unwrap();
-
-    use token;
+#[cfg(test)]
+mod test {
+    use common::*;
     use packet::*;
-    use std::net::SocketAddr;
-    use std::str::FromStr;
+    use token;
+    use super::*;
 
-    let sequence = 0xCCDD;
-    let pkey = crypto::generate_key();
+    use std::net::UdpSocket;
+    use std::sync::atomic;
 
-    let token = token::ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
-                        &pkey,
-                        30, //Expire
-                        sequence,
-                        protocol_id,
-                        0xFFEE, //Client Id
-                        None).unwrap();
+    const PROTOCOL_ID: u64 = 0xFFCC;
+    const MAX_CLIENTS: usize = 256;
+    const CLIENT_ID: u64 = 0xFFEEDD;
 
-    let packet = Packet::ConnectionRequest(ConnectionRequestPacket {
-        version: NETCODE_VERSION_STRING.clone(),
-        protocol_id: protocol_id,
-        token_expire: token.expire_utc,
-        sequence: sequence,
-        private_data: token.private_data
-    });
+    struct TestHarness {
+        next_sequence: u64,
+        private_key: [u8; NETCODE_KEY_BYTES],
+        server: UdpServer,
+        socket: UdpSocket,
+        connect_token: token::ConnectToken
+    }
 
-    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-    let len = packet::encode(&mut data, protocol_id, &packet, None, None).unwrap();
-    socket.send(&data[..len]).unwrap();
+    impl TestHarness {
+        pub fn new() -> TestHarness {
+            let private_key = crypto::generate_key();
 
-    server.update(0.0, time::Duration::from_secs(0)).unwrap();
-    assert!(server.next_event(&mut data).is_ok());
+            let server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+            let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+            socket.connect(server.get_local_addr().unwrap()).unwrap();
 
-    socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
-    let read = socket.recv_from(&mut data).unwrap();
+            let token = token::ConnectToken::generate(
+                                [server.get_local_addr().unwrap()].iter().cloned(),
+                                &private_key,
+                                30, //Expire
+                                0,
+                                PROTOCOL_ID,
+                                CLIENT_ID, //Client Id
+                                None).unwrap();
 
-    assert!(read.0 != 0);
+            TestHarness {
+                next_sequence: 0,
+                private_key: private_key,
+                server: server,
+                socket: socket,
+                connect_token: token
+            }
+        }
+
+        pub fn get_server(&mut self) -> &mut UdpServer {
+            &mut self.server
+        }
+
+        fn get_next_sequence(&mut self) -> u64 {
+            self.next_sequence += 1;
+            self.next_sequence
+        }
+
+        pub fn send_connect_packet(&mut self) {
+            let mut private_data = [0; NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+            private_data.copy_from_slice(&self.connect_token.private_data);
+
+            let packet = Packet::ConnectionRequest(ConnectionRequestPacket {
+                version: NETCODE_VERSION_STRING.clone(),
+                protocol_id: PROTOCOL_ID,
+                token_expire: self.connect_token.expire_utc,
+                sequence: self.connect_token.sequence,
+                private_data: private_data
+            });
+
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let len = packet::encode(&mut data, PROTOCOL_ID, &packet, None, None).unwrap();
+            self.socket.send(&data[..len]).unwrap();
+        }
+        
+        fn validate_challenge(&mut self) {
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            self.server.update(0.0, time::Duration::from_secs(0)).unwrap();
+            assert!(self.server.next_event(&mut data).is_ok());
+
+            self.socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
+            let read = self.socket.recv(&mut data).unwrap();
+
+            trace!("read {}", read);
+
+            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
+                Packet::Challenge(packet) => {
+
+                },
+                _ => assert!(false)
+            }
+        }
+    }
+
+   #[test]
+    fn test_connect() {
+        use env_logger::LogBuilder;
+        use log::LogLevelFilter;
+
+        LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
+
+        let mut harness = TestHarness::new();
+        harness.send_connect_packet();
+        harness.validate_challenge();
+   }
 }
