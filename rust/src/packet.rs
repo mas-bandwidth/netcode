@@ -671,7 +671,7 @@ fn test_decode_challenge_token() {
                             challenge_sequence,
                             &challenge_key).unwrap();
 
-    let decoded = challenge_packet.decode(challenge_sequence, &challenge_key).unwrap();
+    let decoded = challenge_packet.decode(&challenge_key).unwrap();
     assert_eq!(decoded.client_id, client_id);
     for i in 0..user_data.len() {
         assert_eq!(user_data[i], decoded.user_data[i]);

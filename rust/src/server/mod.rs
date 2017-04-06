@@ -625,11 +625,12 @@ mod test {
 
    #[test]
     fn test_connect() {
+        /*
         use env_logger::LogBuilder;
         use log::LogLevelFilter;
 
         LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
-
+        */
         let mut harness = TestHarness::new();
         harness.send_connect_packet();
         harness.validate_challenge();
