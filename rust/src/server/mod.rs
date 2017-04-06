@@ -247,6 +247,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
             mio::Token(n) => {
                 let client_idx = n-1;
                 let protocol_id = self.protocol_id;
+                let challenge_key = self.challenge_key;
 
                 if let Some(&mut (ref mut client, ref mut socket)) = self.clients[client_idx].as_mut() {
                     let time = self.time;
@@ -254,7 +255,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                     socket.recv(&mut scratch)
                         .map_err(|e| e.into())
                         .and_then(|read| {
-                            Self::handle_packet(time, protocol_id, (client, socket), &scratch[..read.unwrap_or(0)], out_packet)
+                            Self::handle_packet(time, protocol_id, &challenge_key, (client, socket), &scratch[..read.unwrap_or(0)], out_packet)
                         })
                 } else {
                     Ok(None)
@@ -466,6 +467,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
 
     fn handle_packet(time: f64,
             protocol_id: u64,
+            challenge_key: &[u8; NETCODE_KEY_BYTES],
             (client, socket): (&mut Connection, &mut I),
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE])
@@ -501,7 +503,10 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
             &ConnectionState::PendingResponse(_) => {
                 match decoded {
                     packet::Packet::Response(resp) => {
-                        (None, ConnectionState::Idle(RetryState::new(time)))
+                        let token = resp.decode(&challenge_key)?;
+                        out_packet[..NETCODE_USER_DATA_BYTES].copy_from_slice(&token.user_data);
+
+                        (Some(ServerEvent::ClientConnect(token.client_id)), ConnectionState::Idle(RetryState::new(time)))
                     },
                     p => {
                         info!("Unexpected packet type when waiting for repsonse {}", p.get_type_id());
@@ -607,8 +612,6 @@ mod test {
 
             self.socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
             let read = self.socket.recv(&mut data).unwrap();
-
-            trace!("read {}", read);
 
             let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {

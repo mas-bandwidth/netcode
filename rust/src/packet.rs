@@ -329,7 +329,7 @@ impl ChallengePacket {
         })
     }
 
-    pub fn decode(&self, challenge_sequence: u64, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
+    pub fn decode(&self, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
         let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
 
@@ -370,6 +370,13 @@ impl ResponsePacket {
             token_sequence: token_sequence,
             token_data: token_data
         })
+    }
+
+    pub fn decode(&self, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
+        let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
+        crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
+
+        ChallengeToken::read(&mut io::Cursor::new(&decoded[..])).map_err(|e| e.into())
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
@@ -650,26 +657,10 @@ fn test_payload_packet() {
 
 #[test]
 fn test_decode_challenge_token() {
-    use token;
-    use std::net::SocketAddr;
-    use std::str::FromStr;
-
-    let protocol_id = 0xFFCC;
-    let sequence = 0xCCDD;
-    let pkey = crypto::generate_key();
     let mut user_data = [0; NETCODE_USER_DATA_BYTES];
     for i in 0..user_data.len() {
         user_data[i] = i as u8;
     }
-
-    let conn_token = token::ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
-                        &pkey,
-                        30, //Expire
-                        sequence,
-                        protocol_id,
-                        0xFFEE, //Client Id
-                        Some(&user_data)).unwrap();
 
     let client_id = 5;
     let challenge_sequence = 0xFED;
