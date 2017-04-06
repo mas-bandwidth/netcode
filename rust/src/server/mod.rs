@@ -603,7 +603,7 @@ mod test {
         fn validate_challenge(&mut self) {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
             self.server.update(0.0, time::Duration::from_secs(0)).unwrap();
-            assert!(self.server.next_event(&mut data).is_ok());
+            self.server.next_event(&mut data).unwrap();
 
             self.socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
             let read = self.socket.recv(&mut data).unwrap();

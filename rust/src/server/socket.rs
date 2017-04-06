@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::io;
 
 use mio;
+use net2;
 
 pub trait SocketProvider<I> where I: mio::Evented {
     fn bind(addr: &SocketAddr) -> Result<I, io::Error>;
@@ -16,7 +17,8 @@ pub trait SocketProvider<I> where I: mio::Evented {
 
 impl SocketProvider<mio::udp::UdpSocket> for mio::udp::UdpSocket {
     fn bind(addr: &SocketAddr) -> Result<mio::udp::UdpSocket, io::Error> {
-        mio::udp::UdpSocket::bind(addr)
+	let socket = net2::UdpBuilder::new_v4()?.reuse_address(true)?.bind(addr)?;
+        mio::udp::UdpSocket::from_socket(socket)
     }
 
     fn local_addr(&self) -> Result<SocketAddr, io::Error> {
