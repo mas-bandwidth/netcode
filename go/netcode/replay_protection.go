@@ -2,8 +2,8 @@ package netcode
 
 // Our type to hold replay protection of packet sequences
 type ReplayProtection struct {
-	MostRecentSequence uint64 // last sequence recv'd
-	ReceivedPacket []uint64 // slice of REPLAY_PROTECTION_BUFFER_SIZE worth of packet sequences
+	MostRecentSequence uint64   // last sequence recv'd
+	ReceivedPacket     []uint64 // slice of REPLAY_PROTECTION_BUFFER_SIZE worth of packet sequences
 }
 
 // Initializes a new ReplayProtection with the ReceivedPacket buffer elements all set to 0xFFFFFFFFFFFFFFFF
@@ -22,15 +22,15 @@ func (r *ReplayProtection) Reset() {
 
 // Tests that the sequence has not already been recv'd, adding it to the buffer if it's new.
 func (r *ReplayProtection) AlreadyReceived(sequence uint64) int {
-	if sequence & (uint64(1 << 63)) != 0 {
+	if sequence&(uint64(1<<63)) != 0 {
 		return 0
 	}
 
-	if sequence + REPLAY_PROTECTION_BUFFER_SIZE <= r.MostRecentSequence {
+	if sequence+REPLAY_PROTECTION_BUFFER_SIZE <= r.MostRecentSequence {
 		return 1
 	}
 
-	if  sequence > r.MostRecentSequence {
+	if sequence > r.MostRecentSequence {
 		r.MostRecentSequence = sequence
 	}
 
@@ -50,7 +50,7 @@ func (r *ReplayProtection) AlreadyReceived(sequence uint64) int {
 }
 
 func clearPacketBuffer(packets []uint64) {
-	for i := 0; i < len(packets); i+=1 {
+	for i := 0; i < len(packets); i += 1 {
 		packets[i] = 0xFFFFFFFFFFFFFFFF
 	}
 }

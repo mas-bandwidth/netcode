@@ -19,7 +19,7 @@ const (
 
 type Socket struct {
 	Address *net.UDPAddr
-	Conn *net.UDPConn
+	Conn    *net.UDPConn
 }
 
 func NewSocket() *Socket {
@@ -66,8 +66,6 @@ func (s *Socket) Recv(source *net.Addr, data []byte, maxsize uint) error {
 	return nil
 }
 
-
 func (s *Socket) Destroy() {
 	s.Conn.Close()
 }
-

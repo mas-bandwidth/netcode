@@ -2,8 +2,8 @@ package netcode
 
 // Challenge tokens are used in certain packet types
 type ChallengeToken struct {
-	ClientId uint64 // the clientId associated with this token
-	UserData *Buffer // the userdata payload
+	ClientId  uint64  // the clientId associated with this token
+	UserData  *Buffer // the userdata payload
 	TokenData *Buffer // the serialized payload container
 }
 

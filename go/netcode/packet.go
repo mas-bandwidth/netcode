@@ -25,6 +25,7 @@ const MAX_SERVERS_PER_CONNECT = 32
 
 const VERSION_INFO = "NETCODE 1.00\x00"
 
+// Used for determining the type of packet, part of the serialization protocol
 type PacketType uint8
 
 const (
@@ -37,9 +38,7 @@ const (
 	ConnectionDisconnect
 )
 
-// not a packet type, but value is last packetType+1
-const ConnectionNumPackets = ConnectionDisconnect + 1
-
+// reference map of packet -> string values
 var packetTypeMap = map[PacketType]string{
 	ConnectionRequest:    "CONNECTION_REQUEST",
 	ConnectionDenied:     "CONNECTION_DENIED",
@@ -50,19 +49,24 @@ var packetTypeMap = map[PacketType]string{
 	ConnectionDisconnect: "CONNECTION_DISCONNECT",
 }
 
+// not a packet type, but value is last packetType+1
+const ConnectionNumPackets = ConnectionDisconnect + 1
+
+// Packet interface supporting reading and writing.
 type Packet interface {
-	GetType() PacketType
-	Write(buffer *Buffer, protocolId, sequence uint64, writePacketKey []byte) (int, error)
-	Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error
+	GetType() PacketType                                                                                                                                                       // returns the packet type
+	Write(buffer *Buffer, protocolId, sequence uint64, writePacketKey []byte) (int, error)                                                                                     // writes the packet data to the supplied buffer.
+	Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error // reads in data from the supplied buffer to set the packet properties
 }
 
+// The connection request packet
 type RequestPacket struct {
-	VersionInfo                 []byte
-	ProtocolId                  uint64
-	ConnectTokenExpireTimestamp uint64
-	ConnectTokenSequence        uint64
-	Token                       *ConnectTokenPrivate
-	ConnectTokenData            []byte // the encrypted Token after Write -> Encrypt
+	VersionInfo                 []byte               // version information of communications
+	ProtocolId                  uint64               // protocol id used in communications
+	ConnectTokenExpireTimestamp uint64               // when the connect token expires
+	ConnectTokenSequence        uint64               // the sequence id of this token
+	Token                       *ConnectTokenPrivate // reference to the private parts of this packet
+	ConnectTokenData            []byte               // the encrypted Token after Write -> Encrypt
 }
 
 // Writes the RequestPacket data to a supplied buffer and returns the length of bytes written to it.
@@ -150,6 +154,7 @@ func (p *RequestPacket) GetType() PacketType {
 	return ConnectionRequest
 }
 
+// Denied packet type, contains no information
 type DeniedPacket struct {
 }
 
@@ -179,6 +184,7 @@ func (p *DeniedPacket) GetType() PacketType {
 	return ConnectionDenied
 }
 
+// Challenge packet containing token data and the sequence id used
 type ChallengePacket struct {
 	ChallengeTokenSequence uint64
 	ChallengeTokenData     []byte
@@ -224,6 +230,7 @@ func (p *ChallengePacket) GetType() PacketType {
 	return ConnectionChallenge
 }
 
+// Response packet, containing the token data and sequence id
 type ResponsePacket struct {
 	ChallengeTokenSequence uint64
 	ChallengeTokenData     []byte
@@ -269,6 +276,7 @@ func (p *ResponsePacket) GetType() PacketType {
 	return ConnectionResponse
 }
 
+// used for heart beats
 type KeepAlivePacket struct {
 	ClientIndex uint32
 	MaxClients  uint32
@@ -314,6 +322,7 @@ func (p *KeepAlivePacket) GetType() PacketType {
 	return ConnectionKeepAlive
 }
 
+// Contains user supplied payload data between server <-> client
 type PayloadPacket struct {
 	PayloadBytes uint32
 	PayloadData  []byte
@@ -323,6 +332,7 @@ func (p *PayloadPacket) GetType() PacketType {
 	return ConnectionPayload
 }
 
+// Helper function to create a new payload packet with the supplied buffer
 func NewPayloadPacket(payloadData []byte) *PayloadPacket {
 	packet := &PayloadPacket{}
 	packet.PayloadBytes = uint32(len(payloadData))
@@ -362,6 +372,7 @@ func (p *PayloadPacket) Read(packetBuffer *Buffer, packetLen int, protocolId, cu
 	return nil
 }
 
+// Signals to server/client to disconnect, contains no data.
 type DisconnectPacket struct {
 }
 
@@ -391,6 +402,7 @@ func (p *DisconnectPacket) GetType() PacketType {
 	return ConnectionDisconnect
 }
 
+// Decrypts the packet after reading in the prefix byte and sequence id. Used for all PacketTypes except RequestPacket. Returns a buffer containing the decrypted data
 func decryptPacket(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) (*Buffer, error) {
 	var packetSequence uint64
 
@@ -428,6 +440,7 @@ func decryptPacket(packetBuffer *Buffer, packetLen int, protocolId, currentTimes
 	return NewBufferFromBytes(decryptedBuff), nil
 }
 
+// Reads and verifies the sequence id
 func readSequence(packetBuffer *Buffer, packetLen int, prefixByte uint8) (uint64, error) {
 	var sequence uint64
 
@@ -452,7 +465,7 @@ func readSequence(packetBuffer *Buffer, packetLen int, prefixByte uint8) (uint64
 	return sequence, nil
 }
 
-// Validates the data prior to encrypted blob is valid before we bother attempting to decrypt.
+// Validates the data prior to the encrypted segment before we bother attempting to decrypt.
 func validateSequence(packetLen int, prefixByte uint8, sequence uint64, readPacketKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
 
 	if readPacketKey == nil {
@@ -503,6 +516,7 @@ func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error)
 	return prefixByte, nil
 }
 
+// Encrypts the packet data of the supplied buffer between encryptedStart and encrypedFinish.
 func encryptPacket(buffer *Buffer, encryptedStart, encryptedFinish int, prefixByte uint8, protocolId, sequence uint64, writePacketKey []byte) (int, error) {
 	// slice up the buffer for the bits we will encrypt
 	encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]

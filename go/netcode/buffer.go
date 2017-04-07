@@ -1,8 +1,8 @@
 package netcode
 
 import (
-	"math"
 	"io"
+	"math"
 )
 
 // Buffer is a helper struct for serializing and deserializing as the caller
@@ -10,8 +10,9 @@ import (
 // or writing to.
 type Buffer struct {
 	Buf []byte // the backing byte slice
-	Pos int // current position in read/write
+	Pos int    // current position in read/write
 }
+
 // Creates a new Buffer with a backing byte slice of the provided size
 func NewBuffer(size int) *Buffer {
 	b := &Buffer{}
@@ -58,17 +59,17 @@ func (b *Buffer) GetBytes(length int) ([]byte, error) {
 	if len(b.Buf) < length {
 		return nil, io.EOF
 	}
-	value := b.Buf[b.Pos:b.Pos+length]
+	value := b.Buf[b.Pos : b.Pos+length]
 	b.Pos += length
 	return value, nil
 }
 
 // GetUint8 decodes a little-endian uint8 from the buffer
 func (b *Buffer) GetUint8() (uint8, error) {
-	if b.Pos + SizeUint8 > len(b.Buf) {
+	if b.Pos+SizeUint8 > len(b.Buf) {
 		return 0, io.EOF
 	}
-	buf := b.Buf[b.Pos:b.Pos+SizeUint8]
+	buf := b.Buf[b.Pos : b.Pos+SizeUint8]
 	b.Pos++
 	return uint8(buf[0]), nil
 }
@@ -118,11 +119,11 @@ func (b *Buffer) GetUint64() (uint64, error) {
 }
 
 // GetInt8 decodes a little-endian int8 from the buffer
-func (b *Buffer)  GetInt8() (int8, error) {
-	if b.Pos + 1 > len(b.Buf) {
+func (b *Buffer) GetInt8() (int8, error) {
+	if b.Pos+1 > len(b.Buf) {
 		return 0, io.EOF
 	}
-	buf := b.Buf[b.Pos:b.Pos+SizeInt8]
+	buf := b.Buf[b.Pos : b.Pos+SizeInt8]
 	return int8(buf[0]), nil
 }
 
@@ -170,7 +171,6 @@ func (b *Buffer) GetInt64() (int64, error) {
 	return n, nil
 }
 
-
 // WriteByte encodes a little-endian uint8 into the buffer.
 func (b *Buffer) WriteByte(n byte) {
 	b.Buf[b.Pos] = uint8(n)
@@ -179,18 +179,17 @@ func (b *Buffer) WriteByte(n byte) {
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytes(src []byte) {
-	for i := 0; i < len(src); i+=1 {
+	for i := 0; i < len(src); i += 1 {
 		b.WriteByte(uint8(src[i]))
 	}
 }
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytesN(src []byte, length int) {
-	for i := 0; i < length; i+=1 {
+	for i := 0; i < length; i += 1 {
 		b.WriteByte(uint8(src[i]))
 	}
 }
-
 
 // WriteUint8 encodes a little-endian uint8 into the buffer.
 func (b *Buffer) WriteUint8(n uint8) {
@@ -266,6 +265,6 @@ func (b *Buffer) WriteFloat32(n float32) {
 }
 
 // WriteFloat64 encodes a little-endian float64 into the buffer.
-func (b *Buffer)  WriteFloat64(buf []byte, n float64) {
+func (b *Buffer) WriteFloat64(buf []byte, n float64) {
 	b.WriteUint64(math.Float64bits(n))
 }

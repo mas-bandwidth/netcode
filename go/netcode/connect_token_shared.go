@@ -14,7 +14,7 @@ type sharedTokenData struct {
 	ServerKey   []byte        // server to client key
 }
 
-// Reads and validates the servers and client <-> server keys.
+// Reads and validates the servers, client <-> server keys.
 func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 	var err error
 	var servers uint32

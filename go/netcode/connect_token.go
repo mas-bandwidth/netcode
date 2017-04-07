@@ -6,24 +6,26 @@ import (
 	"time"
 )
 
+// ip types used in serialization of server addresses
 const (
 	ADDRESS_NONE = iota
 	ADDRESS_IPV4
 	ADDRESS_IPV6
 )
 
+// number of bytes for connect tokens
 const CONNECT_TOKEN_BYTES = 2048
 
 // Token used for connecting
 type ConnectToken struct {
-	sharedTokenData
-	VersionInfo     []byte
-	ProtocolId      uint64
-	CreateTimestamp uint64
-	ExpireTimestamp uint64
-	Sequence        uint64
-	PrivateData     *ConnectTokenPrivate
-	TimeoutSeconds  uint32
+	sharedTokenData                      // a shared container holding the server addresses, client and server keys
+	VersionInfo     []byte               // the version information for client <-> server communications
+	ProtocolId      uint64               // protocol id for communications
+	CreateTimestamp uint64               // when this token was created
+	ExpireTimestamp uint64               // when this token expires
+	Sequence        uint64               // the sequence id
+	PrivateData     *ConnectTokenPrivate // reference to the private parts of this connect token
+	TimeoutSeconds  uint32               // timeout of connect token in seconds
 }
 
 // Create a new empty token and empty private token

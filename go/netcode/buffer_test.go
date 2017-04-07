@@ -29,8 +29,6 @@ func TestBuffer_Copy(t *testing.T) {
 		t.Fatalf("error reading bytes from copy: %s\n", err)
 	}
 
-	t.Logf("%s\n", string(data))
-
 }
 
 func TestBuffer_GetByte(t *testing.T) {
@@ -47,7 +45,6 @@ func TestBuffer_GetByte(t *testing.T) {
 		t.Fatalf("expected 0xfe got: %x\n", val)
 	}
 }
-
 
 func TestBuffer_GetBytes(t *testing.T) {
 	buf := make([]byte, 2)
@@ -73,7 +70,6 @@ func TestBuffer_GetBytes(t *testing.T) {
 	}
 
 }
-
 
 func TestBuffer_GetInt8(t *testing.T) {
 	writer := NewBuffer(SizeInt8)
@@ -130,7 +126,6 @@ func TestBuffer_GetInt16(t *testing.T) {
 		t.Fatalf("expected -1 got: %x\n", val)
 	}
 }
-
 
 func TestBuffer_GetInt32(t *testing.T) {
 	writer := NewBuffer(SizeInt32)
@@ -254,13 +249,13 @@ func TestBuffer_WriteBytes(t *testing.T) {
 	w := NewBuffer(10)
 	w.WriteBytes([]byte("0123456789"))
 	r := w.Copy()
-	val, err :=r.GetBytes(10)
+	val, err := r.GetBytes(10)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if string(val) != "0123456789" {
-		t.Fatalf("expected 0123456789 got: %s %d\n",val, len(val))
+		t.Fatalf("expected 0123456789 got: %s %d\n", val, len(val))
 	}
 
 }
