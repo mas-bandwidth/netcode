@@ -183,6 +183,10 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
         self.listen_socket.local_addr()
     }
 
+    pub fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
+        &self.challenge_key
+    }
+
     /// Updates time elapsed since last server iteration.
     pub fn update(&mut self, elapsed: f64, block_duration: time::Duration) -> Result<(), io::Error> {
         self.time += elapsed;
@@ -248,6 +252,8 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                 let client_idx = n-1;
                 let protocol_id = self.protocol_id;
                 let challenge_key = self.challenge_key;
+
+                trace!("New data on client socket {}", n);
 
                 if let Some(&mut (ref mut client, ref mut socket)) = self.clients[client_idx].as_mut() {
                     let time = self.time;
@@ -349,7 +355,7 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
                             Some((sequence, &client.server_to_client_key)),
                             None)?;
 
-            trace!("Sending packet with id {} and length {}", packet.get_type_id(), out_packet.len());
+            trace!("Sending packet with id {} and length {}", packet.get_type_id(), len);
             socket.send(&out_packet[..len]).map(|_| ()).map_err(|e| e.into())
         } else {
             trace!("Tried to send packet to invalid client id: {}", client_id);
@@ -475,6 +481,8 @@ impl<I> Server<I> where I: SocketProvider<I> + mio::Evented {
         if packet.len() == 0 {
             return Ok(None)
         }
+
+        trace!("Handling packet from client");
 
         let decoded = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
             Ok(p) => p,
@@ -605,7 +613,7 @@ mod test {
             self.socket.send(&data[..len]).unwrap();
         }
         
-        fn validate_challenge(&mut self) {
+        fn validate_challenge(&mut self) -> ChallengePacket {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
             self.server.update(0.0, time::Duration::from_secs(0)).unwrap();
             self.server.next_event(&mut data).unwrap();
@@ -616,10 +624,33 @@ mod test {
             let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
                 Packet::Challenge(packet) => {
-
+                    packet
                 },
-                _ => assert!(false)
+                _ => {
+                    assert!(false);
+                    ChallengePacket {
+                        token_sequence: 0,
+                        token_data: [0; NETCODE_CHALLENGE_TOKEN_BYTES]
+                    }
+                }
             }
+        }
+
+        fn send_response(&mut self, token: ChallengePacket) {
+            let packet = Packet::Response(ResponsePacket {
+                token_sequence: token.token_sequence,
+                token_data: token.token_data
+            });
+
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let len = packet::encode(&mut data, PROTOCOL_ID, &packet, Some((self.get_next_sequence(), &self.connect_token.client_to_server_key)), None).unwrap();
+            self.socket.send(&data[..len]).unwrap();
+        }
+
+        fn validate_response(&mut self) {
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            self.server.update(0.0, time::Duration::from_secs(1)).unwrap();
+            self.server.next_event(&mut data).unwrap();
         }
     }
 
@@ -633,6 +664,8 @@ mod test {
         */
         let mut harness = TestHarness::new();
         harness.send_connect_packet();
-        harness.validate_challenge();
+        let challenge = harness.validate_challenge();
+        harness.send_response(challenge);
+        harness.validate_response();
    }
 }
