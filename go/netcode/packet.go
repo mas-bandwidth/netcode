@@ -2,7 +2,6 @@ package netcode
 
 import (
 	"errors"
-	"log"
 	"strconv"
 )
 
@@ -509,7 +508,6 @@ func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error)
 
 	var i uint8
 	for ; i < sequenceBytes; i += 1 {
-		log.Printf("sequenceTemp %d: %x\n", i, uint8(sequenceTemp&0xFF))
 		buffer.WriteUint8(uint8(sequenceTemp & 0xFF))
 		sequenceTemp >>= 8
 	}

@@ -24,9 +24,14 @@ func TestBuffer_Copy(t *testing.T) {
 	if r.Len() != b.Len() {
 		t.Fatalf("expected copy length to be same got: %d and %d\n", r.Len(), b.Len())
 	}
+
 	data, err := r.GetBytes(10)
 	if err != nil {
 		t.Fatalf("error reading bytes from copy: %s\n", err)
+	}
+
+	if string(data) != "abcdefghij" {
+		t.Fatalf("error expeced: %s got %d\n", "abcdefghij", string(data))
 	}
 
 }
