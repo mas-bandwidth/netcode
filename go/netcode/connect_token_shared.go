@@ -2,6 +2,7 @@ package netcode
 
 import (
 	"errors"
+	"log"
 	"net"
 	"strconv"
 )
@@ -52,7 +53,9 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 		if err != nil {
 			return err
 		}
-
+		for i, b := range ipBytes {
+			log.Printf("%d %x\n", i, b)
+		}
 		ip := net.IP(ipBytes)
 		port, err := buffer.GetUint16()
 		if err != nil {
@@ -96,12 +99,14 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 
 		for i := 0; i < len(parsed); i += 1 {
 			buffer.WriteUint8(parsed[i])
+			log.Printf("%d %x\n", i, parsed[i])
 		}
 
 		p, err := strconv.ParseUint(port, 10, 16)
 		if err != nil {
 			return err
 		}
+		log.Printf("writing port: %x\n", uint16(p))
 		buffer.WriteUint16(uint16(p))
 	}
 	buffer.WriteBytesN(shared.ClientKey, KEY_BYTES)

@@ -1,71 +1,127 @@
 package netcode
 
 import (
+	"log"
 	"net"
+	"time"
 )
 
 const (
-	SOCKET_ERROR_NONE = iota
-	SOCKET_ERROR_CREATE_FAILED
-	SOCKET_ERROR_SET_NON_BLOCKING_FAILED
-	SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED
-	SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED
-	SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED
-	SOCKET_ERROR_BIND_IPV4_FAILED
-	SOCKET_ERROR_BIND_IPV6_FAILED
-	SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED
-	SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED
+	SOCKET_RCVBUF_SIZE = 1024 * 1024
+	SOCKET_SNDBUF_SIZE = 1024 * 1024
 )
 
-type Socket struct {
-	Address *net.UDPAddr
-	Conn    *net.UDPConn
+type NetcodeConn struct {
+	address  *net.UDPAddr
+	conn     *net.UDPConn
+	closeCh  chan struct{}
+	isClosed bool
+	xmit     *Queue
+	recv     *Queue
 }
 
-func NewSocket() *Socket {
-	s := &Socket{}
-	return s
+func NewNetcodeConn(address *net.UDPAddr) *NetcodeConn {
+	c := &NetcodeConn{}
+	c.address = address
+	c.closeCh = make(chan struct{})
+	c.xmit = NewQueue()
+	c.recv = NewQueue()
+	return c
 }
 
-func (s *Socket) Create(address *net.UDPAddr, sendsize, recvsize int) error {
-	conn, err := net.ListenUDP(address.Network(), address)
+func (c *NetcodeConn) Read(b []byte) (int, error) {
+	n, _, err := c.conn.ReadFromUDP(b)
+	return n, err
+}
+
+func (c *NetcodeConn) Write(b []byte) (int, error) {
+	return c.conn.Write(b)
+}
+
+func (c *NetcodeConn) Close() error {
+	c.xmit = nil
+	c.recv = nil
+	if !c.isClosed {
+		close(c.closeCh)
+	}
+	c.isClosed = true
+	return c.conn.Close()
+}
+
+func (c *NetcodeConn) SetReadBuffer(bytes int) error {
+	return c.conn.SetReadBuffer(bytes)
+}
+
+func (c *NetcodeConn) SetWriteBuffer(bytes int) error {
+	return c.conn.SetWriteBuffer(bytes)
+}
+
+func (c *NetcodeConn) SetDeadline(t time.Time) error {
+	return c.conn.SetDeadline(t)
+}
+
+func (c *NetcodeConn) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+func (c *NetcodeConn) SetWriteDeadline(t time.Time) error {
+	return c.conn.SetWriteDeadline(t)
+}
+
+// LocalAddr returns the local network address.
+func (c *NetcodeConn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+// RemoteAddr returns the remote network address.
+func (c *NetcodeConn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *NetcodeConn) Create() error {
+	var err error
+	c.conn, err = net.DialUDP(c.address.Network(), nil, c.address)
 	if err != nil {
 		return err
 	}
-
-	if err := conn.SetReadBuffer(recvsize); err != nil {
-		return err
-	}
-
-	if err := conn.SetWriteBuffer(sendsize); err != nil {
-		return err
-	}
-
-	s.Conn = conn
+	c.conn.SetReadBuffer(SOCKET_RCVBUF_SIZE)
+	c.conn.SetWriteBuffer(SOCKET_SNDBUF_SIZE)
+	go c.readLoop()
 	return nil
 }
 
-func (s *Socket) Send(destination *net.UDPAddr, data []byte) error {
-	if s.Conn == nil {
-		return nil
+func (c *NetcodeConn) receiver(ch chan []byte) {
+	for {
+		data := make([]byte, MAX_PACKET_BYTES)
+		if n, from, err := c.conn.ReadFromUDP(data); err == nil {
+			if !from.IP.Equal(c.address.IP) {
+				log.Printf("unknown server address sent us data expected: " + c.address.String() + " but came from: " + from.String())
+			}
+			select {
+			case ch <- data[:n]:
+			case <-c.closeCh:
+				return
+			}
+		} else {
+			log.Printf("error reading packet data: %s\n", err)
+			return
+		}
 	}
-
-	length, err := s.Conn.WriteTo(data, destination)
-	if err != nil {
-		return err
-	}
-
-	if length != len(data) {
-		// error writing all data
-		return nil
-	}
-	return nil
 }
 
-func (s *Socket) Recv(source *net.Addr, data []byte, maxsize uint) error {
-	return nil
+func (c *NetcodeConn) readLoop() {
+	dataCh := make(chan []byte, MAX_PACKET_BYTES)
+	go c.receiver(dataCh)
+	for {
+		select {
+		case data := <-dataCh:
+			c.recv.Push(data)
+		case <-c.closeCh:
+			return
+		}
+	}
 }
 
-func (s *Socket) Destroy() {
-	s.Conn.Close()
+func (c *NetcodeConn) Recv() []byte {
+	return c.recv.Pop()
 }
