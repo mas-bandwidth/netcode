@@ -288,7 +288,7 @@ func (c *Client) Recv() error {
 
 		packet := NewPacket(packetData)
 		packetBuffer := NewBufferFromBytes(packetData)
-		log.Printf("calling packet %s.Read\n", packetTypeMap[packet.GetType()])
+		log.Printf("calling packet %#v .Read\n", packetBuffer)
 		if err = packet.Read(packetBuffer, size, c.config.ProtocolId, timestamp, c.context.ReadPacketKey, nil, allowedPackets, c.replayProtection); err != nil {
 			return err
 		}

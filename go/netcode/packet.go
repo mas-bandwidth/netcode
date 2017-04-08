@@ -36,7 +36,8 @@ const (
 )
 
 func (p PacketType) Peek(packetBuffer []byte) PacketType {
-	return PacketType(uint8(packetBuffer[0]))
+	prefix := uint8(packetBuffer[0])
+	return PacketType(prefix & 0xF)
 }
 
 // reference map of packet -> string values

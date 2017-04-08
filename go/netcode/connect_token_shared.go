@@ -1,6 +1,7 @@
 package netcode
 
 import (
+	"encoding/binary"
 	"errors"
 	"log"
 	"net"
@@ -46,6 +47,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 			ipBytes, err = buffer.GetBytes(4)
 		} else if serverType == ADDRESS_IPV6 {
 			ipBytes, err = buffer.GetBytes(16)
+			log.Printf("%x\n", buffer.Buf[:buffer.Pos])
 		} else {
 			return errors.New("unknown ip address")
 		}
@@ -62,6 +64,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 		if err != nil {
 			return errors.New("invalid port")
 		}
+		log.Printf("%#v\n", buffer.Buf[:buffer.Pos])
 		shared.ServerAddrs[i] = net.UDPAddr{IP: ip, Port: int(port)}
 	}
 
@@ -93,14 +96,19 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 
 		if len(parsed) == 4 {
 			buffer.WriteUint8(uint8(ADDRESS_IPV4))
+			for i := 0; i < len(parsed); i += 1 {
+				buffer.WriteUint8(parsed[i])
+				log.Printf("%d %x %x\n", i, parsed[i], buffer.Buf[:buffer.Pos])
+			}
 
 		} else {
 			buffer.WriteUint8(uint8(ADDRESS_IPV6))
-		}
-
-		for i := 0; i < len(parsed); i += 1 {
-			buffer.WriteUint8(parsed[i])
-			log.Printf("%d %x\n", i, parsed[i])
+			for i := 0; i < len(parsed); i += 2 {
+				var n uint16
+				// TODO: Why must this be in bigendian?
+				n = binary.BigEndian.Uint16([]byte(parsed[i : i+2]))
+				buffer.WriteUint16(n)
+			}
 		}
 
 		p, err := strconv.ParseUint(port, 10, 16)
@@ -113,6 +121,46 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 	buffer.WriteBytesN(shared.ServerKey, KEY_BYTES)
 	return nil
 }
+
+/*
+// Writes the servers and client <-> server keys to the supplied buffer
+func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
+	buffer.WriteUint32(uint32(len(shared.ServerAddrs)))
+
+	for _, addr := range shared.ServerAddrs {
+		host, port, err := net.SplitHostPort(addr.String())
+		if err != nil {
+			return errors.New("invalid port for host: " + addr.String())
+		}
+
+		parsed := net.ParseIP(host)
+		if parsed == nil {
+			return errors.New("invalid ip address")
+		}
+
+		if len(parsed) == 4 {
+			buffer.WriteUint8(uint8(ADDRESS_IPV4))
+
+		} else {
+			buffer.WriteUint8(uint8(ADDRESS_IPV6))
+		}
+
+		for i := 0; i < len(parsed); i += 1 {
+			buffer.WriteUint8(parsed[i])
+			log.Printf("%d %x %x\n", i, parsed[i], buffer.Buf[:buffer.Pos])
+		}
+
+		p, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return err
+		}
+		buffer.WriteUint16(uint16(p))
+	}
+	buffer.WriteBytesN(shared.ClientKey, KEY_BYTES)
+	buffer.WriteBytesN(shared.ServerKey, KEY_BYTES)
+	return nil
+}
+*/
 
 // Generates the shared data, should only really be called by ConnectTokenPrivate
 // since the same data will be copied/referenced by ConnectToken

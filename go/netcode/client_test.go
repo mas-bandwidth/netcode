@@ -62,7 +62,9 @@ func TestClientCommunications(t *testing.T) {
 	}
 
 	packetData := make([]byte, 1200)
+	count := 0
 	for {
+
 		timestamp := time.Now()
 		c.Update(timestamp)
 		fmt.Println("sending update")
@@ -80,5 +82,6 @@ func TestClientCommunications(t *testing.T) {
 			}
 		}
 		time.Sleep(deltaTime)
+		count++
 	}
 }

@@ -21,7 +21,7 @@ func TestReadWriteShared(t *testing.T) {
 	}
 
 	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
-
+	t.Logf("%#v\n", server.IP)
 	data := &sharedTokenData{}
 	data.ServerAddrs = make([]net.UDPAddr, 1)
 	data.ServerAddrs[0] = server
@@ -32,7 +32,6 @@ func TestReadWriteShared(t *testing.T) {
 	if err := data.WriteShared(buffer); err != nil {
 		t.Fatalf("error writing shared buffer: %s\n", err)
 	}
-	t.Logf("%#v\n", buffer)
 
 	// reset
 	buffer.Reset()
