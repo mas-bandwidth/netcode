@@ -57,6 +57,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 			log.Printf("%d %x\n", i, b)
 		}
 		ip := net.IP(ipBytes)
+
 		port, err := buffer.GetUint16()
 		if err != nil {
 			return errors.New("invalid port")
@@ -106,7 +107,6 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("writing port: %x\n", uint16(p))
 		buffer.WriteUint16(uint16(p))
 	}
 	buffer.WriteBytesN(shared.ClientKey, KEY_BYTES)
