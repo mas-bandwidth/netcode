@@ -9,7 +9,7 @@ import (
 
 func TestConnectTokenPrivate(t *testing.T) {
 	token1 := NewConnectTokenPrivate()
-	server := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000}
+	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
 	servers := make([]net.UDPAddr, 1)
 	servers[0] = server
 

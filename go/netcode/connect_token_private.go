@@ -15,7 +15,7 @@ type ConnectTokenPrivate struct {
 // Create a new connect token private with an empty TokenData buffer
 func NewConnectTokenPrivate() *ConnectTokenPrivate {
 	p := &ConnectTokenPrivate{}
-	p.TokenData = NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES)
+	p.TokenData = NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES - MAC_BYTES)
 	return p
 }
 

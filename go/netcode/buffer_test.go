@@ -1,6 +1,7 @@
 package netcode
 
 import (
+	"encoding/binary"
 	"testing"
 )
 
@@ -199,6 +200,10 @@ func TestBuffer_GetUint16(t *testing.T) {
 	writer.WriteUint16(0xffff)
 	reader := writer.Copy()
 
+	data := make([]byte, 2)
+	binary.LittleEndian.PutUint16(data, 0xffff)
+	t.Logf("%x = %x\n", data, writer.Buf)
+
 	val, err := reader.GetUint16()
 	if err != nil {
 		t.Fatal(err)
@@ -207,6 +212,7 @@ func TestBuffer_GetUint16(t *testing.T) {
 	if val != 0xffff {
 		t.Fatalf("expected 0xffff got: %x\n", val)
 	}
+
 }
 
 func TestBuffer_GetUint32(t *testing.T) {

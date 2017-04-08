@@ -64,7 +64,6 @@ func TestConnectionRequestPacket(t *testing.T) {
 
 	// write the connection request packet to a buffer
 	buffer := NewBuffer(2048)
-
 	packetKey, err := GenerateKey()
 	if err != nil {
 		t.Fatalf("error generating key")
@@ -370,7 +369,7 @@ func TestDisconnectPacket(t *testing.T) {
 }
 
 func testBuildRequestPacket(connectTokenKey []byte, t *testing.T) (*RequestPacket, []byte) {
-	addr := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: TEST_SERVER_PORT}
+	addr := net.UDPAddr{IP: net.ParseIP("::"), Port: TEST_SERVER_PORT}
 	serverAddrs := make([]net.UDPAddr, 1)
 	serverAddrs[0] = addr
 	config := NewConfig(serverAddrs, TEST_TIMEOUT_SECONDS, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, connectTokenKey)
