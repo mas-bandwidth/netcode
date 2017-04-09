@@ -669,7 +669,7 @@ mod test {
         harness.send_response(challenge);
         harness.validate_response();
    }
-
+   /*
    #[test]
     fn test_capi_connect() {
         use wrapper::private::*;
@@ -708,4 +708,5 @@ mod test {
             netcode_term();
        }
    }
+   */
 }
