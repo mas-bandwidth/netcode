@@ -266,8 +266,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
                 if let Some(ref mut client) = self.clients[idx] {
                     match client.state {
                         ConnectionState::PendingResponse(ref mut retry) => {
-                            retry.last_retry = 0.0;
-                            retry.retry_count += 1;
+                            retry.last_response = self.time;
                         }
                         _ => ()
                     }
@@ -278,7 +277,10 @@ impl<I> Server<I> where I: SocketProvider<I> {
                     Some(idx) => {
                         let conn = Connection {
                             client_id: private_data.client_id,
-                            state: ConnectionState::PendingResponse(RetryState::new(self.time)),
+                            state: ConnectionState::PendingResponse(RetryState {
+                                last_sent: 0.0,
+                                last_response: self.time
+                            }),
                             server_to_client_key: private_data.server_to_client_key,
                             client_to_server_key: private_data.client_to_server_key,
                             addr: addr.clone(),
@@ -417,9 +419,6 @@ impl<I> Server<I> where I: SocketProvider<I> {
                     (Some(ConnectionState::TimedOut), (false, Some(Ok(ServerEvent::ClientDisconnect(client_id)))))
                 }
             },
-            &mut ConnectionState::Connected => { 
-                (Some(ConnectionState::Idle(RetryState::new(time))), (false, None))
-            },
             &mut ConnectionState::TimedOut 
                 | &mut ConnectionState::Disconnected => (None, (true, None)),
         };
@@ -433,14 +432,13 @@ impl<I> Server<I> where I: SocketProvider<I> {
     }
 
     fn process_timeout<S>(time: f64, state: &mut RetryState, send_func: S) -> bool where S: Fn() {
-        if state.last_update + NETCODE_TIMEOUT_SECONDS as f64 <= time {
+        if state.last_response + NETCODE_TIMEOUT_SECONDS as f64 <= time {
             false
         } else {
             //Retry if we've hit an expire timeout or if this is the first time we're ticking.
-            if state.last_retry > RETRY_TIMEOUT
-                || (state.last_retry == 0.0 && state.retry_count == 0) {
+            if state.last_sent > RETRY_TIMEOUT {
                 send_func();
-                state.last_retry = 0.0;
+                state.last_sent = time;
             }
 
             true
@@ -472,19 +470,26 @@ impl<I> Server<I> where I: SocketProvider<I> {
 
         //Update client state with any recieved packet
         let (event, new_state) = match &client.state {
-            &ConnectionState::Connected |
-            &ConnectionState::Idle(_) => {
+            &ConnectionState::Idle(ref retry) => {
                 match decoded {
-                    packet::Packet::Payload(len) => (Some(ServerEvent::Packet(client.client_id, len)), ConnectionState::Idle(RetryState::new(time))),
-                    packet::Packet::KeepAlive(_) => (None, ConnectionState::Idle(RetryState::new(time))),
-                    packet::Packet::Disconnect => (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected),
+                    packet::Packet::Payload(len) =>
+                        (
+                            Some(ServerEvent::Packet(client.client_id, len)),
+                            ConnectionState::Idle(retry.update_response(time))
+                        ),
+                    packet::Packet::KeepAlive(_) => {
+                        (None, ConnectionState::Idle(retry.update_response(time)))
+                    },
+                    packet::Packet::Disconnect => {
+                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                    },
                     other => {
                         info!("Unexpected packet type when waiting for repsonse {}", other.get_type_id());
                         (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
                     }
                 }
              },
-            &ConnectionState::PendingResponse(_) => {
+            &ConnectionState::PendingResponse(ref retry) => {
                 match decoded {
                     packet::Packet::Response(resp) => {
                         let token = resp.decode(&challenge_key)?;
@@ -492,7 +497,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
 
                         info!("client response");
 
-                        (Some(ServerEvent::ClientConnect(token.client_id)), ConnectionState::Idle(RetryState::new(time)))
+                        (Some(ServerEvent::ClientConnect(token.client_id)), ConnectionState::Idle(retry.update_response(time)))
                     },
                     p => {
                         info!("Unexpected packet type when waiting for repsonse {}", p.get_type_id());
@@ -667,7 +672,7 @@ mod test {
 
         let mut harness = TestHarness::new();
 
-        TestHarness::enable_logging();
+        //TestHarness::enable_logging();
 
         unsafe {
             netcode_init();

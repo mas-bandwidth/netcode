@@ -96,5 +96,7 @@ pub fn main() {
 
         private_bindings.write_to_file(&private_path)
             .expect("Couldn't write bindings!");
+
+        //Todo: Pull in constants for timeout/etc into a separate file.
     }
 }
