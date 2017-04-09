@@ -6,7 +6,7 @@
             "name": "C++ Launch (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "target\\debug\\deps\\netcode-3a17994ab82a584c.exe",
+            "program": "target\\debug\\deps\\netcode-6b2d58131f7e37f3.exe",
             "args": ["--test-threads 1", "--nocapture", "--", ""],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",

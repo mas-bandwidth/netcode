@@ -106,11 +106,12 @@ pub enum ServerEvent {
     Packet(ClientId, usize)
 }
 
-pub type UdpServer = Server<UdpSocket>;
+pub type UdpServer = Server<UdpSocket,()>;
 
 const RETRY_TIMEOUT: f64 = 1.0;
 
-pub struct Server<I> {
+pub struct Server<I,S> {
+    socket_state: S,
     listen_socket: I,
     listen_addr: SocketAddr,
     protocol_id: u64,
@@ -128,13 +129,20 @@ pub struct Server<I> {
     client_event_idx: usize,
 }
 
-impl<I> Server<I> where I: SocketProvider<I> {
+enum TickResult {
+    Noop,
+    StateChange(ConnectionState),
+    SendKeepAlive
+}
+
+impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     /// Constructs a new Server bound to `local_addr` with `max_clients` and supplied `private_key` for authentication.
     pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES]) 
-            -> Result<Server<I>, CreateError>
+            -> Result<Server<I,S>, CreateError>
             where A: ToSocketAddrs {
         let bind_addr = local_addr.to_socket_addrs().unwrap().next().unwrap();
-        match I::bind(&bind_addr) {
+        let mut socket_state = I::new_state();
+        match I::bind(&bind_addr, &mut socket_state) {
             Ok(s) => {
                 let mut key_copy: [u8; NETCODE_KEY_BYTES] = [0; NETCODE_KEY_BYTES];
                 key_copy.copy_from_slice(private_key);
@@ -147,6 +155,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
                 trace!("Started server on {:?}", s.local_addr().unwrap());
 
                 Ok(Server {
+                    socket_state: socket_state,
                     listen_socket: s,
                     listen_addr: bind_addr,
                     protocol_id: protocol_id,
@@ -169,6 +178,10 @@ impl<I> Server<I> where I: SocketProvider<I> {
         }
     }
 
+    pub fn get_socket_state(&mut self) -> &mut S {
+        &mut self.socket_state
+    }
+
     /// Gets the local port that this server is bound to.
     pub fn get_local_addr(&self) -> Result<SocketAddr, io::Error> {
         self.listen_socket.local_addr()
@@ -185,6 +198,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
     /// Updates time elapsed since last server iteration.
     pub fn update(&mut self, elapsed: f64) -> Result<(), io::Error> {
         self.time += elapsed;
+        self.client_event_idx = 0;
 
         Ok(())
     }
@@ -219,19 +233,42 @@ impl<I> Server<I> where I: SocketProvider<I> {
                 break;
             }
 
-            let (remove, result) = match self.clients[self.client_event_idx] {
-                Some(ref mut c) => Server::tick_client(self.time, &mut self.listen_socket, c),
-                None => (false, None)
+            let result = match self.clients[self.client_event_idx] {
+                Some(ref mut c) => Server::<I,S>::tick_client(self.time, c),
+                None => TickResult::Noop
             };
 
-            if remove {
-                self.clients[self.client_event_idx] = None;
-            }
+            let event = match result {
+                TickResult::Noop => None,
+                TickResult::StateChange(state) => {
+                    match state {
+                        ConnectionState::TimedOut |
+                        ConnectionState::Disconnected => {
+                            let client_id = self.clients[self.client_event_idx].as_ref().map(|c| c.client_id).unwrap_or(0);
+                            self.clients[self.client_event_idx] = None;
+                            trace!("Client disconnected {}", client_id);
+                            Some(ServerEvent::ClientDisconnect(client_id))
+                        },
+                        _ => {
+                            if let Some(client) = self.clients[self.client_event_idx].as_mut() {
+                                client.state = state.clone();
+                            }
+
+                            None
+                        }
+                    }
+                },
+                TickResult::SendKeepAlive => {
+                    let client_idx = self.client_event_idx;
+                    self.send_keepalive_packet(client_idx)?;
+                    None
+                }
+            };
 
             self.client_event_idx += 1;
 
-            if result.is_some() {
-                return result.map_or(Ok(None), |r| r.map(|i| Some(i)))
+            if event.is_some() {
+                return event.map_or(Ok(None), |r| Ok(Some(r)))
             }
         }
 
@@ -253,7 +290,6 @@ impl<I> Server<I> where I: SocketProvider<I> {
 
                 if let Some(ref mut client) = self.clients[client_idx].as_mut() {
                     let time = self.time;
-                    let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
                     Self::handle_packet(time, protocol_id, &challenge_key, client, data, out_packet)
                 } else {
                     Ok(None)
@@ -355,6 +391,16 @@ impl<I> Server<I> where I: SocketProvider<I> {
         self.listen_socket.send_to(&packet[..], addr).map_err(|e| e.into()).map(|_| ())
     }
 
+    fn send_keepalive_packet(&mut self, client_idx: usize) -> Result<(), SendError> {
+        let client_id = self.clients[client_idx].as_ref().map(|c| c.client_id).unwrap_or(0);
+        trace!("Sending keepalive for {}", client_id);
+        let client_count = self.clients.len() as i32;
+        self.send_packet(client_id, &packet::Packet::KeepAlive(packet::KeepAlivePacket {
+            client_idx: client_idx as i32,
+            max_clients: client_count
+        }))
+    }
+
     fn validate_client_token(
             protocol_id: u64,
             private_key: &[u8; NETCODE_KEY_BYTES],
@@ -397,55 +443,31 @@ impl<I> Server<I> where I: SocketProvider<I> {
         }
     }
 
-    fn tick_client(time: f64, socket: &mut I, client: &mut Connection) -> (bool, Option<Result<ServerEvent, UpdateError>>) {
-        let client_id = 0;
-        let (new_state, result) = match &mut client.state {
+    fn tick_client(time: f64, client: &mut Connection) -> TickResult {
+        match &mut client.state {
             &mut ConnectionState::PendingResponse(ref mut retry_state) => {
-                let result = Self::process_timeout(time, retry_state, || {
-                    //We let client connection tokens drive retry so do nothing here
-                });
-
                 //If we didn't timeout then persist our retry state
-                if result {
-                    (None, (false, None))
+                if !retry_state.has_expired(time) {
+                    TickResult::Noop
                 } else {    //Timed out, remove client and trigger event
-                    (Some(ConnectionState::TimedOut), (true, None))
+                    TickResult::StateChange(ConnectionState::TimedOut)
                 }
             },
             &mut ConnectionState::Idle(ref mut retry_state) => {
-                let result = Self::process_timeout(time, retry_state, || {
-                });
-
                 //If we didn't timeout then persist our retry state
-                if result {
-                    (None, (false, None))
+                if !retry_state.has_expired(time) {
+                    if retry_state.should_send_keepalive(time) {
+                        *retry_state = retry_state.update_sent(time);
+                        TickResult::SendKeepAlive
+                    } else {
+                        TickResult::Noop
+                    }
                 } else {    //Timed out, remove client and trigger event
-                    (Some(ConnectionState::TimedOut), (false, Some(Ok(ServerEvent::ClientDisconnect(client_id)))))
+                    TickResult::StateChange(ConnectionState::TimedOut)
                 }
             },
             &mut ConnectionState::TimedOut 
-                | &mut ConnectionState::Disconnected => (None, (true, None)),
-        };
-
-        //If we're moving to a new state update it here
-        if let Some(new_state) = new_state {
-            client.state = new_state;
-        }
-
-        result
-    }
-
-    fn process_timeout<S>(time: f64, state: &mut RetryState, send_func: S) -> bool where S: Fn() {
-        if state.last_response + NETCODE_TIMEOUT_SECONDS as f64 <= time {
-            false
-        } else {
-            //Retry if we've hit an expire timeout or if this is the first time we're ticking.
-            if state.last_sent > RETRY_TIMEOUT {
-                send_func();
-                state.last_sent = time;
-            }
-
-            true
+                | &mut ConnectionState::Disconnected => TickResult::Noop
         }
     }
 
@@ -488,8 +510,8 @@ impl<I> Server<I> where I: SocketProvider<I> {
                         (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
                     },
                     other => {
-                        info!("Unexpected packet type when waiting for repsonse {}", other.get_type_id());
-                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                        info!("Unexpected packet type {}", other.get_type_id());
+                        (None, ConnectionState::Idle(retry.update_response(time)))
                     }
                 }
              },
@@ -505,7 +527,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
                     },
                     p => {
                         info!("Unexpected packet type when waiting for repsonse {}", p.get_type_id());
-                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                        (None, ConnectionState::Idle(retry.update_response(time)))
                     }
                 }
             },
@@ -533,26 +555,29 @@ mod test {
     use token;
     use super::*;
 
+    use server::socket::capi_simulator::*;
+
     use std::net::UdpSocket;
 
     const PROTOCOL_ID: u64 = 0xFFCC;
     const MAX_CLIENTS: usize = 256;
     const CLIENT_ID: u64 = 0xFFEEDD;
 
-    struct TestHarness {
+    struct TestHarness<I,S> where I: SocketProvider<I,S> {
         next_sequence: u64,
-        server: UdpServer,
+        server: Server<I,S>,
         socket: UdpSocket,
         connect_token: token::ConnectToken
     }
 
-    impl TestHarness {
-        pub fn new() -> TestHarness {
+    impl<S,I> TestHarness<I,S> where I: SocketProvider<I,S> {
+        pub fn new(port: Option<u16>) -> TestHarness<I,S> {
             let private_key = crypto::generate_key();
 
-            let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+            let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
+            let mut server = Server::<I,S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
             server.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
-            let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+            let socket = UdpSocket::bind(&addr).unwrap();
             socket.connect(server.get_local_addr().unwrap()).unwrap();
 
             let token = token::ConnectToken::generate(
@@ -570,6 +595,10 @@ mod test {
                 socket: socket,
                 connect_token: token
             }
+        }
+
+        pub fn get_socket_state(&mut self) -> &mut S {
+            self.server.get_socket_state()
         }
 
         pub fn get_connect_token(&mut self) -> &token::ConnectToken {
@@ -645,68 +674,82 @@ mod test {
                 _ => assert!(false)
             }
         }
+    }
 
-        #[allow(dead_code)]
-        fn enable_logging() {
-            use env_logger::LogBuilder;
-            use log::LogLevelFilter;
+    #[allow(dead_code)]
+    fn enable_logging() {
+        use env_logger::LogBuilder;
+        use log::LogLevelFilter;
 
-            LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
+        LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
 
-            use wrapper::private::*;
-            unsafe {
-                netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
-            }
+        use wrapper::private::*;
+        unsafe {
+            netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
         }
     }
 
-   #[test]
+    #[test]
     fn test_connect() {
-       let mut harness = TestHarness::new();
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
         harness.send_connect_packet();
         harness.validate_challenge();
         let challenge = harness.read_challenge();
         harness.send_response(challenge);
         harness.validate_response();
-   }
-   /*
-   #[test]
+    }
+
+    #[test]
     fn test_capi_connect() {
         use wrapper::private::*;
         use std::ffi::CString;
 
-        let mut harness = TestHarness::new();
-
-        //TestHarness::enable_logging();
+        let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));
 
         unsafe {
             netcode_init();
 
-            let addr = CString::new("0.0.0.0:0").unwrap();
-            let client = netcode_client_create(::std::mem::transmute(addr.as_ptr()), 0.0);
+            let addr = CString::new("127.0.0.1:1234").unwrap();
+            let sim = harness.get_socket_state().clone();
+            let client = netcode_client_create_internal(::std::mem::transmute(addr.as_ptr()), 0.0, sim.borrow_mut().sim);
 
             let mut connect_token = vec!();
             harness.get_connect_token().write(&mut connect_token).unwrap();
 
             netcode_client_connect(client, ::std::mem::transmute(connect_token.as_ptr()));
-            netcode_client_update(client, 0.0);
 
-            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST as i32);
+            let mut time = 0.0;
+            loop {
+                netcode_network_simulator_update(sim.borrow_mut().sim, time);
 
-            harness.validate_challenge();
+                harness.server.update(1.0 / 10.0).unwrap();
+                loop {
+                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    match harness.server.next_event(&mut data) {
+                        Ok(None) => break,
+                        Err(e) => assert!(false, "{:?}", e),
+                        _ => (),
+                    }
+                }
 
-            netcode_client_update(client, 1.0 / NETCODE_PACKET_SEND_RATE as f64 + 0.1);
+                netcode_client_update(client, time);
 
-            harness.validate_response();
+                if netcode_client_state(client) <= NETCODE_CLIENT_STATE_DISCONNECTED as i32 {
+                    break;
+                }
 
-            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE as i32);
+                if netcode_client_state(client) == NETCODE_CLIENT_STATE_CONNECTED as i32 {
+                    break;
+                }
 
-            //Todo: Send keep alive and test for STATE_CONNECTED
+                time += 1.0 / 1.0;
+            }
+
+            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_CONNECTED as i32);
 
             netcode_client_destroy(client);
 
             netcode_term();
        }
    }
-   */
 }

@@ -2,7 +2,7 @@ use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::io;
 use std::io::Write;
 use std::time;
-use byteorder::{WriteBytesExt, ReadBytesExt, ByteOrder, LittleEndian};
+use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian, BigEndian};
 
 use common::*;
 use crypto;
@@ -344,7 +344,7 @@ impl HostList {
 
             match host_type {
                 NETCODE_ADDRESS_IPV4 => {
-                    let ip = source.read_u32::<LittleEndian>()?;
+                    let ip = source.read_u32::<BigEndian>()?;
                     let port = source.read_u16::<LittleEndian>()?;
 
                     hosts[i] = Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::from(ip)), port))
@@ -381,7 +381,7 @@ impl HostList {
                     let ip = addr.ip().octets();
 
                     for i in 0..4 {
-                        out.write_u8(ip[3-i])?;
+                        out.write_u8(ip[i])?;
                     }
                 },
                 SocketAddr::V6(addr) => {
@@ -389,7 +389,7 @@ impl HostList {
                     let ip = addr.ip().octets();
 
                     for i in 0..16 {
-                        out.write_u8(ip[15-i])?;
+                        out.write_u8(ip[i])?;
                     }
                 }
             }
