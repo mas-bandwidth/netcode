@@ -94,6 +94,7 @@ impl From<io::Error> for SendError {
 pub type ClientId = u64;
 
 /// Enum that describes and event from the server.
+#[derive(Debug)]
 pub enum ServerEvent {
     /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private date from token.
     ClientConnect(ClientId),
@@ -143,6 +144,8 @@ impl<I> Server<I> where I: SocketProvider<I> {
                     clients.push(None);
                 }
 
+                trace!("Started server on {:?}", s.local_addr().unwrap());
+
                 Ok(Server {
                     listen_socket: s,
                     listen_addr: bind_addr,
@@ -176,7 +179,7 @@ impl<I> Server<I> where I: SocketProvider<I> {
     }
 
     /// Updates time elapsed since last server iteration.
-    pub fn update(&mut self, elapsed: f64, block_duration: time::Duration) -> Result<(), io::Error> {
+    pub fn update(&mut self, elapsed: f64) -> Result<(), io::Error> {
         self.time += elapsed;
 
         Ok(())
@@ -195,11 +198,14 @@ impl<I> Server<I> where I: SocketProvider<I> {
                 Ok((len, addr)) => self.handle_io(&addr, &scratch[..len], out_packet),
                 Err(e) => match e.kind() {
                     io::ErrorKind::WouldBlock => Ok(None),
+                    io::ErrorKind::Other => Ok(None),
                     _ => Err(e.into())
                 }
             };
 
-            if let Ok(Some(_)) = result {
+            if let Ok(None) = result {
+                break;
+            } else {
                 return result
             }
         }
@@ -519,7 +525,6 @@ mod test {
     use super::*;
 
     use std::net::UdpSocket;
-    use std::sync::atomic;
 
     const PROTOCOL_ID: u64 = 0xFFCC;
     const MAX_CLIENTS: usize = 256;
@@ -527,7 +532,6 @@ mod test {
 
     struct TestHarness {
         next_sequence: u64,
-        private_key: [u8; NETCODE_KEY_BYTES],
         server: UdpServer,
         socket: UdpSocket,
         connect_token: token::ConnectToken
@@ -552,15 +556,14 @@ mod test {
 
             TestHarness {
                 next_sequence: 0,
-                private_key: private_key,
                 server: server,
                 socket: socket,
                 connect_token: token
             }
         }
 
-        pub fn get_server(&mut self) -> &mut UdpServer {
-            &mut self.server
+        pub fn get_connect_token(&mut self) -> &token::ConnectToken {
+            &self.connect_token
         }
 
         fn get_next_sequence(&mut self) -> u64 {
@@ -585,11 +588,14 @@ mod test {
             self.socket.send(&data[..len]).unwrap();
         }
         
-        fn validate_challenge(&mut self) -> ChallengePacket {
+        fn validate_challenge(&mut self) {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.server.update(0.0, time::Duration::from_secs(0)).unwrap();
+            self.server.update(0.0).unwrap();
             self.server.next_event(&mut data).unwrap();
+        }
 
+        fn read_challenge(&mut self) -> ChallengePacket {
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
             self.socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
             let read = self.socket.recv(&mut data).unwrap();
 
@@ -621,7 +627,7 @@ mod test {
 
         fn validate_response(&mut self) {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.server.update(0.0, time::Duration::from_secs(1)).unwrap();
+            self.server.update(0.0).unwrap();
             let event = self.server.next_event(&mut data);
 
             match event {
@@ -629,20 +635,67 @@ mod test {
                 _ => assert!(false)
             }
         }
+
+        #[allow(dead_code)]
+        fn enable_logging() {
+            use env_logger::LogBuilder;
+            use log::LogLevelFilter;
+
+            LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
+
+            use wrapper::private::*;
+            unsafe {
+                netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
+            }
+        }
     }
 
    #[test]
     fn test_connect() {
-        /*
-        use env_logger::LogBuilder;
-        use log::LogLevelFilter;
-
-        LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
-        */        
-        let mut harness = TestHarness::new();
+       let mut harness = TestHarness::new();
         harness.send_connect_packet();
-        let challenge = harness.validate_challenge();
+        harness.validate_challenge();
+        let challenge = harness.read_challenge();
         harness.send_response(challenge);
         harness.validate_response();
+   }
+
+   #[test]
+    fn test_capi_connect() {
+        use wrapper::private::*;
+        use std::ffi::CString;
+
+        let mut harness = TestHarness::new();
+
+        TestHarness::enable_logging();
+
+        unsafe {
+            netcode_init();
+
+            let addr = CString::new("0.0.0.0:0").unwrap();
+            let client = netcode_client_create(::std::mem::transmute(addr.as_ptr()), 0.0);
+
+            let mut connect_token = vec!();
+            harness.get_connect_token().write(&mut connect_token).unwrap();
+
+            netcode_client_connect(client, ::std::mem::transmute(connect_token.as_ptr()));
+            netcode_client_update(client, 0.0);
+
+            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST as i32);
+
+            harness.validate_challenge();
+
+            netcode_client_update(client, 1.0 / NETCODE_PACKET_SEND_RATE as f64 + 0.1);
+
+            harness.validate_response();
+
+            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE as i32);
+
+            //Todo: Send keep alive and test for STATE_CONNECTED
+
+            netcode_client_destroy(client);
+
+            netcode_term();
+       }
    }
 }

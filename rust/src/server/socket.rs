@@ -12,7 +12,10 @@ pub trait SocketProvider<I> {
 
 impl SocketProvider<UdpSocket> for UdpSocket {
     fn bind(addr: &SocketAddr) -> Result<UdpSocket, io::Error> {
-        net2::UdpBuilder::new_v4()?.reuse_address(true)?.bind(addr)
+        let socket = net2::UdpBuilder::new_v4()?.reuse_address(true)?.bind(addr)?;
+        socket.set_nonblocking(true)?;
+
+        Ok(socket)
     }
 
     fn local_addr(&self) -> Result<SocketAddr, io::Error> {

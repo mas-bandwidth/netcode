@@ -460,8 +460,6 @@ fn test_encode_decode<V>(
     unsafe {
         use wrapper;
 
-        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
-
         let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
         wrapper::private::netcode_replay_protection_reset(&mut replay);
 
@@ -682,8 +680,6 @@ fn test_decode_challenge_token() {
 
         let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         capi_scratch.copy_from_slice(&challenge_packet.token_data);
-
-        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
 
         let decode = wrapper::private::netcode_decrypt_challenge_token(
             capi_scratch.as_mut_ptr(),
