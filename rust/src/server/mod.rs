@@ -2,7 +2,7 @@
 
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io;
-use std::time;
+use std::time::Duration;
 
 use common::*;
 use packet;
@@ -176,6 +176,10 @@ impl<I> Server<I> where I: SocketProvider<I> {
 
     pub fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
         &self.challenge_key
+    }
+
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
+        self.listen_socket.set_recv_timeout(duration)
     }
 
     /// Updates time elapsed since last server iteration.
@@ -546,7 +550,8 @@ mod test {
         pub fn new() -> TestHarness {
             let private_key = crypto::generate_key();
 
-            let server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+            let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+            server.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
             let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
             socket.connect(server.get_local_addr().unwrap()).unwrap();
 
@@ -601,7 +606,7 @@ mod test {
 
         fn read_challenge(&mut self) -> ChallengePacket {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.socket.set_read_timeout(Some(time::Duration::from_secs(1))).unwrap();
+            self.socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
             let read = self.socket.recv(&mut data).unwrap();
 
             let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
