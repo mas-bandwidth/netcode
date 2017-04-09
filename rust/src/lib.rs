@@ -2,7 +2,6 @@ extern crate libsodium_sys;
 extern crate byteorder;
 #[macro_use]
 extern crate log;
-extern crate mio;
 extern crate net2;
 
 #[cfg(test)]

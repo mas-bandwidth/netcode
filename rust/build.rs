@@ -7,13 +7,6 @@ use std::fs::File;
 use std::time::{Duration};
 
 pub fn main() {
-
-    #[cfg(target_os = "windows")]
-    {
-        println!("cargo:rustc-link-search=native=../c/windows");
-        println!("cargo:rustc-link-lib=static=sodium-release");
-    }
-
     gcc::Config::new()
         .file("../c/netcode.c")
         .include("../c")
@@ -65,14 +58,14 @@ pub fn main() {
 
         let include = env::var("INCLUDE").unwrap_or("".to_string());
         let sodium_include = env::var("SODIUM_LIB_DIR")
-                                 .unwrap_or("../c/windows/sodium".to_string());
+                                 .unwrap_or("../c/windows".to_string());
 
         let private_bindings = bindgen::Builder::default()
             .no_unstable_rust()
             .header("../c/netcode.c")
             .clang_arg("-I../c")
-            .clang_arg(format!("-I{}", include))
             .clang_arg(format!("-I{}", sodium_include))
+            .clang_arg(format!("-I{}", include))
             .whitelisted_function("netcode_write_packet")
             .whitelisted_function("netcode_read_packet")
             .whitelisted_function("netcode_read_connect_token")
