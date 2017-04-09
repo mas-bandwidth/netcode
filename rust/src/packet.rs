@@ -169,7 +169,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
         Ok(writer.position() as usize)
     } else {
-       if let Some((sequence,private_key)) = crypt_info {
+        if let Some((sequence,private_key)) = crypt_info {
             let (prefix_byte, offset) = {
                 let mut write = &mut io::Cursor::new(&mut out[..]);
 
@@ -180,7 +180,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
                 (prefix_byte, write.position())
             };
-    
+
             let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
             let scratch_written = {
                 let mut scratch_write = io::Cursor::new(&mut scratch[..]);
@@ -197,7 +197,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
             let crypt_write = crypto::encode(
                 &mut out[offset as usize..],
-                &scratch[0..scratch_written as usize],
+                &scratch[..scratch_written as usize],
                 Some(&additional_data[..]),
                 sequence,
                 private_key)?;
@@ -329,7 +329,7 @@ impl ChallengePacket {
         })
     }
 
-    pub fn decode(&self, challenge_sequence: u64, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
+    pub fn decode(&self, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
         let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
 
@@ -370,6 +370,13 @@ impl ResponsePacket {
             token_sequence: token_sequence,
             token_data: token_data
         })
+    }
+
+    pub fn decode(&self, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
+        let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
+        crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
+
+        ChallengeToken::read(&mut io::Cursor::new(&decoded[..])).map_err(|e| e.into())
     }
 
     pub fn write<W>(&self, out: &mut W) -> Result<(), io::Error> where W: io::Write {
@@ -452,8 +459,6 @@ fn test_encode_decode<V>(
 
     unsafe {
         use wrapper;
-
-        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
 
         let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
         wrapper::private::netcode_replay_protection_reset(&mut replay);
@@ -650,26 +655,10 @@ fn test_payload_packet() {
 
 #[test]
 fn test_decode_challenge_token() {
-    use token;
-    use std::net::SocketAddr;
-    use std::str::FromStr;
-
-    let protocol_id = 0xFFCC;
-    let sequence = 0xCCDD;
-    let pkey = crypto::generate_key();
     let mut user_data = [0; NETCODE_USER_DATA_BYTES];
     for i in 0..user_data.len() {
         user_data[i] = i as u8;
     }
-
-    let conn_token = token::ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
-                        &pkey,
-                        30, //Expire
-                        sequence,
-                        protocol_id,
-                        0xFFEE, //Client Id
-                        Some(&user_data)).unwrap();
 
     let client_id = 5;
     let challenge_sequence = 0xFED;
@@ -680,7 +669,7 @@ fn test_decode_challenge_token() {
                             challenge_sequence,
                             &challenge_key).unwrap();
 
-    let decoded = challenge_packet.decode(challenge_sequence, &challenge_key).unwrap();
+    let decoded = challenge_packet.decode(&challenge_key).unwrap();
     assert_eq!(decoded.client_id, client_id);
     for i in 0..user_data.len() {
         assert_eq!(user_data[i], decoded.user_data[i]);
@@ -691,8 +680,6 @@ fn test_decode_challenge_token() {
 
         let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         capi_scratch.copy_from_slice(&challenge_packet.token_data);
-
-        wrapper::netcode::netcode_log_level(wrapper::netcode::NETCODE_LOG_LEVEL_DEBUG as i32);
 
         let decode = wrapper::private::netcode_decrypt_challenge_token(
             capi_scratch.as_mut_ptr(),

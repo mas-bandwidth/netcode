@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use common::*;
 use server;
 
 /// Current state of the client connection.
@@ -7,8 +8,6 @@ use server;
 pub enum ConnectionState {
     /// We've recieved the initial packet but response is outstanding yet.
     PendingResponse(RetryState),
-    /// Handshake is complete and client is connected.
-    Connected,
     /// Connection is idle and waiting to send heartbeat.
     Idle(RetryState),
     /// Client timed out from heartbeat packets.
@@ -19,17 +18,22 @@ pub enum ConnectionState {
 
 #[derive(Clone)]
 pub struct RetryState {
-    pub last_update: f64,
-    pub last_retry: f64,
-    pub retry_count: usize
+    pub last_sent: f64,
+    pub last_response: f64
 }
 
 impl RetryState {
-    pub fn new(time: f64) -> RetryState {
+    pub fn update_sent(&self, sent: f64) -> RetryState {
         RetryState {
-            last_update: time,
-            last_retry: 0.0,
-            retry_count: 0
+            last_sent: sent,
+            last_response: self.last_response
+        }
+    }
+
+    pub fn update_response(&self, response: f64) -> RetryState {
+        RetryState {
+            last_sent: self.last_sent,
+            last_response: response
         }
     }
 }
@@ -39,5 +43,7 @@ impl RetryState {
 pub struct Connection {
     pub client_id: server::ClientId,
     pub state: ConnectionState,
+    pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
+    pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
     pub addr: SocketAddr
 }
