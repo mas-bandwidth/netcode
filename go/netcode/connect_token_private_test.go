@@ -3,6 +3,7 @@ package netcode
 import (
 	"bytes"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,8 +78,11 @@ func testComparePrivateTokens(token1, token2 *ConnectTokenPrivate, t *testing.T)
 	token1Servers := token1.ServerAddrs
 	token2Servers := token2.ServerAddrs
 	for i := 0; i < len(token1.ServerAddrs); i += 1 {
-		if bytes.Compare([]byte(token1Servers[i].IP), []byte(token2Servers[i].IP)) != 0 {
-			t.Fatalf("server addresses did not match: expected %v got %v\n", token1Servers[i], token2Servers[i])
+		if strings.Compare(token1Servers[i].IP.String(), token2Servers[i].IP.String()) != 0 {
+			t.Fatalf("server addresses did not match: expected %s got %s\n", token1Servers[i].IP.String(), token2Servers[i].String())
+		}
+		if token1Servers[i].Port != token2Servers[i].Port {
+			t.Fatalf("server ports did not match: expected %s got %s\n", token1Servers[i].Port, token2Servers[i].Port)
 		}
 	}
 

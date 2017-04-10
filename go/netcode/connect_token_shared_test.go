@@ -21,7 +21,6 @@ func TestReadWriteShared(t *testing.T) {
 	}
 
 	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
-	t.Logf("%#v\n", server.IP)
 	data := &sharedTokenData{}
 	data.ServerAddrs = make([]net.UDPAddr, 1)
 	data.ServerAddrs[0] = server
@@ -37,10 +36,13 @@ func TestReadWriteShared(t *testing.T) {
 	buffer.Reset()
 	outData := &sharedTokenData{}
 
-	outData.ReadShared(buffer)
+	if err := outData.ReadShared(buffer); err != nil {
+		t.Fatalf("error reading data: %s\n", err)
+	}
 
+	t.Logf("clientKey len: %d outData len: %d\n", len(clientKey), len(outData.ClientKey))
 	if bytes.Compare(clientKey, outData.ClientKey) != 0 {
-		t.Fatalf("client key did not match")
+		t.Fatalf("client key did not match expected %#v\ngot:%#v\n", clientKey, outData.ClientKey)
 	}
 
 	if bytes.Compare(serverKey, outData.ServerKey) != 0 {

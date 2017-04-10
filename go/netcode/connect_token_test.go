@@ -3,6 +3,7 @@ package netcode
 import (
 	"bytes"
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func TestConnectToken(t *testing.T) {
 	server := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000}
 	servers := make([]net.UDPAddr, 1)
 	servers[0] = server
-
+	t.Logf("ip: %#v\n", server.IP)
 	if key, err = GenerateKey(); err != nil {
 		t.Fatalf("error generating key %s\n", key)
 	}
@@ -89,10 +90,15 @@ func testCompareTokens(token1, token2 *ConnectToken, t *testing.T) {
 
 	token1Servers := token1.ServerAddrs
 	token2Servers := token2.ServerAddrs
+
 	for i := 0; i < len(token1.ServerAddrs); i += 1 {
-		if bytes.Compare([]byte(token1Servers[i].IP), []byte(token2Servers[i].IP)) != 0 {
-			t.Fatalf("server addresses did not match: expected %v got %v\n", token1Servers[i], token2Servers[i])
+		if strings.Compare(token1Servers[i].IP.String(), token2Servers[i].IP.String()) != 0 {
+			t.Fatalf("server addresses did not match: expected %s got %s\n", token1Servers[i].IP.String(), token2Servers[i].String())
 		}
+		if token1Servers[i].Port != token2Servers[i].Port {
+			t.Fatalf("server ports did not match: expected %s got %s\n", token1Servers[i].Port, token2Servers[i].Port)
+		}
+
 	}
 
 	if bytes.Compare(token1.ClientKey, token2.ClientKey) != 0 {

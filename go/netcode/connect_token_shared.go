@@ -1,7 +1,6 @@
 package netcode
 
 import (
-	"encoding/binary"
 	"errors"
 	"log"
 	"net"
@@ -26,7 +25,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 	if err != nil {
 		return err
 	}
-
+	log.Printf("read %d servers\n", servers)
 	if servers <= 0 {
 		return errors.New("empty servers")
 	}
@@ -45,26 +44,30 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 
 		if serverType == ADDRESS_IPV4 {
 			ipBytes, err = buffer.GetBytes(4)
+			if err != nil {
+				return err
+			}
 		} else if serverType == ADDRESS_IPV6 {
-			ipBytes, err = buffer.GetBytes(16)
-			log.Printf("%x\n", buffer.Buf[:buffer.Pos])
+			ipBytes = make([]byte, 16)
+			for i := 0; i < 16; i += 2 {
+				n, err := buffer.GetUint16()
+				if err != nil {
+					return err
+				}
+				// decode little endian -> big endian for net.IP
+				ipBytes[i] = byte(n) << 8
+				ipBytes[i+1] = byte(n)
+			}
 		} else {
 			return errors.New("unknown ip address")
 		}
 
-		if err != nil {
-			return err
-		}
-		for i, b := range ipBytes {
-			log.Printf("%d %x\n", i, b)
-		}
 		ip := net.IP(ipBytes)
 
 		port, err := buffer.GetUint16()
 		if err != nil {
 			return errors.New("invalid port")
 		}
-		log.Printf("%#v\n", buffer.Buf[:buffer.Pos])
 		shared.ServerAddrs[i] = net.UDPAddr{IP: ip, Port: int(port)}
 	}
 
@@ -93,20 +96,19 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 		if parsed == nil {
 			return errors.New("invalid ip address")
 		}
-
-		if len(parsed) == 4 {
+		parsedIpv4 := parsed.To4()
+		if parsedIpv4 != nil {
 			buffer.WriteUint8(uint8(ADDRESS_IPV4))
-			for i := 0; i < len(parsed); i += 1 {
-				buffer.WriteUint8(parsed[i])
-				log.Printf("%d %x %x\n", i, parsed[i], buffer.Buf[:buffer.Pos])
+			for i := 0; i < len(parsedIpv4); i += 1 {
+				buffer.WriteUint8(parsedIpv4[i])
 			}
-
 		} else {
 			buffer.WriteUint8(uint8(ADDRESS_IPV6))
 			for i := 0; i < len(parsed); i += 2 {
 				var n uint16
-				// TODO: Why must this be in bigendian?
-				n = binary.BigEndian.Uint16([]byte(parsed[i : i+2]))
+				// net.IP is already big endian encoded, encode it to create little endian encoding.
+				n = uint16(parsed[i]) << 8
+				n = uint16(parsed[i+1])
 				buffer.WriteUint16(n)
 			}
 		}

@@ -1,6 +1,7 @@
 package netcode
 
 import (
+	//"errors"
 	"log"
 	"net"
 	"time"
@@ -30,8 +31,9 @@ func NewNetcodeConn(address *net.UDPAddr) *NetcodeConn {
 }
 
 func (c *NetcodeConn) Read(b []byte) (int, error) {
-	n, _, err := c.conn.ReadFromUDP(b)
-	return n, err
+	buf := c.Recv()
+	copy(b, buf)
+	return len(buf), nil
 }
 
 func (c *NetcodeConn) Write(b []byte) (int, error) {
@@ -78,16 +80,31 @@ func (c *NetcodeConn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-func (c *NetcodeConn) Create() error {
+func (c *NetcodeConn) Dial() error {
 	var err error
 	c.conn, err = net.DialUDP(c.address.Network(), nil, c.address)
 	if err != nil {
 		return err
 	}
+	return c.create()
+}
+
+func (c *NetcodeConn) create() error {
 	c.conn.SetReadBuffer(SOCKET_RCVBUF_SIZE)
 	c.conn.SetWriteBuffer(SOCKET_SNDBUF_SIZE)
 	go c.readLoop()
 	return nil
+}
+
+func (c *NetcodeConn) Listen() error {
+	var err error
+	log.Printf("%s\n", c.address.Network())
+	c.conn, err = net.ListenUDP(c.address.Network(), c.address)
+	if err != nil {
+		return err
+	}
+	c.create()
+	return err
 }
 
 func (c *NetcodeConn) receiver(ch chan []byte) {

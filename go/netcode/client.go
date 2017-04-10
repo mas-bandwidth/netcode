@@ -105,7 +105,7 @@ func (c *Client) Connect() error {
 	c.serverAddress = &c.connectToken.ServerAddrs[0]
 
 	c.conn = NewNetcodeConn(c.serverAddress)
-	if err = c.conn.Create(); err != nil {
+	if err = c.conn.Dial(); err != nil {
 		return err
 	}
 	if err != nil {
@@ -288,7 +288,6 @@ func (c *Client) Recv() error {
 
 		packet := NewPacket(packetData)
 		packetBuffer := NewBufferFromBytes(packetData)
-		log.Printf("calling packet %#v .Read\n", packetBuffer)
 		if err = packet.Read(packetBuffer, size, c.config.ProtocolId, timestamp, c.context.ReadPacketKey, nil, allowedPackets, c.replayProtection); err != nil {
 			return err
 		}
