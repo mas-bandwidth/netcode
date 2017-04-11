@@ -2,6 +2,7 @@ package netcode
 
 import (
 	"errors"
+	"log"
 	"strings"
 	"time"
 )
@@ -36,6 +37,7 @@ func NewConnectToken() *ConnectToken {
 }
 
 // Generates the token and private token data with the supplied config values and sequence id.
+// This will also write and encrypt the private token
 func (token *ConnectToken) Generate(config *Config, sequence uint64) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
 	token.ExpireTimestamp = token.CreateTimestamp + config.TokenExpiry
@@ -125,8 +127,9 @@ func ReadConnectToken(tokenBuffer []byte) (*ConnectToken, error) {
 	if token.Sequence, err = buffer.GetUint64(); err != nil {
 		return nil, errors.New("read connect data has bad sequence " + err.Error())
 	}
+	log.Printf("sequence: %x\n", token.Sequence)
 
-	if privateData, err = buffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES + MAC_BYTES); err != nil {
+	if privateData, err = buffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES); err != nil {
 		return nil, errors.New("read connect data has bad private data " + err.Error())
 	}
 

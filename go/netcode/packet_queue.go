@@ -1,41 +1,45 @@
 package netcode
 
+const PACKET_QUEUE_SIZE = 256
+
 type PacketQueue struct {
-	NumPackets int
-	StartIndex int
-	Packets    []Packet
+	numPackets int
+	startIndex int
+	packets    []Packet
+	queueSize  int
 }
 
-func NewPacketQueue() *PacketQueue {
+func NewPacketQueue(queueSize int) *PacketQueue {
 	q := &PacketQueue{}
-	q.Packets = make([]Packet, PACKET_QUEUE_SIZE)
+	q.queueSize = queueSize
+	q.packets = make([]Packet, queueSize)
 	return q
 }
 
 func (q *PacketQueue) Clear() {
-	q.NumPackets = 0
-	q.StartIndex = 0
-	q.Packets = make([]Packet, PACKET_QUEUE_SIZE)
+	q.numPackets = 0
+	q.startIndex = 0
+	q.packets = make([]Packet, q.queueSize)
 }
 
 func (q *PacketQueue) Push(packet Packet) int {
-	if q.NumPackets == PACKET_QUEUE_SIZE {
+	if q.numPackets == q.queueSize {
 		return 0
 	}
 
-	index := (q.StartIndex + q.NumPackets) % PACKET_QUEUE_SIZE
-	q.Packets[index] = packet
-	q.NumPackets++
+	index := (q.startIndex + q.numPackets) % q.queueSize
+	q.packets[index] = packet
+	q.numPackets++
 	return 1
 }
 
 func (q *PacketQueue) Pop() Packet {
-	if q.NumPackets == 0 {
+	if q.numPackets == 0 {
 		return nil
 	}
 
-	packet := q.Packets[q.StartIndex]
-	q.StartIndex = (q.StartIndex + 1) % PACKET_QUEUE_SIZE
-	q.NumPackets--
+	packet := q.packets[q.startIndex]
+	q.startIndex = (q.startIndex + 1) % q.queueSize
+	q.numPackets--
 	return packet
 }

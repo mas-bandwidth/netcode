@@ -63,12 +63,15 @@ func TestClientCommunications(t *testing.T) {
 
 	packetData := make([]byte, 1200)
 	count := 0
+	// fake game loop
 	for {
-
+		if count == 10 {
+			t.Fatalf("error communicating with server")
+		}
 		timestamp := time.Now()
 		c.Update(timestamp)
 		fmt.Println("sending update")
-		if c.state == StateConnected {
+		if c.getState() == StateConnected {
 			c.SendData(packetData)
 			fmt.Println("sent data")
 		}
@@ -78,7 +81,8 @@ func TestClientCommunications(t *testing.T) {
 			if payload := c.RecvData(); payload == nil {
 				break
 			} else {
-				fmt.Printf("recv'd payload: %#v\n", payload)
+				fmt.Printf("recv'd payload: of %d bytes\n", len(payload))
+				return
 			}
 		}
 		time.Sleep(deltaTime)
