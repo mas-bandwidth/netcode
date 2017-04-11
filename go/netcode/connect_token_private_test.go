@@ -3,7 +3,6 @@ package netcode
 import (
 	"bytes"
 	"net"
-	"strings"
 	"testing"
 	"time"
 )
@@ -78,12 +77,7 @@ func testComparePrivateTokens(token1, token2 *ConnectTokenPrivate, t *testing.T)
 	token1Servers := token1.ServerAddrs
 	token2Servers := token2.ServerAddrs
 	for i := 0; i < len(token1.ServerAddrs); i += 1 {
-		if strings.Compare(token1Servers[i].IP.String(), token2Servers[i].IP.String()) != 0 {
-			t.Fatalf("server addresses did not match: expected %s got %s\n", token1Servers[i].IP.String(), token2Servers[i].String())
-		}
-		if token1Servers[i].Port != token2Servers[i].Port {
-			t.Fatalf("server ports did not match: expected %s got %s\n", token1Servers[i].Port, token2Servers[i].Port)
-		}
+		testCompareAddrs(token1Servers[i], token2Servers[i], t)
 	}
 
 	if bytes.Compare(token1.ClientKey, token2.ClientKey) != 0 {
@@ -93,4 +87,15 @@ func testComparePrivateTokens(token1, token2 *ConnectTokenPrivate, t *testing.T)
 	if bytes.Compare(token1.ServerKey, token2.ServerKey) != 0 {
 		t.Fatalf("ServerKey do not match expected %v got %v", token1.ServerKey, token2.ServerKey)
 	}
+}
+
+func testCompareAddrs(addr1, addr2 net.UDPAddr, t *testing.T) {
+	if addr1.IP.String() != addr2.IP.String() {
+		t.Fatalf("ip addresses were not equal: %s and %s\n", addr1.IP.String(), addr2.IP.String())
+	}
+
+	if addr1.Port != addr2.Port {
+		t.Fatalf("server ports did not match: expected %s got %s\n", addr1.Port, addr2.Port)
+	}
+
 }

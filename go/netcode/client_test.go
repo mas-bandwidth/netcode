@@ -63,6 +63,7 @@ func TestClientCommunications(t *testing.T) {
 
 	packetData := make([]byte, 1200)
 	count := 0
+	// fake game loop
 	for {
 		if count == 10 {
 			t.Fatalf("error communicating with server")
@@ -70,7 +71,7 @@ func TestClientCommunications(t *testing.T) {
 		timestamp := time.Now()
 		c.Update(timestamp)
 		fmt.Println("sending update")
-		if c.state == StateConnected {
+		if c.getState() == StateConnected {
 			c.SendData(packetData)
 			fmt.Println("sent data")
 		}
