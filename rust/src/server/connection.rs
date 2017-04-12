@@ -4,7 +4,7 @@ use common::*;
 use server;
 
 /// Current state of the client connection.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ConnectionState {
     /// We've recieved the initial packet but response is outstanding yet.
     PendingResponse(RetryState),
@@ -16,7 +16,7 @@ pub enum ConnectionState {
     Disconnected
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RetryState {
     pub last_sent: f64,
     pub last_response: f64
@@ -35,6 +35,14 @@ impl RetryState {
             last_sent: self.last_sent,
             last_response: response
         }
+    }
+
+    pub fn has_expired(&self, time: f64) -> bool {
+        self.last_response + (NETCODE_TIMEOUT_SECONDS as f64) < time
+    }
+
+    pub fn should_send_keepalive(&self, time: f64) -> bool {
+        self.last_sent + NETCODE_KEEPALIVE_RETRY < time
     }
 }
 
