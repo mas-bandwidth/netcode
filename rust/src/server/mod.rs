@@ -707,6 +707,9 @@ mod test {
 
     #[test]
     fn test_capi_connect() {
+        #[allow(unused_variables)]
+        let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
         use wrapper::private::*;
         use std::ffi::CString;
 

@@ -6,6 +6,9 @@ extern crate net2;
 
 #[cfg(test)]
 extern crate env_logger;
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
 
 pub mod wrapper;
 

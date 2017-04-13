@@ -18,3 +18,12 @@ pub const NETCODE_MAX_PAYLOAD_SIZE: usize = NETCODE_MAX_PACKET_SIZE - crypto::NE
 pub const NETCODE_VERSION_LEN: usize = 13;
 pub const NETCODE_VERSION_STRING: &'static [u8; NETCODE_VERSION_LEN] = b"NETCODE 1.00\0";
 pub const NETCODE_CHALLENGE_TOKEN_BYTES: usize = 300;
+
+#[cfg(test)]
+pub mod test {
+    use std::sync::Mutex;
+
+    lazy_static! {
+        pub static ref FFI_LOCK: Mutex<()> = Mutex::new(());
+    }
+}

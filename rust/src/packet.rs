@@ -458,6 +458,9 @@ fn test_encode_decode<V>(
     }
 
     unsafe {
+        #[allow(unused_variables)]
+        let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
         use wrapper;
 
         let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
@@ -676,6 +679,9 @@ fn test_decode_challenge_token() {
     }
 
    unsafe {
+        #[allow(unused_variables)]
+        let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
         use wrapper;
 
         let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];

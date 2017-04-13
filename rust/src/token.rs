@@ -547,6 +547,9 @@ fn interop_read() {
 
 #[test]
 fn interop_write() {
+    #[allow(unused_variables)]
+    let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
     use wrapper;
 
     let mut private_key = [0; NETCODE_KEY_BYTES];
