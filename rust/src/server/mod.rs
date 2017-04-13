@@ -103,7 +103,9 @@ pub enum ServerEvent {
     /// Called when client tries to connect but all slots are full.
     ClientSlotFull,
     /// We recieved a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
-    Packet(ClientId, usize)
+    Packet(ClientId, usize),
+    /// Client failed connection token validation
+    RejectedClient
 }
 
 pub type UdpServer = Server<UdpSocket,()>;
@@ -351,7 +353,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             Ok(Some(ServerEvent::ClientConnect(private_data.client_id)))
         } else {
             trace!("Failed to accept client connection");
-            Ok(None)
+            Ok(Some(ServerEvent::RejectedClient))
         }
     }
 
@@ -570,14 +572,13 @@ mod test {
     struct TestHarness<I,S> where I: SocketProvider<I,S> {
         next_sequence: u64,
         server: Server<I,S>,
+        private_key: [u8; NETCODE_KEY_BYTES],
         socket: UdpSocket,
         connect_token: token::ConnectToken
     }
 
     impl<S,I> TestHarness<I,S> where I: SocketProvider<I,S> {
         pub fn new(port: Option<u16>) -> TestHarness<I,S> {
-            use std::str::FromStr;
-
             let private_key = crypto::generate_key();
 
             let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
@@ -586,21 +587,29 @@ mod test {
             let socket = UdpSocket::bind(&addr).unwrap();
             socket.connect(server.get_local_addr().unwrap()).unwrap();
 
-            let token = token::ConnectToken::generate(
-                                [SocketAddr::from_str(addr.as_str()).unwrap()].iter().cloned(),
-                                &private_key,
+            TestHarness {
+                next_sequence: 0,
+                server: server,
+                private_key: private_key,
+                socket: socket,
+                connect_token: Self::generate_connect_token(&private_key, addr.as_str())
+            }
+        }
+
+        pub fn generate_connect_token(private_key: &[u8; NETCODE_KEY_BYTES], addr: &str) -> token::ConnectToken {
+            use std::str::FromStr;
+            token::ConnectToken::generate(
+                                [SocketAddr::from_str(addr).unwrap()].iter().cloned(),
+                                private_key,
                                 30, //Expire
                                 0,
                                 PROTOCOL_ID,
                                 CLIENT_ID, //Client Id
-                                None).unwrap();
+                                None).unwrap()
+        }
 
-            TestHarness {
-                next_sequence: 0,
-                server: server,
-                socket: socket,
-                connect_token: token
-            }
+        pub fn replace_connect_token(&mut self, addr: &str) {
+            self.connect_token = Self::generate_connect_token(&self.private_key, addr);
         }
 
         pub fn get_socket_state(&mut self) -> &mut S {
@@ -706,6 +715,21 @@ mod test {
     }
 
     #[test]
+    fn test_connect_bad_token() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        let port = harness.server.get_local_addr().unwrap().port();
+        harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str());
+        harness.send_connect_packet();
+
+        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        harness.server.update(0.0).unwrap();
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::RejectedClient)) => {},
+            _ => assert!(false)
+        }
+    }
+
+    #[test]
     fn test_capi_connect() {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
@@ -751,7 +775,7 @@ mod test {
                     break;
                 }
 
-                time += 1.0 / 1.0;
+                time += 1.0 / 10.0;
             }
 
             assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_CONNECTED as i32);
