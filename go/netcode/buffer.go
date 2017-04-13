@@ -29,7 +29,8 @@ func NewBufferFromBytes(buf []byte) *Buffer {
 
 // Returns a copy of Buffer
 func (b *Buffer) Copy() *Buffer {
-	c := NewBufferFromBytes(b.Buf)
+	c := NewBuffer(len(b.Buf))
+	copy(c.Buf, b.Buf)
 	return c
 }
 

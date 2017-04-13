@@ -56,12 +56,13 @@ const ConnectionNumPackets = ConnectionDisconnect + 1
 
 // Packet interface supporting reading and writing.
 type Packet interface {
-	GetType() PacketType
-	Sequence() uint64                                                                                                                                                          // returns the packet type
-	Write(buffer *Buffer, protocolId, sequence uint64, writePacketKey []byte) (int, error)                                                                                     // writes the packet data to the supplied buffer.
-	Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error // reads in data from the supplied buffer to set the packet properties
+	GetType() PacketType                                                                                                                                                       // The type of packet
+	Sequence() uint64                                                                                                                                                          // sequence number of this packet, if it supports it                                                                                                                                           // returns the packet type
+	Write(buffer *Buffer, protocolId, sequence uint64, writePacketKey []byte) (int, error)                                                                                     // writes and encrypts the packet data to the supplied buffer.
+	Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error // reads in and decrypts from the supplied buffer to set the packet properties
 }
 
+// Returns the type of packet given packetbuffer by peaking the packet type
 func NewPacket(packetBuffer []byte) Packet {
 	var packetType PacketType
 	t := packetType.Peek(packetBuffer)
