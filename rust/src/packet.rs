@@ -121,13 +121,13 @@ fn get_additional_data(prefix: u8, protocol_id: u64) -> Result<[u8; NETCODE_VERS
 }
 
 pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PACKET_SIZE])
-        -> Result<Packet, PacketError> {
+        -> Result<(u64, Packet), PacketError> {
     let mut source = &mut io::Cursor::new(data);
     let prefix_byte = source.read_u8()?;
     let (ty, sequence_len) = decode_prefix(prefix_byte);
 
     if ty == PACKET_CONNECTION {
-        Ok(Packet::ConnectionRequest(ConnectionRequestPacket::read(source)?))
+        Ok((0, Packet::ConnectionRequest(ConnectionRequestPacket::read(source)?)))
     } else {
         if let Some(private_key) = private_key {
             //Sequence length is variable on the wire so we have to serialize only
@@ -141,7 +141,7 @@ pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_K
 
             let mut source_data = &mut io::Cursor::new(&out[..decoded_len]);
 
-            match ty {
+            let packet = match ty {
                 PACKET_CONNECTION_DENIED => Ok(Packet::ConnectionDenied),
                 PACKET_CHALLENGE => Ok(Packet::Challenge(ChallengePacket::read(source_data)?)),
                 PACKET_RESPONSE => Ok(Packet::Response(ResponsePacket::read(source_data)?)),
@@ -151,7 +151,9 @@ pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_K
                 },
                 PACKET_DISCONNECT => Ok(Packet::Disconnect),
                 PACKET_CONNECTION | _ => Err(PacketError::InvalidPacket)
-            }
+            };
+
+            packet.map(|p| (sequence, p))
         } else {
             Err(PacketError::InvalidPrivateKey)
         }
@@ -447,7 +449,10 @@ fn test_encode_decode<V>(
     let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
     let length = encode(&mut scratch[..], protocol_id, &packet, Some((sequence, &pkey)), payload).unwrap();
     match decode(&scratch[..length], protocol_id, Some(&pkey), &mut out_packet) {
-        Ok(p) => verify(p),
+        Ok((s,p)) => {
+            assert_eq!(s, sequence);
+            verify(p);
+        },
         Err(e) => assert!(false, "{:?}", e)
     }
 

@@ -13,6 +13,8 @@ mod connection;
 use server::connection::*;
 mod socket;
 use server::socket::*;
+mod replay;
+use server::replay::*;
 
 /// Errors from creating a server.
 #[derive(Debug)]
@@ -105,7 +107,9 @@ pub enum ServerEvent {
     /// We recieved a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
     Packet(ClientId, usize),
     /// Client failed connection token validation
-    RejectedClient
+    RejectedClient,
+    /// Replay detection heard duplicate packet and rejected it.
+    ReplayRejected(ClientId)
 }
 
 pub type UdpServer = Server<UdpSocket,()>;
@@ -325,6 +329,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                             }),
                             server_to_client_key: private_data.server_to_client_key,
                             client_to_server_key: private_data.client_to_server_key,
+                            replay_protection: ReplayProtection::new(),
                             addr: addr.clone(),
                         };
 
@@ -410,7 +415,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
-            Ok(packet) => match packet {
+            Ok(packet) => match packet.1 {
                 packet::Packet::ConnectionRequest(req) => {
                     if req.version != *NETCODE_VERSION_STRING {
                         trace!("Version mismatch expected {:?} but got {:?}", 
@@ -490,7 +495,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
 
         trace!("Handling packet from client");
 
-        let decoded = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
+        let (sequence, decoded) = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
             Ok(p) => p,
             Err(e) => {
                 info!("Failed to decode packet: {:?}", e);
@@ -499,6 +504,10 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 return Ok(Some(ServerEvent::ClientDisconnect(client.client_id)))
             }
         };
+
+        if client.replay_protection.packet_already_received(sequence) {
+            return Ok(Some(ServerEvent::ReplayRejected(client.client_id)))
+        }
 
         //Update client state with any recieved packet
         let (event, new_state) = match &client.state {
@@ -608,8 +617,8 @@ mod test {
                                 None).unwrap()
         }
 
-        pub fn replace_connect_token(&mut self, addr: &str) {
-            self.connect_token = Self::generate_connect_token(&self.private_key, addr);
+        pub fn replace_connect_token(&mut self, addr: &str, key: Option<&[u8; NETCODE_KEY_BYTES]>) {
+            self.connect_token = Self::generate_connect_token(key.unwrap_or(&self.private_key), addr);
         }
 
         pub fn get_socket_state(&mut self) -> &mut S {
@@ -655,7 +664,7 @@ mod test {
 
             let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
-                Packet::Challenge(packet) => {
+                (_, Packet::Challenge(packet)) => {
                     packet
                 },
                 _ => {
@@ -715,10 +724,10 @@ mod test {
     }
 
     #[test]
-    fn test_connect_bad_token() {
+    fn test_connect_bad_host() {
         let mut harness = TestHarness::<UdpSocket,()>::new(None);
         let port = harness.server.get_local_addr().unwrap().port();
-        harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str());
+        harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str(), None);
         harness.send_connect_packet();
 
         let mut data = [0; NETCODE_MAX_PACKET_SIZE];
@@ -727,6 +736,31 @@ mod test {
             Ok(Some(ServerEvent::RejectedClient)) => {},
             _ => assert!(false)
         }
+    }
+
+    #[test]
+    fn test_connect_bad_key() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        let port = harness.server.get_local_addr().unwrap().port();
+        harness.replace_connect_token(format!("127.0.0.1:{}", port).as_str(), Some(&crypto::generate_key()));
+        harness.send_connect_packet();
+
+        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        harness.server.update(0.0).unwrap();
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::RejectedClient)) => {},
+            _ => assert!(false)
+        }
+    }
+
+    #[test]
+    fn test_replay_protection() {
+        //todo
+    }
+
+    #[test]
+    fn test_payload() {
+        //todo
     }
 
     #[test]
