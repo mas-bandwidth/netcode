@@ -299,7 +299,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     }
 
     fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
-        if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, data, out_packet) {
+        if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &self.listen_addr, data, out_packet) {
             //See if we already have this connection
             if let Some(idx) = self.find_client_by_id(private_data.client_id) {
                 trace!("Client already exists, skipping socket creation");
@@ -404,6 +404,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     fn validate_client_token(
             protocol_id: u64,
             private_key: &[u8; NETCODE_KEY_BYTES],
+            host: &SocketAddr,
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
@@ -423,9 +424,12 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                     }
 
                     if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
-                        //todo: Validate hosts
-
-                        Some(v)
+                        if !v.hosts.get().any(|thost| thost == *host) {
+                            info!("Client connected but didn't contain host's address.");
+                            None
+                        } else {
+                            Some(v)
+                        }
                     } else {
                         info!("Unable to decode connection token");
                         None
@@ -572,6 +576,8 @@ mod test {
 
     impl<S,I> TestHarness<I,S> where I: SocketProvider<I,S> {
         pub fn new(port: Option<u16>) -> TestHarness<I,S> {
+            use std::str::FromStr;
+
             let private_key = crypto::generate_key();
 
             let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
@@ -581,7 +587,7 @@ mod test {
             socket.connect(server.get_local_addr().unwrap()).unwrap();
 
             let token = token::ConnectToken::generate(
-                                [server.get_local_addr().unwrap()].iter().cloned(),
+                                [SocketAddr::from_str(addr.as_str()).unwrap()].iter().cloned(),
                                 &private_key,
                                 30, //Expire
                                 0,
