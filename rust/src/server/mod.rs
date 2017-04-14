@@ -52,7 +52,7 @@ pub enum InternalError {
     ChallengeEncodeError(packet::ChallengeEncodeError)
 }
 
-//Errors from sending packets
+/// Errors from sending packets
 #[derive(Debug)]
 pub enum SendError {
     /// Client Id used for sending didn't exist.
@@ -116,10 +116,38 @@ pub enum ServerEvent {
     ReplayRejected(ClientId)
 }
 
+/// UDP based netcode server.
 pub type UdpServer = Server<UdpSocket,()>;
 
-const RETRY_TIMEOUT: f64 = 1.0;
-
+/// Netcode server object.
+/// # Example
+/// ```
+/// use netcode::UdpServer;
+/// use netcode::ServerEvent;
+/// use netcode::generate_key;
+///
+/// const PROTOCOL_ID: u64 = 0xFFEE;
+/// const MAX_CLIENTS: usize = 32;
+/// let private_key = generate_key();
+/// let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+///
+/// //loop {
+///     server.update(1.0 / 10.0);
+///     let mut packet_data = [0; netcode::NETCODE_MAX_PACKET_SIZE];
+///     match server.next_event(&mut packet_data) {
+///         Ok(Some(e)) => {
+///             match e {
+///                 ServerEvent::ClientConnect(_id) => {},
+///                 ServerEvent::ClientDisconnect(_id) => {},
+///                 ServerEvent::Packet(_id,_size) => {},
+///                 _ => ()
+///             }
+///         },
+///         Ok(None) => (),
+///         Err(err) => Err(err).unwrap()
+///     }
+/// //}
+/// ```
 pub struct Server<I,S> {
     socket_state: S,
     listen_socket: I,
@@ -188,7 +216,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
-    pub fn get_socket_state(&mut self) -> &mut S {
+    fn get_socket_state(&mut self) -> &mut S {
         &mut self.socket_state
     }
 
@@ -197,14 +225,15 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         self.listen_socket.local_addr()
     }
 
-    pub fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
+    fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
         &self.challenge_key
     }
 
-    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         self.listen_socket.set_recv_timeout(duration)
     }
 
+    /// Sends a packet to `client_id` specified.
     pub fn send(&mut self, client_id: ClientId, packet: &[u8]) -> Result<(), SendError> {
         if packet.len() == 0 || packet.len() > NETCODE_MAX_PAYLOAD_SIZE {
             return Err(SendError::PacketSize)

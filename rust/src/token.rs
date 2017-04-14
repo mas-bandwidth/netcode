@@ -80,6 +80,7 @@ pub struct ConnectToken {
     pub timeout_sec: u32
 }
 
+/// Private data encapsulated by Connect token.
 pub struct PrivateData {
     /// Unique client id, determined by the server.
     pub client_id: u64,
