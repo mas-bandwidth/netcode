@@ -175,6 +175,7 @@ func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, 
 		}
 		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
+
 	}
 }
 
@@ -212,7 +213,7 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 
 	if s.clientManager.ConnectedClientCount() == s.maxClients {
 		log.Printf("server denied connection request. server is full\n")
-		// send denied packet
+		s.sendDeniedPacket(requestPacket.Token.ServerKey, addr)
 		return
 	}
 
@@ -291,20 +292,29 @@ func (s *Server) processConnectionResponse(clientIndex, encryptionIndex int, pac
 
 	if s.clientManager.ConnectedClientCount() == s.maxClients {
 		log.Printf("server denied connection response. server is full\n")
-		deniedPacket := &DeniedPacket{}
-		packetBuffer := NewBuffer(MAX_PACKET_BYTES)
-		if _, err := deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
-			log.Printf("error creating denied packet: %s\n", err)
-			return
-		}
-		s.globalSequence++
-		s.sendGlobalPacket(packetBuffer.Bytes(), addr)
+		s.sendDeniedPacket(sendKey, addr)
 		return
 	}
 
+	clientIndex = s.clientManager.FindFreeClientIndex()
+	if clientIndex == -1 {
+		log.Printf("failure to find free client index\n")
+		return
+	}
 	s.connectClient(clientIndex, encryptionIndex, challengeToken, addr)
 	return
 
+}
+
+func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
+	deniedPacket := &DeniedPacket{}
+	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
+	if _, err := deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
+		log.Printf("error creating denied packet: %s\n", err)
+		return
+	}
+	s.globalSequence++
+	s.sendGlobalPacket(packetBuffer.Bytes(), addr)
 }
 
 func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
@@ -316,60 +326,70 @@ func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken 
 
 	s.clientManager.SetEncryptionEntryExpiration(encryptionIndex, -1)
 	client := s.clientManager.instances[clientIndex]
+	client.serverConn = s.serverConn
+	client.clientIndex = clientIndex
 	client.connected = true
 	client.clientId = challengeToken.ClientId
+	client.protocolId = s.protocolId
 	client.sequence = 0
 	client.address = addr
 	client.lastSendTime = s.serverTime
 	client.lastRecvTime = s.serverTime
 	copy(client.userData, challengeToken.UserData.Bytes())
-	log.Printf("server accepted client %d from %s in slot: %d\n", client.clientId, addr.String())
-	// SEND PACKET client.SendPacket(...)
+	log.Printf("server accepted client %d from %s in slot: %d\n", client.clientId, addr.String(), clientIndex)
+	s.sendKeepAlive(client, clientIndex)
 }
 
-func (s *Server) Update(time int64) error {
+func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
+	packet := &KeepAlivePacket{}
+	packet.ClientIndex = uint32(clientIndex)
+	packet.MaxClients = uint32(s.maxClients)
+
+	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
+		log.Printf("error: encryption mapping is out of date for client %d\n", clientIndex)
+		return
+	}
+
+	writePacketKey := s.clientManager.GetEncryptionEntrySendKey(client.encryptionIndex)
+	if writePacketKey == nil {
+		log.Printf("error: unable to retrieve encryption key for client: %d\n", clientIndex)
+		return
+	}
+
+	if err := client.SendPacket(packet, writePacketKey, s.serverTime); err != nil {
+		log.Printf("%s\n", err)
+	}
+}
+
+func (s *Server) Update(time int64) {
+	if !s.running {
+		return
+	}
+
 	s.serverTime = time
+	s.clientManager.SendPackets(s.serverTime)
+	s.clientManager.CheckTimeouts(s.serverTime)
 
-	if err := s.sendPackets(); err != nil {
-		return err
-	}
-
-	if err := s.checkTimeouts(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *Server) checkTimeouts() error {
-	return nil
-}
-
-func (s *Server) recvPackets() error {
-	return nil
-}
-
-func (s *Server) sendPackets() error {
-	return nil
-}
-
-func (s *Server) sendClientPacket(packet Packet, client *ClientInstance) error {
-	return nil
-}
-
-func (s *Server) disconnectClient(client *ClientInstance) error {
-	return nil
-}
-
-func (s *Server) disconnectAll() error {
-	return nil
+	return
 }
 
 func (s *Server) Stop() error {
-	if s.running {
-		close(s.shutdownCh)
-		s.serverConn.Close()
-		s.running = false
+	if !s.running {
+		return nil
 	}
+	s.clientManager.disconnectClients(s.serverTime)
+
+	s.running = false
+	s.maxClients = 0
+	s.globalSequence = 0
+	s.challengeSequence = 0
+	s.challengeKey = make([]byte, KEY_BYTES)
+	s.clientManager.resetCryptoEntries()
+	s.clientManager.resetTokenEntries()
+	close(s.shutdownCh)
+	s.running = false
+	s.serverConn.Close()
+
 	return nil
 }
 

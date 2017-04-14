@@ -15,5 +15,10 @@ func TestServerListen(t *testing.T) {
 	if err := serv.Listen(); err != nil {
 		t.Fatalf("error listening: %s\n", err)
 	}
-
+	time := 0
+	deltaTime := 1 / 60
+	count := 0
+	for {
+		serv.Update(time)
+	}
 }

@@ -2,6 +2,7 @@ package netcode
 
 import (
 	"bytes"
+	"log"
 	"net"
 )
 
@@ -264,6 +265,69 @@ func (m *ClientManager) getEncryptionEntryKey(index int, sendKey bool) []byte {
 	}
 
 	return m.cryptoEntries[index].recvKey
+}
+
+func (m *ClientManager) SendPackets(serverTime int64) {
+	for i := 0; i < m.maxClients; i += 1 {
+		instance := m.instances[i]
+		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
+		if writePacketKey == nil {
+			return
+		}
+
+		if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+			log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+			return
+		}
+
+		if instance.connected && instance.lastSendTime+(1/PACKET_SEND_RATE) < serverTime {
+			packet := &KeepAlivePacket{}
+			packet.ClientIndex = uint32(instance.clientIndex)
+			packet.MaxClients = uint32(m.maxClients)
+			instance.SendPacket(packet, writePacketKey, serverTime)
+		}
+	}
+}
+
+func (m *ClientManager) CheckTimeouts(serverTime int64) {
+
+	for i := 0; i < m.maxClients; i += 1 {
+		instance := m.instances[i]
+		if instance.connected && (instance.lastRecvTime+TIMEOUT_SECONDS <= serverTime) {
+			log.Printf("server timed out client: %d\n", i)
+			m.disconnectClient(instance, i, serverTime, false)
+		}
+	}
+}
+
+func (m *ClientManager) disconnectClients(serverTime int64) {
+	for i := 0; i < m.maxClients; i += 1 {
+		instance := m.instances[i]
+		m.disconnectClient(instance, i, serverTime, true)
+	}
+}
+
+func (m *ClientManager) disconnectClient(client *ClientInstance, clientIndex int, serverTime int64, sendDisconnect bool) {
+	if !client.connected {
+		return
+	}
+
+	log.Printf("server disconnected client: %d\n", clientIndex)
+	if sendDisconnect {
+		log.Printf("server sent disconnect packets to client %d\n", clientIndex)
+		packet := &DisconnectPacket{}
+		writePacketKey := m.GetEncryptionEntrySendKey(client.encryptionIndex)
+		if writePacketKey != nil {
+			log.Printf("error: unable to retrieve encryption key for client: %d\n", clientIndex)
+		} else {
+			for i := 0; i < NUM_DISCONNECT_PACKETS; i += 1 {
+				client.SendPacket(packet, writePacketKey, serverTime)
+			}
+		}
+	}
+
+	m.RemoveEncryptionEntry(client.address, serverTime)
+	client.Clear()
 }
 
 func (m *ClientManager) ConnectedClientCount() int {
