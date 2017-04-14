@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use common::*;
 use server;
+use server::replay::*;
 
 /// Current state of the client connection.
 #[derive(Clone, Debug)]
@@ -53,5 +54,6 @@ pub struct Connection {
     pub state: ConnectionState,
     pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
     pub client_to_server_key: [u8; NETCODE_KEY_BYTES],
+    pub replay_protection: ReplayProtection,
     pub addr: SocketAddr
 }

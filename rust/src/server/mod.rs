@@ -13,6 +13,8 @@ mod connection;
 use server::connection::*;
 mod socket;
 use server::socket::*;
+mod replay;
+use server::replay::*;
 
 /// Errors from creating a server.
 #[derive(Debug)]
@@ -50,13 +52,15 @@ pub enum InternalError {
     ChallengeEncodeError(packet::ChallengeEncodeError)
 }
 
-//Errors from sending packets
+/// Errors from sending packets
 #[derive(Debug)]
 pub enum SendError {
     /// Client Id used for sending didn't exist.
     InvalidClientId,
     /// Failed to encode the packet for sending.
     PacketEncodeError(packet::PacketError),
+    /// Packet is larger then `PACKET_MAX_PAYLOAD_SIZE` or equals zero.
+    PacketSize,
     /// Generic io error.
     SocketError(io::Error)
 }
@@ -102,14 +106,48 @@ pub enum ServerEvent {
     ClientDisconnect(ClientId),
     /// Called when client tries to connect but all slots are full.
     ClientSlotFull,
-    /// We recieved a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
-    Packet(ClientId, usize)
+    /// We received a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
+    Packet(ClientId, usize),
+    /// We received a keep alive packet.
+    KeepAlive(ClientId),
+    /// Client failed connection token validation
+    RejectedClient,
+    /// Replay detection heard duplicate packet and rejected it.
+    ReplayRejected(ClientId)
 }
 
+/// UDP based netcode server.
 pub type UdpServer = Server<UdpSocket,()>;
 
-const RETRY_TIMEOUT: f64 = 1.0;
-
+/// Netcode server object.
+/// # Example
+/// ```
+/// use netcode::UdpServer;
+/// use netcode::ServerEvent;
+/// use netcode::generate_key;
+///
+/// const PROTOCOL_ID: u64 = 0xFFEE;
+/// const MAX_CLIENTS: usize = 32;
+/// let private_key = generate_key();
+/// let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+///
+/// //loop {
+///     server.update(1.0 / 10.0);
+///     let mut packet_data = [0; netcode::NETCODE_MAX_PACKET_SIZE];
+///     match server.next_event(&mut packet_data) {
+///         Ok(Some(e)) => {
+///             match e {
+///                 ServerEvent::ClientConnect(_id) => {},
+///                 ServerEvent::ClientDisconnect(_id) => {},
+///                 ServerEvent::Packet(_id,_size) => {},
+///                 _ => ()
+///             }
+///         },
+///         Ok(None) => (),
+///         Err(err) => Err(err).unwrap()
+///     }
+/// //}
+/// ```
 pub struct Server<I,S> {
     socket_state: S,
     listen_socket: I,
@@ -178,7 +216,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
-    pub fn get_socket_state(&mut self) -> &mut S {
+    fn get_socket_state(&mut self) -> &mut S {
         &mut self.socket_state
     }
 
@@ -187,12 +225,23 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         self.listen_socket.local_addr()
     }
 
-    pub fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
+    fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
         &self.challenge_key
     }
 
-    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         self.listen_socket.set_recv_timeout(duration)
+    }
+
+    /// Sends a packet to `client_id` specified.
+    pub fn send(&mut self, client_id: ClientId, packet: &[u8]) -> Result<(), SendError> {
+        if packet.len() == 0 || packet.len() > NETCODE_MAX_PAYLOAD_SIZE {
+            return Err(SendError::PacketSize)
+        }
+
+        trace!("Sending packet to {} with length {}", client_id, packet.len());
+
+        self.send_packet(client_id, &packet::Packet::Payload(packet.len()), Some(packet))
     }
 
     /// Updates time elapsed since last server iteration.
@@ -323,6 +372,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                             }),
                             server_to_client_key: private_data.server_to_client_key,
                             client_to_server_key: private_data.client_to_server_key,
+                            replay_protection: ReplayProtection::new(),
                             addr: addr.clone(),
                         };
 
@@ -346,16 +396,16 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 &self.challenge_key)?;
 
             //Send challenge token
-            self.send_packet(private_data.client_id, &packet::Packet::Challenge(challenge))?;
+            self.send_packet(private_data.client_id, &packet::Packet::Challenge(challenge), None)?;
 
             Ok(Some(ServerEvent::ClientConnect(private_data.client_id)))
         } else {
             trace!("Failed to accept client connection");
-            Ok(None)
+            Ok(Some(ServerEvent::RejectedClient))
         }
     }
 
-    fn send_packet(&mut self, client_id: ClientId, packet: &packet::Packet) -> Result<(), SendError> {
+    fn send_packet(&mut self, client_id: ClientId, packet: &packet::Packet, payload: Option<&[u8]>) -> Result<(), SendError> {
         self.send_sequence += 1;
 
         let sequence = self.send_sequence;
@@ -367,7 +417,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                             protocol_id,
                             &packet,
                             Some((sequence, &client.server_to_client_key)),
-                            None)?;
+                            payload)?;
             trace!("Sending packet with id {} and length {}", packet.get_type_id(), len);
 
             Ok((len, out_packet, client.addr))
@@ -398,7 +448,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         self.send_packet(client_id, &packet::Packet::KeepAlive(packet::KeepAlivePacket {
             client_idx: client_idx as i32,
             max_clients: client_count
-        }))
+        }), None)
     }
 
     fn validate_client_token(
@@ -408,7 +458,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
-            Ok(packet) => match packet {
+            Ok(packet) => match packet.1 {
                 packet::Packet::ConnectionRequest(req) => {
                     if req.version != *NETCODE_VERSION_STRING {
                         trace!("Version mismatch expected {:?} but got {:?}", 
@@ -488,7 +538,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
 
         trace!("Handling packet from client");
 
-        let decoded = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
+        let (sequence, decoded) = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
             Ok(p) => p,
             Err(e) => {
                 info!("Failed to decode packet: {:?}", e);
@@ -498,17 +548,23 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             }
         };
 
+        if client.replay_protection.packet_already_received(sequence) {
+            return Ok(Some(ServerEvent::ReplayRejected(client.client_id)))
+        }
+
         //Update client state with any recieved packet
         let (event, new_state) = match &client.state {
             &ConnectionState::Idle(ref retry) => {
                 match decoded {
-                    packet::Packet::Payload(len) =>
+                    packet::Packet::Payload(len) => {
+                        trace!("Received payload packet from {} with size {}", client.client_id, len);
                         (
                             Some(ServerEvent::Packet(client.client_id, len)),
                             ConnectionState::Idle(retry.update_response(time))
-                        ),
+                        )
+                    },
                     packet::Packet::KeepAlive(_) => {
-                        (None, ConnectionState::Idle(retry.update_response(time)))
+                        (Some(ServerEvent::KeepAlive(client.client_id)), ConnectionState::Idle(retry.update_response(time)))
                     },
                     packet::Packet::Disconnect => {
                         (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
@@ -570,37 +626,47 @@ mod test {
     struct TestHarness<I,S> where I: SocketProvider<I,S> {
         next_sequence: u64,
         server: Server<I,S>,
-        socket: UdpSocket,
+        private_key: [u8; NETCODE_KEY_BYTES],
+        socket: I,
         connect_token: token::ConnectToken
     }
 
     impl<S,I> TestHarness<I,S> where I: SocketProvider<I,S> {
         pub fn new(port: Option<u16>) -> TestHarness<I,S> {
-            use std::str::FromStr;
-
             let private_key = crypto::generate_key();
 
             let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
             let mut server = Server::<I,S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
             server.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
-            let socket = UdpSocket::bind(&addr).unwrap();
-            socket.connect(server.get_local_addr().unwrap()).unwrap();
-
-            let token = token::ConnectToken::generate(
-                                [SocketAddr::from_str(addr.as_str()).unwrap()].iter().cloned(),
-                                &private_key,
-                                30, //Expire
-                                0,
-                                PROTOCOL_ID,
-                                CLIENT_ID, //Client Id
-                                None).unwrap();
+            let socket = I::bind(&Self::str_to_addr(&addr), server.get_socket_state()).unwrap();
 
             TestHarness {
                 next_sequence: 0,
                 server: server,
+                private_key: private_key,
                 socket: socket,
-                connect_token: token
+                connect_token: Self::generate_connect_token(&private_key, addr.as_str())
             }
+        }
+
+        fn str_to_addr(addr: &str) -> SocketAddr {
+            use std::str::FromStr;
+            SocketAddr::from_str(addr).unwrap()
+        }
+
+        pub fn generate_connect_token(private_key: &[u8; NETCODE_KEY_BYTES], addr: &str) -> token::ConnectToken {
+            token::ConnectToken::generate(
+                                [Self::str_to_addr(addr)].iter().cloned(),
+                                private_key,
+                                30, //Expire
+                                0,
+                                PROTOCOL_ID,
+                                CLIENT_ID, //Client Id
+                                None).unwrap()
+        }
+
+        pub fn replace_connect_token(&mut self, addr: &str, key: Option<&[u8; NETCODE_KEY_BYTES]>) {
+            self.connect_token = Self::generate_connect_token(key.unwrap_or(&self.private_key), addr);
         }
 
         pub fn get_socket_state(&mut self) -> &mut S {
@@ -630,7 +696,7 @@ mod test {
 
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
             let len = packet::encode(&mut data, PROTOCOL_ID, &packet, None, None).unwrap();
-            self.socket.send(&data[..len]).unwrap();
+            self.socket.send_to(&data[..len], &self.server.get_local_addr().unwrap()).unwrap();
         }
         
         fn validate_challenge(&mut self) {
@@ -641,12 +707,12 @@ mod test {
 
         fn read_challenge(&mut self) -> ChallengePacket {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
-            let read = self.socket.recv(&mut data).unwrap();
+            self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
+            let (read, _) = self.socket.recv_from(&mut data).unwrap();
 
             let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
-                Packet::Challenge(packet) => {
+                (_, Packet::Challenge(packet)) => {
                     packet
                 },
                 _ => {
@@ -667,7 +733,7 @@ mod test {
 
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
             let len = packet::encode(&mut data, PROTOCOL_ID, &packet, Some((self.get_next_sequence(), &self.connect_token.client_to_server_key)), None).unwrap();
-            self.socket.send(&data[..len]).unwrap();
+            self.socket.send_to(&data[..len], &self.server.get_local_addr().unwrap()).unwrap();
         }
 
         fn validate_response(&mut self) {
@@ -679,6 +745,63 @@ mod test {
                 Ok(Some(ServerEvent::ClientConnect(CLIENT_ID))) => (),
                 _ => assert!(false)
             }
+        }
+
+        fn generate_payload_packet(&mut self, payload: &[u8]) -> (usize, [u8; NETCODE_MAX_PACKET_SIZE]) {
+            let packet = Packet::Payload(payload.len());
+
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let len = packet::encode(&mut data, PROTOCOL_ID, &packet, Some((self.get_next_sequence(), &self.connect_token.client_to_server_key)), Some(payload)).unwrap();
+
+            (len, data)
+        }
+
+        fn send_payload(&mut self, payload: &[u8]) {
+            let (len, data) = self.generate_payload_packet(payload);
+            self.socket.send_to(&data[..len], &self.server.get_local_addr().unwrap()).unwrap();
+        }
+
+        fn validate_recv_payload(&mut self, payload: &[u8]) {
+            self.server.update(0.0).unwrap();
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+
+            loop {
+                match self.server.next_event(&mut data) {
+                    Ok(Some(ServerEvent::Packet(cid, len))) => {
+                        assert_eq!(cid, CLIENT_ID);
+                        assert_eq!(payload.len(), len);
+                        for i in 0..len {
+                            assert_eq!(payload[i], data[i]);
+                        }
+
+                        break;
+                    },
+                    Ok(Some(ServerEvent::KeepAlive(cid))) => {
+                        assert_eq!(cid, CLIENT_ID);
+                    },
+                    o => assert!(false, "unexpected {:?}", o)
+                }
+            }
+        }
+
+        fn validate_send_payload(&mut self, payload: &[u8]) {
+            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
+            let (read,_) = self.socket.recv_from(&mut data).unwrap();
+
+            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data) {
+                Ok((sequence, Packet::Payload(len))) => {
+                    assert_eq!(sequence, self.next_sequence);
+                    assert_eq!(payload.len(), len);
+                    for i in 0..len {
+                        assert_eq!(packet_data[i], payload[i]);
+                    }
+                },
+                Ok((_,p)) => assert!(false, "unexpected packet type {}", p.get_type_id()),
+                Err(o) => assert!(false, "unexpected {:?}", o)
+            }
+ 
         }
     }
 
@@ -706,7 +829,179 @@ mod test {
     }
 
     #[test]
+    fn test_connect_bad_host() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        let port = harness.server.get_local_addr().unwrap().port();
+        harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str(), None);
+        harness.send_connect_packet();
+
+        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        harness.server.update(0.0).unwrap();
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::RejectedClient)) => {},
+            _ => assert!(false)
+        }
+    }
+
+    #[test]
+    fn test_connect_bad_key() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        let port = harness.server.get_local_addr().unwrap().port();
+        harness.replace_connect_token(format!("127.0.0.1:{}", port).as_str(), Some(&crypto::generate_key()));
+        harness.send_connect_packet();
+
+        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        harness.server.update(0.0).unwrap();
+        match harness.server.next_event(&mut data) {
+            Ok(Some(ServerEvent::RejectedClient)) => {},
+            _ => assert!(false)
+        }
+    }
+
+    #[test]
+    fn test_replay_protection() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        harness.send_connect_packet();
+        harness.validate_challenge();
+        let challenge = harness.read_challenge();
+        harness.send_response(challenge);
+        harness.validate_response();
+
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
+        for i in 0..NETCODE_MAX_PAYLOAD_SIZE {
+            data[i] = i as u8;
+        }
+
+        let (plen, packet) = harness.generate_payload_packet(&data);
+        harness.socket.send_to(&packet[..plen], harness.server.get_local_addr().unwrap()).unwrap();
+        harness.validate_recv_payload(&data);
+
+        harness.socket.send_to(&packet[..plen], harness.server.get_local_addr().unwrap()).unwrap();
+        harness.server.update(0.0).unwrap();
+        let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+        match harness.server.next_event(&mut scratch) {
+            Ok(Some(ServerEvent::ReplayRejected(cid))) => assert_eq!(cid, CLIENT_ID),
+            o => assert!(false, "unexpected {:?}", o)
+        }
+    }
+
+    #[test]
+    fn test_payload() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+        harness.send_connect_packet();
+        harness.validate_challenge();
+        let challenge = harness.read_challenge();
+        harness.send_response(challenge);
+        harness.validate_response();
+
+        for s in 1..NETCODE_MAX_PAYLOAD_SIZE {
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
+            for i in 0..s {
+                data[i] = i as u8;
+            }
+
+            harness.send_payload(&data[..s]);
+            harness.validate_recv_payload(&data[..s]);
+
+            harness.server.send(CLIENT_ID, &data[..s]).unwrap();
+            harness.validate_send_payload(&data[..s]);
+        }
+    }
+
+    #[test]
+    fn test_capi_payload() {
+        #[allow(unused_variables)]
+        let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
+        use wrapper::private::*;
+        use std::ffi::CString;
+
+        let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));
+
+        unsafe {
+            //Establish connection
+            netcode_init();
+
+            let addr = CString::new("127.0.0.1:1234").unwrap();
+            let sim = harness.get_socket_state().clone();
+            let client = netcode_client_create_internal(::std::mem::transmute(addr.as_ptr()), 0.0, sim.borrow_mut().sim);
+
+            let mut connect_token = vec!();
+            harness.get_connect_token().write(&mut connect_token).unwrap();
+
+            netcode_client_connect(client, ::std::mem::transmute(connect_token.as_ptr()));
+
+            let mut time = 0.0;
+            loop {
+                netcode_network_simulator_update(sim.borrow_mut().sim, time);
+
+                harness.server.update(1.0 / 10.0).unwrap();
+                loop {
+                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    match harness.server.next_event(&mut data) {
+                        Ok(None) => break,
+                        Err(e) => assert!(false, "{:?}", e),
+                        _ => (),
+                    }
+                }
+
+                netcode_client_update(client, time);
+
+                if netcode_client_state(client) <= NETCODE_CLIENT_STATE_DISCONNECTED as i32 {
+                    break;
+                }
+
+                if netcode_client_state(client) == NETCODE_CLIENT_STATE_CONNECTED as i32 {
+                    break;
+                }
+
+                time += 1.0 / 10.0;
+            }
+
+            assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_CONNECTED as i32);
+
+            //Test payloads
+            for s in 1..NETCODE_MAX_PAYLOAD_SIZE {
+                let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
+                for i in 0..s {
+                    data[i] = i as u8;
+                }
+
+                netcode_client_send_packet(client, data.as_mut_ptr(), s as i32);
+                netcode_network_simulator_update(sim.borrow_mut().sim, time);
+
+                harness.validate_recv_payload(&data[..s]);
+
+                harness.server.send(CLIENT_ID, &data[..s]);
+
+                netcode_network_simulator_update(sim.borrow_mut().sim, time);
+                netcode_client_update(client, 1.0 / 10.0);
+
+                let mut clen: i32 = 0;
+                let cpacket = netcode_client_receive_packet(client, &mut clen);
+
+                assert!(cpacket != ::std::ptr::null_mut());
+                assert_eq!(clen, s as i32);
+
+                let cslice: &[u8] = ::std::slice::from_raw_parts(cpacket as *const u8, clen as usize);
+                for i in 0..s {
+                    assert_eq!(cslice[i], data[i]);
+                }
+
+                netcode_client_free_packet(client, cpacket);
+            }
+
+            netcode_client_destroy(client);
+
+            netcode_term();
+        }
+    }
+
+    #[test]
     fn test_capi_connect() {
+        #[allow(unused_variables)]
+        let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
         use wrapper::private::*;
         use std::ffi::CString;
 
@@ -748,7 +1043,7 @@ mod test {
                     break;
                 }
 
-                time += 1.0 / 1.0;
+                time += 1.0 / 10.0;
             }
 
             assert_eq!(netcode_client_state(client), NETCODE_CLIENT_STATE_CONNECTED as i32);

@@ -80,6 +80,7 @@ pub struct ConnectToken {
     pub timeout_sec: u32
 }
 
+/// Private data encapsulated by Connect token.
 pub struct PrivateData {
     /// Unique client id, determined by the server.
     pub client_id: u64,
@@ -547,6 +548,9 @@ fn interop_read() {
 
 #[test]
 fn interop_write() {
+    #[allow(unused_variables)]
+    let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
     use wrapper;
 
     let mut private_key = [0; NETCODE_KEY_BYTES];

@@ -11,6 +11,7 @@ pub enum EncryptError {
     Failed
 }
 
+/// Generates a new random private key.
 pub fn generate_key() -> [u8; NETCODE_KEY_BYTES] {
     let mut key: [u8; NETCODE_KEY_BYTES] = [0; NETCODE_KEY_BYTES];
 
