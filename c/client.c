@@ -106,9 +106,11 @@ int main( int argc, char ** argv )
         while ( 1 )             
         {
             int packet_bytes;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes );
+            uint64_t packet_sequence;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
+            (void) packet_sequence;
             assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
             assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
             netcode_client_free_packet( client, packet );
