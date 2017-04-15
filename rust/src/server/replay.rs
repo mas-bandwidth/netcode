@@ -1,5 +1,3 @@
-use common::*;
-
 const REPLAY_BUFFER_SIZE: usize = 256;
 const EMPTY_ENTRY: u64 = 0xFFFFFFFFFFFFFFFF;
 
@@ -57,7 +55,7 @@ impl ReplayProtection {
 
 #[test]
 fn test_replay_protection() {
-    for i in 0..2 {
+    for _ in 0..2 {
         let mut replay_protection = ReplayProtection::new();
 
         assert_eq!(replay_protection.most_recent_sequence, 0);

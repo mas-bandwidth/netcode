@@ -2,6 +2,7 @@
 
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io;
+#[cfg(test)]
 use std::time::Duration;
 
 use common::*;
@@ -149,6 +150,7 @@ pub type UdpServer = Server<UdpSocket,()>;
 /// //}
 /// ```
 pub struct Server<I,S> {
+    #[allow(dead_code)]
     socket_state: S,
     listen_socket: I,
     listen_addr: SocketAddr,
@@ -216,6 +218,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
+    #[cfg(test)]
     fn get_socket_state(&mut self) -> &mut S {
         &mut self.socket_state
     }
@@ -225,10 +228,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         self.listen_socket.local_addr()
     }
 
-    fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
-        &self.challenge_key
-    }
-
+    #[cfg(test)]
     fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         self.listen_socket.set_recv_timeout(duration)
     }
@@ -265,7 +265,6 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 Ok((len, addr)) => self.handle_io(&addr, &scratch[..len], out_packet),
                 Err(e) => match e.kind() {
                     io::ErrorKind::WouldBlock => Ok(None),
-                    io::ErrorKind::Other => Ok(None),
                     _ => Err(e.into())
                 }
             };
@@ -812,7 +811,7 @@ mod test {
 
         LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         unsafe {
             netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
         }
@@ -913,7 +912,7 @@ mod test {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         use std::ffi::CString;
 
         let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));
@@ -972,7 +971,7 @@ mod test {
 
                 harness.validate_recv_payload(&data[..s]);
 
-                harness.server.send(CLIENT_ID, &data[..s]);
+                harness.server.send(CLIENT_ID, &data[..s]).unwrap();
 
                 netcode_network_simulator_update(sim.borrow_mut().sim, time);
                 netcode_client_update(client, 1.0 / 10.0);
@@ -1002,7 +1001,7 @@ mod test {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         use std::ffi::CString;
 
         let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));

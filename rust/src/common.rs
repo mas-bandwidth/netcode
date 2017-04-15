@@ -1,6 +1,5 @@
 use crypto;
 
-pub const NETCODE_CONNECT_TOKEN_BYTES: usize = 2048;
 pub const NETCODE_KEY_BYTES: usize = 32;
 pub const NETCODE_MAC_BYTES: usize = 16;
 /// Maximum size of userdata included in `ConnectToken`.
@@ -12,7 +11,6 @@ pub const NETCODE_KEEPALIVE_RETRY: f64 = 1.0 / 10.0;
 
 pub const NETCODE_MAX_SERVERS_PER_CONNECT: usize = 16;
 
-pub const NETCODE_MAX_CLIENTS: usize = 256;
 /// Maximum size packet that is sent over the wire.
 pub const NETCODE_MAX_PACKET_SIZE: usize = 1200;
 /// Maximum size of a payload that can be sent.

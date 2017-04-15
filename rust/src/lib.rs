@@ -10,7 +10,8 @@ extern crate env_logger;
 #[macro_use]
 extern crate lazy_static;
 
-pub mod wrapper;
+#[cfg(test)]
+pub mod capi;
 
 mod common;
 mod crypto;
