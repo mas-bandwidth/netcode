@@ -975,7 +975,7 @@ mod test {
                 netcode_client_update(client, 1.0 / 10.0);
 
                 let mut clen: i32 = 0;
-                let cpacket = netcode_client_receive_packet(client, &mut clen);
+                let cpacket = netcode_client_receive_packet(client, &mut clen, ::std::ptr::null_mut());
 
                 assert!(cpacket != ::std::ptr::null_mut());
                 assert_eq!(clen, s as i32);
