@@ -2,6 +2,7 @@ package netcode
 
 import (
 	"errors"
+	"log"
 	"strconv"
 )
 
@@ -205,7 +206,7 @@ func (p *DeniedPacket) Write(buffer *Buffer, protocolId, sequence uint64, writeP
 }
 
 func (p *DeniedPacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
@@ -246,12 +247,13 @@ func (p *ChallengePacket) Write(buffer *Buffer, protocolId, sequence uint64, wri
 }
 
 func (p *ChallengePacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
 	p.sequence = sequence
 	if decryptedBuf.Len() != 8+CHALLENGE_TOKEN_BYTES {
+		log.Printf("len: %d expected: %d\n", decryptedBuf.Len(), 8+CHALLENGE_TOKEN_BYTES)
 		return errors.New("ignored connection challenge packet. decrypted packet data is wrong size")
 	}
 
@@ -297,7 +299,7 @@ func (p *ResponsePacket) Write(buffer *Buffer, protocolId, sequence uint64, writ
 }
 
 func (p *ResponsePacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
@@ -349,7 +351,7 @@ func (p *KeepAlivePacket) Write(buffer *Buffer, protocolId, sequence uint64, wri
 }
 
 func (p *KeepAlivePacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
@@ -412,7 +414,7 @@ func (p *PayloadPacket) Write(buffer *Buffer, protocolId, sequence uint64, write
 }
 
 func (p *PayloadPacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
@@ -452,7 +454,7 @@ func (p *DisconnectPacket) Write(buffer *Buffer, protocolId, sequence uint64, wr
 }
 
 func (p *DisconnectPacket) Read(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) error {
-	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, privateKey, allowedPackets, replayProtection)
+	sequence, decryptedBuf, err := decryptPacket(packetBuffer, packetLen, protocolId, currentTimestamp, readPacketKey, allowedPackets, replayProtection)
 	if err != nil {
 		return err
 	}
@@ -469,7 +471,7 @@ func (p *DisconnectPacket) GetType() PacketType {
 }
 
 // Decrypts the packet after reading in the prefix byte and sequence id. Used for all PacketTypes except RequestPacket. Returns a buffer containing the decrypted data
-func decryptPacket(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, privateKey, allowedPackets []byte, replayProtection *ReplayProtection) (uint64, *Buffer, error) {
+func decryptPacket(packetBuffer *Buffer, packetLen int, protocolId, currentTimestamp uint64, readPacketKey, allowedPackets []byte, replayProtection *ReplayProtection) (uint64, *Buffer, error) {
 	var packetSequence uint64
 
 	prefixByte, err := packetBuffer.GetUint8()

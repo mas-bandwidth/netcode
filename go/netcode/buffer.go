@@ -23,7 +23,8 @@ func NewBuffer(size int) *Buffer {
 // Creates a new buffer from a byte slice
 func NewBufferFromBytes(buf []byte) *Buffer {
 	b := &Buffer{}
-	b.Buf = buf
+	b.Buf = make([]byte, len(buf))
+	copy(b.Buf, buf)
 	return b
 }
 

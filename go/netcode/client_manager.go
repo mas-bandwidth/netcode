@@ -28,13 +28,18 @@ type ClientManager struct {
 	connectTokensEntries []*connectTokenEntry
 	cryptoEntries        []*encryptionEntry
 	numCryptoEntries     int
+
+	emptyMac      []byte // used to ensure empty mac (all empty bytes) doesn't match
+	emptyWriteKey []byte // used to test for empty write key
 }
 
 func NewClientManager(maxClients int) *ClientManager {
 	m := &ClientManager{}
 	m.maxClients = maxClients
-
 	m.maxEntries = maxClients * 8
+
+	m.emptyMac = make([]byte, MAC_BYTES)
+	m.emptyWriteKey = make([]byte, KEY_BYTES)
 	m.resetClientInstances()
 	m.resetTokenEntries()
 	m.resetCryptoEntries()
@@ -126,9 +131,13 @@ func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UD
 	tokenIndex := -1
 	oldestIndex := -1
 
-	// find the matching entry for the token mac and the oldest token entry. constant time worst case. This is intentional!
+	if bytes.Equal(connectTokenMac, m.emptyMac) {
+		return false
+	}
+
+	// find the matching entry for the token mac and the oldest token entry.
 	for i := 0; i < m.maxEntries; i += 1 {
-		if bytes.Compare(m.connectTokensEntries[i].mac, connectTokenMac) == 0 {
+		if bytes.Equal(m.connectTokensEntries[i].mac, connectTokenMac) {
 			tokenIndex = i
 		}
 
@@ -143,11 +152,13 @@ func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UD
 		m.connectTokensEntries[oldestIndex].time = time
 		m.connectTokensEntries[oldestIndex].address = addr
 		m.connectTokensEntries[oldestIndex].mac = connectTokenMac
+		log.Printf("new connect token added")
 		return true
 	}
 
 	// allow connect tokens we have already seen from the same address
 	if addressEqual(m.connectTokensEntries[tokenIndex].address, addr) {
+		log.Printf("we've seen this token for this address")
 		return true
 	}
 
@@ -155,6 +166,7 @@ func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UD
 }
 
 func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, addr *net.UDPAddr, serverTime, expireTime int64) bool {
+	// already list
 	for i := 0; i < m.maxEntries; i += 1 {
 		entry := m.cryptoEntries[i]
 		if entry.address != nil && addressEqual(entry.address, addr) && entry.lastAccess+TIMEOUT_SECONDS >= serverTime {
@@ -162,10 +174,12 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 			entry.lastAccess = serverTime
 			copy(entry.recvKey, connectToken.ClientKey)
 			copy(entry.sendKey, connectToken.ServerKey)
+			log.Printf("re-added encryption mapping for %s\n", addr.String())
 			return true
 		}
 	}
 
+	// not in our list.
 	for i := 0; i < m.maxEntries; i += 1 {
 		entry := m.cryptoEntries[i]
 		if entry.lastAccess+TIMEOUT_SECONDS < serverTime || (entry.expireTime > 0 && entry.expireTime < serverTime) {
@@ -174,6 +188,7 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 			entry.lastAccess = serverTime
 			copy(entry.recvKey, connectToken.ClientKey)
 			copy(entry.sendKey, connectToken.ServerKey)
+			log.Printf("added encryption mapping for %s\n", addr.String())
 			if i+1 > m.numCryptoEntries {
 				m.numCryptoEntries = i + 1
 			}
@@ -190,21 +205,26 @@ func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime i
 		if entry == nil || entry.address == nil {
 			continue
 		}
-
+		log.Printf("attempting to find: match of %s and %s %t\n", entry.address.String(), addr.String(), addressEqual(entry.address, addr))
+		log.Printf("lastAccess+TIMEOUT: %d, serverTime: %d, entry.expireTime %d", entry.lastAccess+TIMEOUT_SECONDS, serverTime, entry.expireTime)
 		if addressEqual(entry.address, addr) && entry.lastAccess+TIMEOUT_SECONDS >= serverTime && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
 			entry.lastAccess = serverTime
 			return i
 		}
 	}
+	log.Printf("unable to find encryption entry for %s\n", addr.String())
 	return -1
 }
 
 func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serverTime int64) bool {
+
 	if index < 0 || index > m.numCryptoEntries {
+		log.Printf("index is < 0 or > m.numCryptoEntries\n")
 		return false
 	}
 
 	if !addressEqual(m.cryptoEntries[index].address, addr) {
+		log.Printf("%#v != %#v\n", m.cryptoEntries[index].address, addr)
 		return false
 	}
 
@@ -271,10 +291,10 @@ func (m *ClientManager) SendPackets(serverTime int64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
 		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
-		if writePacketKey == nil {
+		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
 			return
 		}
-
+		log.Printf("boop")
 		if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
 			log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
 			return
@@ -290,7 +310,6 @@ func (m *ClientManager) SendPackets(serverTime int64) {
 }
 
 func (m *ClientManager) CheckTimeouts(serverTime int64) {
-
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
 		if instance.connected && (instance.lastRecvTime+TIMEOUT_SECONDS <= serverTime) {

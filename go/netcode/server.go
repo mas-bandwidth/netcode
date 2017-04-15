@@ -49,6 +49,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.allowedPackets[ConnectionKeepAlive] = 1
 	s.allowedPackets[ConnectionPayload] = 1
 	s.allowedPackets[ConnectionDisconnect] = 1
+	s.allowedPackets[ConnectionChallenge] = 1
 	return s
 }
 
@@ -72,7 +73,7 @@ func (s *Server) Init() error {
 		return err
 	}
 	s.serverConn = NewNetcodeConn()
-	s.serverConn.SetRecvHandler(s.onPacketData)
+	s.serverConn.SetRecvHandler(s.OnPacketData)
 	return nil
 }
 
@@ -85,7 +86,7 @@ func (s *Server) Listen() error {
 	return nil
 }
 
-func (s *Server) onPacketData(packetData []byte, addr *net.UDPAddr) {
+func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	var readPacketKey []byte
 	var replayProtection *ReplayProtection
 
@@ -127,11 +128,11 @@ func (s *Server) onPacketData(packetData []byte, addr *net.UDPAddr) {
 		return
 	}
 
-	s.processPacket(clientIndex, encryptionIndex, packet, addr, s.allowedPackets, timestamp)
+	s.processPacket(clientIndex, encryptionIndex, packet, addr)
 }
 
-func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, addr *net.UDPAddr, allowedPackets []byte, timestamp uint64) {
-
+func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, addr *net.UDPAddr) {
+	log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	switch packet.GetType() {
 	case ConnectionRequest:
 		if s.ignoreRequests {
@@ -207,7 +208,7 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 		log.Printf("server ignored connection request. a client with this id has already been used\n")
 	}
 
-	if !s.clientManager.FindOrAddTokenEntry(requestPacket.ConnectTokenData[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:], addr, s.serverTime) {
+	if !s.clientManager.FindOrAddTokenEntry(requestPacket.Token.Mac(), addr, s.serverTime) {
 		log.Printf("server ignored connection request. connect token has already been used\n")
 	}
 
@@ -226,8 +227,11 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 }
 
 func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDPAddr) {
+	var bytesWritten int
+	var err error
+
 	challenge := NewChallengeToken(requestPacket.Token.ClientId)
-	challengeBuf := challenge.Write(requestPacket.Token.UserData[:USER_DATA_BYTES])
+	challengeBuf := challenge.Write(requestPacket.Token.UserData)
 	challengeSequence := s.challengeSequence
 
 	s.challengeSequence++
@@ -236,19 +240,20 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 		log.Printf("server ignored connection request. failed to encrypt challenge token\n")
 		return
 	}
+
 	challengePacket := &ChallengePacket{}
 	challengePacket.ChallengeTokenData = challengeBuf
 	challengePacket.ChallengeTokenSequence = challengeSequence
 
 	buffer := NewBuffer(MAX_PACKET_BYTES)
-	if _, err := challengePacket.Write(buffer, s.protocolId, s.globalSequence, requestPacket.Token.ServerKey); err != nil {
+	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.globalSequence, requestPacket.Token.ServerKey); err != nil {
 		log.Printf("server error while writing challenge packet\n")
 		return
 	}
 	s.globalSequence++
 
-	log.Printf("server sent connection challenge packet\n")
-	s.sendGlobalPacket(buffer.Bytes(), addr)
+	log.Printf("server sent connection challenge packet to: %s using key: %#v\n", addr.String(), requestPacket.Token.ServerKey)
+	s.sendGlobalPacket(buffer.Buf[:bytesWritten], addr)
 }
 
 func (s *Server) sendGlobalPacket(packetBuffer []byte, addr *net.UDPAddr) {
@@ -307,14 +312,17 @@ func (s *Server) processConnectionResponse(clientIndex, encryptionIndex int, pac
 }
 
 func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
+	var bytesWritten int
+	var err error
+
 	deniedPacket := &DeniedPacket{}
 	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
-	if _, err := deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
+	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
 		log.Printf("error creating denied packet: %s\n", err)
 		return
 	}
 	s.globalSequence++
-	s.sendGlobalPacket(packetBuffer.Bytes(), addr)
+	s.sendGlobalPacket(packetBuffer.Buf[:bytesWritten], addr)
 }
 
 func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
@@ -361,6 +369,11 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	}
 }
 
+func (s *Server) SendPackets(serverTime int64) {
+	s.clientManager.SendPackets(serverTime)
+	return
+}
+
 func (s *Server) Update(time int64) {
 	if !s.running {
 		return
@@ -369,8 +382,14 @@ func (s *Server) Update(time int64) {
 	s.serverTime = time
 	s.clientManager.SendPackets(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
+}
 
-	return
+func (s *Server) MaxClients() int {
+	return s.maxClients
+}
+
+func (s *Server) HasClients() int {
+	return s.clientManager.ConnectedClientCount()
 }
 
 func (s *Server) Stop() error {
@@ -393,6 +412,22 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+func (s *Server) RecvPayload(clientIndex int) ([]byte, uint64) {
+	packet := s.clientManager.instances[clientIndex].packetQueue.Pop()
+	if packet == nil {
+		return []byte{}, 0
+	}
+	p, ok := packet.(*PayloadPacket)
+	if !ok {
+		log.Printf("not a payload packet")
+		return []byte{}, 0
+	}
+	return p.PayloadData, p.sequence
+}
+
 func addressEqual(addr1, addr2 *net.UDPAddr) bool {
+	if addr1 == nil || addr2 == nil {
+		return false
+	}
 	return addr1.IP.Equal(addr2.IP) && addr1.Port == addr2.Port
 }
