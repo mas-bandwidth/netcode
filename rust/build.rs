@@ -16,11 +16,10 @@ pub fn main() {
         .compile("libnetcode.a");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let pub_path = out_path.join("pub_bindings.rs");
     let private_path = out_path.join("private_bindings.rs");
 
     //Do some basic dependecy management
-    let targets = vec!(&pub_path, &private_path);
+    let targets = vec!(&private_path);
     let source = vec!("build.rs", "../c/netcode.c", "../c/netcode.h").iter()
         .map(|v| PathBuf::from(v))
         .collect::<Vec<_>>();
@@ -46,16 +45,6 @@ pub fn main() {
         .unwrap_or(newest_source - Duration::from_secs(1));
 
     if newest_source > oldest_target {
-        //Export symbols for netcode
-        let pub_bindings = bindgen::Builder::default()
-            .no_unstable_rust()
-            .header("../c/netcode.h")
-            .generate()
-            .expect("Unable to generate bindings");
-
-        pub_bindings.write_to_file(&pub_path)
-            .expect("Couldn't write bindings!");
-
         let include = env::var("INCLUDE").unwrap_or("".to_string());
         let sodium_include = env::var("SODIUM_LIB_DIR")
                                  .unwrap_or("../c/windows".to_string());
@@ -74,6 +63,7 @@ pub fn main() {
             .whitelisted_function("netcode_read_challenge_token")
             .whitelisted_function("netcode_replay_protection_reset")
             .whitelisted_function("free")
+            .whitelisted_function("netcode_generate_connect_token")
             .whitelisted_function("netcode_init")
             .whitelisted_function("netcode_client_create_internal")
             .whitelisted_function("netcode_client_connect")
@@ -102,12 +92,11 @@ pub fn main() {
             .whitelisted_var("NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST")
             .whitelisted_var("NETCODE_LOG_LEVEL_DEBUG")
             .whitelisted_var("NETCODE_PACKET_SEND_RATE")
+            .whitelisted_var("NETCODE_CONNECT_TOKEN_BYTES")
             .generate()
             .expect("Unable to generate bindings");
 
         private_bindings.write_to_file(&private_path)
             .expect("Couldn't write bindings!");
-
-        //Todo: Pull in constants for timeout/etc into a separate file.
     }
 }

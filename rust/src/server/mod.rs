@@ -2,6 +2,7 @@
 
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io;
+#[cfg(test)]
 use std::time::Duration;
 
 use common::*;
@@ -11,8 +12,7 @@ use crypto;
 
 mod connection;
 use server::connection::*;
-mod socket;
-use server::socket::*;
+use socket::*;
 mod replay;
 use server::replay::*;
 
@@ -36,7 +36,7 @@ impl From<io::Error> for CreateError {
 /// Errors from updating server.
 #[derive(Debug)]
 pub enum UpdateError {
-    /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PACKET_SIZE` = 1200)
+    /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PAYLOAD_LEN` = 1775)
     PacketBufferTooSmall,
     /// Generic io error.
     SocketError(io::Error),
@@ -59,7 +59,7 @@ pub enum SendError {
     InvalidClientId,
     /// Failed to encode the packet for sending.
     PacketEncodeError(packet::PacketError),
-    /// Packet is larger then `PACKET_MAX_PAYLOAD_SIZE` or equals zero.
+    /// Packet is larger than [PACKET_MAX_PAYLOAD_SIZE](constant.NETCODE_MAX_PAYLOAD_SIZE.html) or equals zero.
     PacketSize,
     /// Generic io error.
     SocketError(io::Error)
@@ -97,18 +97,18 @@ impl From<io::Error> for SendError {
 
 pub type ClientId = u64;
 
-/// Enum that describes and event from the server.
+/// Describes event the server receives when calling `next_event(..)`.
 #[derive(Debug)]
 pub enum ServerEvent {
-    /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private date from token.
+    /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private user data from token.
     ClientConnect(ClientId),
-    /// A client has disconnected, contains the clien that was just disconnected.
+    /// A client has disconnected, contains the client that was just disconnected.
     ClientDisconnect(ClientId),
     /// Called when client tries to connect but all slots are full.
     ClientSlotFull,
-    /// We received a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
+    /// We received a packet, `out_packet` will be filled with data based on `usize`, contains the client id that reieved the packet and length of the packet.
     Packet(ClientId, usize),
-    /// We received a keep alive packet.
+    /// We received a keep alive packet with included client id.
     KeepAlive(ClientId),
     /// Client failed connection token validation
     RejectedClient,
@@ -124,16 +124,15 @@ pub type UdpServer = Server<UdpSocket,()>;
 /// ```
 /// use netcode::UdpServer;
 /// use netcode::ServerEvent;
-/// use netcode::generate_key;
 ///
 /// const PROTOCOL_ID: u64 = 0xFFEE;
 /// const MAX_CLIENTS: usize = 32;
-/// let private_key = generate_key();
+/// let private_key = netcode::generate_key();
 /// let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
 ///
 /// //loop {
 ///     server.update(1.0 / 10.0);
-///     let mut packet_data = [0; netcode::NETCODE_MAX_PACKET_SIZE];
+///     let mut packet_data = [0; netcode::NETCODE_MAX_PAYLOAD_SIZE];
 ///     match server.next_event(&mut packet_data) {
 ///         Ok(Some(e)) => {
 ///             match e {
@@ -149,6 +148,7 @@ pub type UdpServer = Server<UdpSocket,()>;
 /// //}
 /// ```
 pub struct Server<I,S> {
+    #[allow(dead_code)]
     socket_state: S,
     listen_socket: I,
     listen_addr: SocketAddr,
@@ -216,6 +216,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
+    #[cfg(test)]
     fn get_socket_state(&mut self) -> &mut S {
         &mut self.socket_state
     }
@@ -225,10 +226,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         self.listen_socket.local_addr()
     }
 
-    fn get_challenge_key(&self) -> &[u8; NETCODE_KEY_BYTES] {
-        &self.challenge_key
-    }
-
+    #[cfg(test)]
     fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         self.listen_socket.set_recv_timeout(duration)
     }
@@ -254,8 +252,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     
     /// Checks for incoming packets, client connection and disconnections. Returns `None` when no more events
     /// are pending.
-    pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
-        if out_packet.len() < NETCODE_MAX_PACKET_SIZE {
+    pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+        if out_packet.len() < NETCODE_MAX_PAYLOAD_SIZE {
             return Err(UpdateError::PacketBufferTooSmall)
         }
 
@@ -265,7 +263,6 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 Ok((len, addr)) => self.handle_io(&addr, &scratch[..len], out_packet),
                 Err(e) => match e.kind() {
                     io::ErrorKind::WouldBlock => Ok(None),
-                    io::ErrorKind::Other => Ok(None),
                     _ => Err(e.into())
                 }
             };
@@ -324,7 +321,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         Ok(None)
     }
 
-    fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         match self.find_client_by_addr(addr) {
             None => {
                 trace!("New data on listening socket");
@@ -347,7 +344,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
-    fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &self.listen_addr, data, out_packet) {
             //See if we already have this connection
             if let Some(idx) = self.find_client_by_id(private_data.client_id) {
@@ -456,7 +453,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             private_key: &[u8; NETCODE_KEY_BYTES],
             host: &SocketAddr,
             packet: &[u8],
-            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
+            out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
             Ok(packet) => match packet.1 {
                 packet::Packet::ConnectionRequest(req) => {
@@ -530,7 +527,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             challenge_key: &[u8; NETCODE_KEY_BYTES],
             client: &mut Connection,
             packet: &[u8],
-            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+            out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE])
                 -> Result<Option<ServerEvent>, UpdateError> {
         if packet.len() == 0 {
             return Ok(None)
@@ -615,7 +612,7 @@ mod test {
     use token;
     use super::*;
 
-    use server::socket::capi_simulator::*;
+    use socket::capi_simulator::*;
 
     use std::net::UdpSocket;
 
@@ -700,7 +697,7 @@ mod test {
         }
         
         fn validate_challenge(&mut self) {
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             self.server.update(0.0).unwrap();
             self.server.next_event(&mut data).unwrap();
         }
@@ -710,7 +707,7 @@ mod test {
             self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
             let (read, _) = self.socket.recv_from(&mut data).unwrap();
 
-            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
                 (_, Packet::Challenge(packet)) => {
                     packet
@@ -737,7 +734,7 @@ mod test {
         }
 
         fn validate_response(&mut self) {
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             self.server.update(0.0).unwrap();
             let event = self.server.next_event(&mut data);
 
@@ -763,7 +760,7 @@ mod test {
 
         fn validate_recv_payload(&mut self, payload: &[u8]) {
             self.server.update(0.0).unwrap();
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
 
             loop {
                 match self.server.next_event(&mut data) {
@@ -789,7 +786,7 @@ mod test {
             self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
             let (read,_) = self.socket.recv_from(&mut data).unwrap();
 
-            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data) {
                 Ok((sequence, Packet::Payload(len))) => {
                     assert_eq!(sequence, self.next_sequence);
@@ -812,7 +809,7 @@ mod test {
 
         LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         unsafe {
             netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
         }
@@ -835,7 +832,7 @@ mod test {
         harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str(), None);
         harness.send_connect_packet();
 
-        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
         harness.server.update(0.0).unwrap();
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
@@ -850,7 +847,7 @@ mod test {
         harness.replace_connect_token(format!("127.0.0.1:{}", port).as_str(), Some(&crypto::generate_key()));
         harness.send_connect_packet();
 
-        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
         harness.server.update(0.0).unwrap();
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
@@ -878,7 +875,7 @@ mod test {
 
         harness.socket.send_to(&packet[..plen], harness.server.get_local_addr().unwrap()).unwrap();
         harness.server.update(0.0).unwrap();
-        let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
         match harness.server.next_event(&mut scratch) {
             Ok(Some(ServerEvent::ReplayRejected(cid))) => assert_eq!(cid, CLIENT_ID),
             o => assert!(false, "unexpected {:?}", o)
@@ -913,7 +910,7 @@ mod test {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         use std::ffi::CString;
 
         let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));
@@ -937,7 +934,7 @@ mod test {
 
                 harness.server.update(1.0 / 10.0).unwrap();
                 loop {
-                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {
                         Ok(None) => break,
                         Err(e) => assert!(false, "{:?}", e),
@@ -972,13 +969,13 @@ mod test {
 
                 harness.validate_recv_payload(&data[..s]);
 
-                harness.server.send(CLIENT_ID, &data[..s]);
+                harness.server.send(CLIENT_ID, &data[..s]).unwrap();
 
                 netcode_network_simulator_update(sim.borrow_mut().sim, time);
                 netcode_client_update(client, 1.0 / 10.0);
 
                 let mut clen: i32 = 0;
-                let cpacket = netcode_client_receive_packet(client, &mut clen);
+                let cpacket = netcode_client_receive_packet(client, &mut clen, ::std::ptr::null_mut());
 
                 assert!(cpacket != ::std::ptr::null_mut());
                 assert_eq!(clen, s as i32);
@@ -1002,7 +999,7 @@ mod test {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper::private::*;
+        use capi::*;
         use std::ffi::CString;
 
         let mut harness = TestHarness::<SimulatedSocket, SimulatorRef>::new(Some(1235));
@@ -1025,7 +1022,7 @@ mod test {
 
                 harness.server.update(1.0 / 10.0).unwrap();
                 loop {
-                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {
                         Ok(None) => break,
                         Err(e) => assert!(false, "{:?}", e),

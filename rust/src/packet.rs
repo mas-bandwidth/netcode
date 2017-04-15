@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{Read, Write};
+use std::io::Write;
 
 use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian};
 
@@ -120,7 +120,7 @@ fn get_additional_data(prefix: u8, protocol_id: u64) -> Result<[u8; NETCODE_VERS
     Ok(buffer)
 }
 
-pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE])
         -> Result<(u64, Packet), PacketError> {
     let mut source = &mut io::Cursor::new(data);
     let prefix_byte = source.read_u8()?;
@@ -331,6 +331,7 @@ impl ChallengePacket {
         })
     }
 
+    #[cfg(test)]
     pub fn decode(&self, challenge_key: &[u8; NETCODE_KEY_BYTES]) -> Result<ChallengeToken, ChallengeEncodeError> {
         let mut decoded = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         crypto::decode(&mut decoded, &self.token_data, None, self.token_sequence, challenge_key)?;
@@ -446,7 +447,7 @@ fn test_encode_decode<V>(
     let mut pkey = crypto::generate_key();
 
     let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
-    let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
+    let mut out_packet = [0; NETCODE_MAX_PAYLOAD_SIZE];
     let length = encode(&mut scratch[..], protocol_id, &packet, Some((sequence, &pkey)), payload).unwrap();
     match decode(&scratch[..length], protocol_id, Some(&pkey), &mut out_packet) {
         Ok((s,p)) => {
@@ -466,12 +467,12 @@ fn test_encode_decode<V>(
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper;
+        use capi;
 
-        let mut replay: wrapper::private::netcode_replay_protection_t = ::std::mem::uninitialized();
-        wrapper::private::netcode_replay_protection_reset(&mut replay);
+        let mut replay: capi::netcode_replay_protection_t = ::std::mem::uninitialized();
+        capi::netcode_replay_protection_reset(&mut replay);
 
-        let mut allowed_packets = [1; wrapper::private::NETCODE_CONNECTION_NUM_PACKETS as usize];
+        let mut allowed_packets = [1; capi::NETCODE_CONNECTION_NUM_PACKETS as usize];
 
         let final_pkey = match private_key {
             Some(ref mut v) => {
@@ -480,7 +481,7 @@ fn test_encode_decode<V>(
             None => ::std::ptr::null_mut()
         };
 
-        let result = wrapper::private::netcode_read_packet(
+        let result = capi::netcode_read_packet(
             scratch.as_mut_ptr(), length as i32, //data
             &mut sequence,
             pkey.as_mut_ptr(), //Recv private key
@@ -492,7 +493,7 @@ fn test_encode_decode<V>(
 
         assert!(result != ::std::ptr::null_mut());
 
-        wrapper::private::free(result);
+        capi::free(result);
     }
 }
 
@@ -687,12 +688,12 @@ fn test_decode_challenge_token() {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
 
-        use wrapper;
+        use capi;
 
         let mut capi_scratch = [0; NETCODE_CHALLENGE_TOKEN_BYTES];
         capi_scratch.copy_from_slice(&challenge_packet.token_data);
 
-        let decode = wrapper::private::netcode_decrypt_challenge_token(
+        let decode = capi::netcode_decrypt_challenge_token(
             capi_scratch.as_mut_ptr(),
             capi_scratch.len() as i32,
             challenge_sequence,
@@ -700,9 +701,9 @@ fn test_decode_challenge_token() {
 
         assert_eq!(decode, 1);
 
-        let mut native_token: wrapper::private::netcode_challenge_token_t = ::std::mem::uninitialized();
+        let mut native_token: capi::netcode_challenge_token_t = ::std::mem::uninitialized();
 
-        let serialize = wrapper::private::netcode_read_challenge_token(
+        let serialize = capi::netcode_read_challenge_token(
             capi_scratch.as_mut_ptr(),
             capi_scratch.len() as i32,
             &mut native_token);
