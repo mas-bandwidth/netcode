@@ -12,8 +12,7 @@ use crypto;
 
 mod connection;
 use server::connection::*;
-mod socket;
-use server::socket::*;
+use socket::*;
 mod replay;
 use server::replay::*;
 
@@ -125,16 +124,15 @@ pub type UdpServer = Server<UdpSocket,()>;
 /// ```
 /// use netcode::UdpServer;
 /// use netcode::ServerEvent;
-/// use netcode::generate_key;
 ///
 /// const PROTOCOL_ID: u64 = 0xFFEE;
 /// const MAX_CLIENTS: usize = 32;
-/// let private_key = generate_key();
+/// let private_key = netcode::generate_key();
 /// let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
 ///
 /// //loop {
 ///     server.update(1.0 / 10.0);
-///     let mut packet_data = [0; netcode::NETCODE_MAX_PACKET_SIZE];
+///     let mut packet_data = [0; netcode::NETCODE_MAX_PAYLOAD_SIZE];
 ///     match server.next_event(&mut packet_data) {
 ///         Ok(Some(e)) => {
 ///             match e {
@@ -254,8 +252,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     
     /// Checks for incoming packets, client connection and disconnections. Returns `None` when no more events
     /// are pending.
-    pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
-        if out_packet.len() < NETCODE_MAX_PACKET_SIZE {
+    pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+        if out_packet.len() < NETCODE_MAX_PAYLOAD_SIZE {
             return Err(UpdateError::PacketBufferTooSmall)
         }
 
@@ -323,7 +321,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         Ok(None)
     }
 
-    fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         match self.find_client_by_addr(addr) {
             None => {
                 trace!("New data on listening socket");
@@ -346,7 +344,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
-    fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
+    fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &self.listen_addr, data, out_packet) {
             //See if we already have this connection
             if let Some(idx) = self.find_client_by_id(private_data.client_id) {
@@ -455,7 +453,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             private_key: &[u8; NETCODE_KEY_BYTES],
             host: &SocketAddr,
             packet: &[u8],
-            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE]) -> Option<token::PrivateData> {
+            out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Option<token::PrivateData> {
         match packet::decode(packet, protocol_id, None, out_packet) {
             Ok(packet) => match packet.1 {
                 packet::Packet::ConnectionRequest(req) => {
@@ -529,7 +527,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             challenge_key: &[u8; NETCODE_KEY_BYTES],
             client: &mut Connection,
             packet: &[u8],
-            out_packet: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+            out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE])
                 -> Result<Option<ServerEvent>, UpdateError> {
         if packet.len() == 0 {
             return Ok(None)
@@ -614,7 +612,7 @@ mod test {
     use token;
     use super::*;
 
-    use server::socket::capi_simulator::*;
+    use socket::capi_simulator::*;
 
     use std::net::UdpSocket;
 
@@ -699,7 +697,7 @@ mod test {
         }
         
         fn validate_challenge(&mut self) {
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             self.server.update(0.0).unwrap();
             self.server.next_event(&mut data).unwrap();
         }
@@ -709,7 +707,7 @@ mod test {
             self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
             let (read, _) = self.socket.recv_from(&mut data).unwrap();
 
-            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data).unwrap() {
                 (_, Packet::Challenge(packet)) => {
                     packet
@@ -736,7 +734,7 @@ mod test {
         }
 
         fn validate_response(&mut self) {
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             self.server.update(0.0).unwrap();
             let event = self.server.next_event(&mut data);
 
@@ -762,7 +760,7 @@ mod test {
 
         fn validate_recv_payload(&mut self, payload: &[u8]) {
             self.server.update(0.0).unwrap();
-            let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
 
             loop {
                 match self.server.next_event(&mut data) {
@@ -788,7 +786,7 @@ mod test {
             self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
             let (read,_) = self.socket.recv_from(&mut data).unwrap();
 
-            let mut packet_data = [0; NETCODE_MAX_PACKET_SIZE];
+            let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data) {
                 Ok((sequence, Packet::Payload(len))) => {
                     assert_eq!(sequence, self.next_sequence);
@@ -834,7 +832,7 @@ mod test {
         harness.replace_connect_token(format!("0.0.0.0:{}", port).as_str(), None);
         harness.send_connect_packet();
 
-        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
         harness.server.update(0.0).unwrap();
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
@@ -849,7 +847,7 @@ mod test {
         harness.replace_connect_token(format!("127.0.0.1:{}", port).as_str(), Some(&crypto::generate_key()));
         harness.send_connect_packet();
 
-        let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
         harness.server.update(0.0).unwrap();
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
@@ -877,7 +875,7 @@ mod test {
 
         harness.socket.send_to(&packet[..plen], harness.server.get_local_addr().unwrap()).unwrap();
         harness.server.update(0.0).unwrap();
-        let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+        let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
         match harness.server.next_event(&mut scratch) {
             Ok(Some(ServerEvent::ReplayRejected(cid))) => assert_eq!(cid, CLIENT_ID),
             o => assert!(false, "unexpected {:?}", o)
@@ -936,7 +934,7 @@ mod test {
 
                 harness.server.update(1.0 / 10.0).unwrap();
                 loop {
-                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {
                         Ok(None) => break,
                         Err(e) => assert!(false, "{:?}", e),
@@ -1024,7 +1022,7 @@ mod test {
 
                 harness.server.update(1.0 / 10.0).unwrap();
                 loop {
-                    let mut data = [0; NETCODE_MAX_PACKET_SIZE];
+                    let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {
                         Ok(None) => break,
                         Err(e) => assert!(false, "{:?}", e),

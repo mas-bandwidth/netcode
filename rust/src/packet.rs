@@ -120,7 +120,7 @@ fn get_additional_data(prefix: u8, protocol_id: u64) -> Result<[u8; NETCODE_VERS
     Ok(buffer)
 }
 
-pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PACKET_SIZE])
+pub fn decode(data: &[u8], protocol_id: u64, private_key: Option<&[u8; NETCODE_KEY_BYTES]>, out: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE])
         -> Result<(u64, Packet), PacketError> {
     let mut source = &mut io::Cursor::new(data);
     let prefix_byte = source.read_u8()?;
@@ -447,7 +447,7 @@ fn test_encode_decode<V>(
     let mut pkey = crypto::generate_key();
 
     let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
-    let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
+    let mut out_packet = [0; NETCODE_MAX_PAYLOAD_SIZE];
     let length = encode(&mut scratch[..], protocol_id, &packet, Some((sequence, &pkey)), payload).unwrap();
     match decode(&scratch[..length], protocol_id, Some(&pkey), &mut out_packet) {
         Ok((s,p)) => {
