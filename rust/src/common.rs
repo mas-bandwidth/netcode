@@ -13,7 +13,7 @@ pub const NETCODE_MAX_SERVERS_PER_CONNECT: usize = 16;
 
 /// Maximum size packet that is sent over the wire.
 pub const NETCODE_MAX_PACKET_SIZE: usize = 1200;
-/// Maximum size of a payload that can be sent.
+/// Maximum size of a payload that can be sent(1175).
 pub const NETCODE_MAX_PAYLOAD_SIZE: usize = NETCODE_MAX_PACKET_SIZE - crypto::NETCODE_ENCRYPT_EXTA_BYTES - 8 - 1;
 
 pub const NETCODE_VERSION_LEN: usize = 13;

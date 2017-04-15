@@ -36,7 +36,7 @@ impl From<io::Error> for CreateError {
 /// Errors from updating server.
 #[derive(Debug)]
 pub enum UpdateError {
-    /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PACKET_SIZE` = 1200)
+    /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PAYLOAD_LEN` = 1775)
     PacketBufferTooSmall,
     /// Generic io error.
     SocketError(io::Error),
@@ -59,7 +59,7 @@ pub enum SendError {
     InvalidClientId,
     /// Failed to encode the packet for sending.
     PacketEncodeError(packet::PacketError),
-    /// Packet is larger then `PACKET_MAX_PAYLOAD_SIZE` or equals zero.
+    /// Packet is larger than [PACKET_MAX_PAYLOAD_SIZE](constant.NETCODE_MAX_PAYLOAD_SIZE.html) or equals zero.
     PacketSize,
     /// Generic io error.
     SocketError(io::Error)
@@ -97,18 +97,18 @@ impl From<io::Error> for SendError {
 
 pub type ClientId = u64;
 
-/// Enum that describes and event from the server.
+/// Describes event the server receives when calling `next_event(..)`.
 #[derive(Debug)]
 pub enum ServerEvent {
-    /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private date from token.
+    /// A client has connected, contains a reference to the client that was just created. `out_packet` contains private user data from token.
     ClientConnect(ClientId),
-    /// A client has disconnected, contains the clien that was just disconnected.
+    /// A client has disconnected, contains the client that was just disconnected.
     ClientDisconnect(ClientId),
     /// Called when client tries to connect but all slots are full.
     ClientSlotFull,
-    /// We received a packet, `out_packet` will be filled with data based on `usize`, contains a reference to the client that reieved the packet.
+    /// We received a packet, `out_packet` will be filled with data based on `usize`, contains the client id that reieved the packet and length of the packet.
     Packet(ClientId, usize),
-    /// We received a keep alive packet.
+    /// We received a keep alive packet with included client id.
     KeepAlive(ClientId),
     /// Client failed connection token validation
     RejectedClient,

@@ -128,13 +128,20 @@ pub fn get_time_now() -> u64 {
 
 impl ConnectToken {
     /// Generates a new connection token.
-    /// `addrs` - List of allowed hosts to connect to.
-    /// `private_key` - Server private key that will be used to authenticate requests.
-    /// `expire_sec` - How long this token is valid for in seconds.
-    /// `sequence` - Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
-    /// `protocol` - Client specific protocol.
-    /// `client_id` - Unique client identifier.
-    /// `user_data` - Client specific userdata.
+    /// # Arguments
+    /// `addrs`: List of allowed hosts to connect to.
+    ///
+    /// `private_key`: Server private key that will be used to authenticate requests.
+    ///
+    /// `expire_sec`: How long this token is valid for in seconds.
+    ///
+    /// `sequence`: Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
+    ///
+    /// `protocol`: Client specific protocol.
+    ///
+    /// `client_id`: Unique client identifier.
+    ///
+    /// `user_data`: Client specific userdata.
     pub fn generate<H>(hosts: H,
                        private_key: &[u8; NETCODE_KEY_BYTES],
                        expire_sec: usize,
