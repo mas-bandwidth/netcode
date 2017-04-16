@@ -31,7 +31,9 @@ pub enum SendError {
     /// Packet is larger than [PACKET_MAX_PAYLOAD_SIZE](constant.NETCODE_MAX_PAYLOAD_SIZE.html) or equals zero.
     PacketSize,
     /// Generic io error.
-    SocketError(io::Error)
+    SocketError(io::Error),
+    /// Client/Server is disconnected and cannot send packets
+    Disconnected
 }
 
 /// Errors from receiving packets

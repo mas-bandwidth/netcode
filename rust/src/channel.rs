@@ -110,13 +110,15 @@ impl Channel {
     }
 
     pub fn update<I,S>(&mut self, elapsed: f64, socket: &mut I, send_keep_alive: bool) -> Result<UpdateResult, SendError> where I: SocketProvider<I,S> {
-        if send_keep_alive && self.keep_alive.should_send_keepalive(elapsed) {
+        if self.keep_alive.should_send_keepalive(elapsed) {
             let keep_alive = KeepAlivePacket {
                 client_idx: self.client_idx as i32,
                 max_clients: self.max_clients as i32
             };
 
-            self.send(elapsed, &Packet::KeepAlive(keep_alive), None, socket)?;
+            if send_keep_alive {
+                self.send(elapsed, &Packet::KeepAlive(keep_alive), None, socket)?;
+            }
 
             return Ok(UpdateResult::SentKeepAlive)
         }
