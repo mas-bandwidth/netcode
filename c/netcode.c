@@ -2455,6 +2455,18 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
+	printf("read packet key: (server_to_client)\n");
+	int i;
+	for (i = 0; i < NETCODE_KEY_BYTES; ++i)
+	{
+		printf("0x%02x,", client->context.read_packet_key[i]);
+	}
+
+	printf("write packet key: (client_to_server)\n");
+	for (i = 0; i < NETCODE_KEY_BYTES; ++i)
+	{
+		printf("%02x", client->context.write_packet_key[i]);
+	}
 
     netcode_client_reset_before_next_connect( client );
 

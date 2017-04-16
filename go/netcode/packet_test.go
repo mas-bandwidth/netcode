@@ -90,7 +90,7 @@ func TestConnectionRequestPacket(t *testing.T) {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
 
-	if bytes.Compare(inputPacket.VersionInfo, outputPacket.VersionInfo) != 0 {
+	if !bytes.Equal(inputPacket.VersionInfo, outputPacket.VersionInfo) {
 		t.Fatalf("version info did not match")
 	}
 
@@ -191,7 +191,7 @@ func TestConnectionChallengePacket(t *testing.T) {
 		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, outputPacket.ChallengeTokenSequence)
 	}
 
-	if bytes.Compare(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) != 0 {
+	if !bytes.Equal(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) {
 		t.Fatalf("challenge token data was not equal\n")
 	}
 }
@@ -239,7 +239,7 @@ func TestConnectionResponsePacket(t *testing.T) {
 		t.Fatalf("input and output sequence differed, expected %d got %d\n", inputPacket.ChallengeTokenSequence, outputPacket.ChallengeTokenSequence)
 	}
 
-	if bytes.Compare(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) != 0 {
+	if !bytes.Equal(inputPacket.ChallengeTokenData, outputPacket.ChallengeTokenData) {
 		t.Fatalf("response challenge token data was not equal\n")
 	}
 }
@@ -331,7 +331,7 @@ func TestConnectionPayloadPacket(t *testing.T) {
 		t.Fatalf("input and output index differed, expected %d got %d\n", inputPacket.PayloadBytes, outputPacket.PayloadBytes)
 	}
 
-	if bytes.Compare(inputPacket.PayloadData, outputPacket.PayloadData) != 0 {
+	if !bytes.Equal(inputPacket.PayloadData, outputPacket.PayloadData) {
 		t.Fatalf("input and output payload differed, expected %v got %v\n", inputPacket.PayloadData, outputPacket.PayloadData)
 	}
 }
@@ -372,13 +372,8 @@ func testBuildRequestPacket(connectTokenKey []byte, t *testing.T) (*RequestPacke
 	addr := net.UDPAddr{IP: net.ParseIP("::"), Port: TEST_SERVER_PORT}
 	serverAddrs := make([]net.UDPAddr, 1)
 	serverAddrs[0] = addr
-	config := NewConfig(serverAddrs, TEST_TIMEOUT_SECONDS, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, connectTokenKey)
 
-	connectToken := NewConnectToken()
-
-	if err := connectToken.Generate(config, TEST_SEQUENCE_START); err != nil {
-		t.Fatalf("error generating connect token: %s\n", err)
-	}
+	connectToken := testGenerateConnectToken(serverAddrs, connectTokenKey, t)
 
 	_, err := connectToken.Write()
 	if err != nil {

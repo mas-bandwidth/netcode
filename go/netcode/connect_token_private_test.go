@@ -8,36 +8,35 @@ import (
 )
 
 func TestConnectTokenPrivate(t *testing.T) {
-	token1 := NewConnectTokenPrivate()
+
 	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
 	servers := make([]net.UDPAddr, 1)
 	servers[0] = server
 
-	config := NewConfig(servers, TEST_TIMEOUT_SECONDS, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, TEST_PRIVATE_KEY)
 	currentTimestamp := uint64(time.Now().Unix())
-	expireTimestamp := uint64(currentTimestamp + config.TokenExpiry)
+	expireTimestamp := uint64(currentTimestamp + TEST_CONNECT_TOKEN_EXPIRY)
 
 	userData, err := RandomBytes(USER_DATA_BYTES)
 	if err != nil {
 		t.Fatalf("error generating random bytes: %s\n", err)
 	}
 
-	if err := token1.Generate(config, userData); err != nil {
-		t.Fatalf("error generating and encrypting token")
+	token1 := NewConnectTokenPrivate(TEST_CLIENT_ID, servers, userData)
+	if err := token1.Generate(); err != nil {
+		t.Fatalf("error generating key: %s\n", err)
 	}
 
 	if _, err := token1.Write(); err != nil {
 		t.Fatalf("error writing token private data")
 	}
 
-	if err := token1.Encrypt(config.ProtocolId, expireTimestamp, TEST_SEQUENCE_START, config.PrivateKey); err != nil {
+	if err := token1.Encrypt(TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, TEST_PRIVATE_KEY); err != nil {
 		t.Fatalf("error encrypting token: %s\n", err)
 	}
 
-	token2 := NewConnectTokenPrivate()
-	token2.TokenData = NewBufferFromBytes(token1.Buffer())
+	token2 := NewConnectTokenPrivateEncrypted(token1.Buffer())
 
-	if _, err := token2.Decrypt(config.ProtocolId, expireTimestamp, TEST_SEQUENCE_START, config.PrivateKey); err != nil {
+	if _, err := token2.Decrypt(TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, TEST_PRIVATE_KEY); err != nil {
 		t.Fatalf("error decrypting token: %s", err)
 	}
 
@@ -52,7 +51,7 @@ func TestConnectTokenPrivate(t *testing.T) {
 		t.Fatalf("error writing token2 buffer")
 	}
 
-	if err := token2.Encrypt(config.ProtocolId, expireTimestamp, TEST_SEQUENCE_START, config.PrivateKey); err != nil {
+	if err := token2.Encrypt(TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, TEST_PRIVATE_KEY); err != nil {
 		t.Fatalf("error encrypting second token: %s\n", err)
 	}
 
@@ -60,7 +59,7 @@ func TestConnectTokenPrivate(t *testing.T) {
 		t.Fatalf("encrypted buffer lengths did not match %d and %d\n", len(token1.Buffer()), len(token2.Buffer()))
 	}
 
-	if bytes.Compare(token1.Buffer(), token2.Buffer()) != 0 {
+	if !bytes.Equal(token1.Buffer(), token2.Buffer()) {
 		t.Fatalf("encrypted private bits didn't match\n%#v\n and\n%#v\n", token1.Buffer(), token2.Buffer())
 	}
 }
@@ -80,11 +79,11 @@ func testComparePrivateTokens(token1, token2 *ConnectTokenPrivate, t *testing.T)
 		testCompareAddrs(token1Servers[i], token2Servers[i], t)
 	}
 
-	if bytes.Compare(token1.ClientKey, token2.ClientKey) != 0 {
+	if !bytes.Equal(token1.ClientKey, token2.ClientKey) {
 		t.Fatalf("ClientKey do not match expected %v got %v", token1.ClientKey, token2.ClientKey)
 	}
 
-	if bytes.Compare(token1.ServerKey, token2.ServerKey) != 0 {
+	if !bytes.Equal(token1.ServerKey, token2.ServerKey) {
 		t.Fatalf("ServerKey do not match expected %v got %v", token1.ServerKey, token2.ServerKey)
 	}
 }

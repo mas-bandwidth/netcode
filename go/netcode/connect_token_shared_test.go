@@ -41,11 +41,11 @@ func TestReadWriteShared(t *testing.T) {
 	}
 
 	t.Logf("clientKey len: %d outData len: %d\n", len(clientKey), len(outData.ClientKey))
-	if bytes.Compare(clientKey, outData.ClientKey) != 0 {
+	if !bytes.Equal(clientKey, outData.ClientKey) {
 		t.Fatalf("client key did not match expected %#v\ngot:%#v\n", clientKey, outData.ClientKey)
 	}
 
-	if bytes.Compare(serverKey, outData.ServerKey) != 0 {
+	if !bytes.Equal(serverKey, outData.ServerKey) {
 		t.Fatalf("server key did not match")
 	}
 

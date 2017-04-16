@@ -11,7 +11,6 @@ func TestConnectToken(t *testing.T) {
 	var tokenBuffer []byte
 	var key []byte
 
-	inToken := NewConnectToken()
 	server := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000}
 	servers := make([]net.UDPAddr, 1)
 	servers[0] = server
@@ -20,13 +19,7 @@ func TestConnectToken(t *testing.T) {
 		t.Fatalf("error generating key %s\n", key)
 	}
 
-	config := NewConfig(servers, TEST_TIMEOUT_SECONDS, TEST_CONNECT_TOKEN_EXPIRY, TEST_CLIENT_ID, TEST_PROTOCOL_ID, key)
-
-	// generate will write & encrypt the ConnectTokenPrivate
-	err = inToken.Generate(config, TEST_SEQUENCE_START)
-	if err != nil {
-		t.Fatalf("error generating")
-	}
+	inToken := testGenerateConnectToken(servers, key, t)
 
 	// Writes the entire ConnectToken (including Private)
 	if tokenBuffer, err = inToken.Write(); err != nil {
@@ -65,11 +58,11 @@ func TestConnectToken(t *testing.T) {
 	}
 
 	// need to decrypt the private tokens before we can compare
-	if _, err := outToken.PrivateData.Decrypt(config.ProtocolId, outToken.ExpireTimestamp, outToken.Sequence, key); err != nil {
+	if _, err := outToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, outToken.ExpireTimestamp, outToken.Sequence, key); err != nil {
 		t.Fatalf("error decrypting private out token data: %s\n", err)
 	}
 
-	if _, err := inToken.PrivateData.Decrypt(config.ProtocolId, inToken.ExpireTimestamp, inToken.Sequence, key); err != nil {
+	if _, err := inToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, inToken.ExpireTimestamp, inToken.Sequence, key); err != nil {
 		t.Fatalf("error decrypting private in token data: %s\n", err)
 	}
 
@@ -80,6 +73,24 @@ func TestConnectToken(t *testing.T) {
 
 	testComparePrivateTokens(inToken.PrivateData, outToken.PrivateData, t)
 
+}
+
+func testGenerateConnectToken(servers []net.UDPAddr, privateKey []byte, t *testing.T) *ConnectToken {
+	if privateKey == nil {
+		privateKey = TEST_PRIVATE_KEY
+	}
+
+	userData, err := RandomBytes(USER_DATA_BYTES)
+	if err != nil {
+		t.Fatalf("error generating userdata bytes: %s\n", err)
+	}
+
+	connectToken := NewConnectToken()
+	// generate will write & encrypt the ConnectTokenPrivate
+	if err := connectToken.Generate(TEST_CLIENT_ID, servers, VERSION_INFO, TEST_PROTOCOL_ID, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_SEQUENCE_START, userData, privateKey); err != nil {
+		t.Fatalf("error generating token: %s\n", err)
+	}
+	return connectToken
 }
 
 func testCompareTokens(token1, token2 *ConnectToken, t *testing.T) {
@@ -94,11 +105,11 @@ func testCompareTokens(token1, token2 *ConnectToken, t *testing.T) {
 		testCompareAddrs(token1Servers[i], token2Servers[i], t)
 	}
 
-	if bytes.Compare(token1.ClientKey, token2.ClientKey) != 0 {
+	if !bytes.Equal(token1.ClientKey, token2.ClientKey) {
 		t.Fatalf("ClientKey do not match expected %v got %v", token1.ClientKey, token2.ClientKey)
 	}
 
-	if bytes.Compare(token1.ServerKey, token2.ServerKey) != 0 {
+	if !bytes.Equal(token1.ServerKey, token2.ServerKey) {
 		t.Fatalf("ServerKey do not match expected %v got %v", token1.ServerKey, token2.ServerKey)
 	}
 }

@@ -15,6 +15,19 @@ type sharedTokenData struct {
 	ServerKey   []byte        // server to client key
 }
 
+func (shared *sharedTokenData) GenerateShared() error {
+	var err error
+
+	if shared.ClientKey, err = GenerateKey(); err != nil {
+		return errors.New("error generating client key: " + err.Error())
+	}
+
+	if shared.ServerKey, err = GenerateKey(); err != nil {
+		return errors.New("error generating server key: " + err.Error())
+	}
+	return nil
+}
+
 // Reads and validates the servers, client <-> server keys.
 func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 	var err error
@@ -122,21 +135,5 @@ func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
 	}
 	buffer.WriteBytesN(shared.ClientKey, KEY_BYTES)
 	buffer.WriteBytesN(shared.ServerKey, KEY_BYTES)
-	return nil
-}
-
-// Generates the shared data, should only really be called by ConnectTokenPrivate
-// since the same data will be copied/referenced by ConnectToken
-func (shared *sharedTokenData) GenerateShared(config *Config) error {
-	var err error
-
-	shared.ServerAddrs = config.ServerAddrs
-	if shared.ClientKey, err = GenerateKey(); err != nil {
-		return err
-	}
-
-	if shared.ServerKey, err = GenerateKey(); err != nil {
-		return err
-	}
 	return nil
 }
