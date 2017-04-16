@@ -15,6 +15,16 @@ func NewChallengeToken(clientId uint64) *ChallengeToken {
 	return token
 }
 
+// Serializes the client id and userData, also sets the UserData buffer.
+func (t *ChallengeToken) Write(userData []byte) []byte {
+	t.UserData.WriteBytes(userData)
+
+	tokenData := NewBuffer(CHALLENGE_TOKEN_BYTES - MAC_BYTES) // mac bytes will be appended by EncryptAead
+	tokenData.WriteUint64(t.ClientId)
+	tokenData.WriteBytes(userData)
+	return tokenData.Buf
+}
+
 // Encrypts the TokenData buffer with the sequence nonce and provided key
 func EncryptChallengeToken(tokenBuffer *[]byte, sequence uint64, key []byte) error {
 	nonce := NewBuffer(SizeUint64)
@@ -28,15 +38,6 @@ func DecryptChallengeToken(tokenBuffer []byte, sequence uint64, key []byte) ([]b
 	nonce := NewBuffer(SizeUint64)
 	nonce.WriteUint64(sequence)
 	return DecryptAead(tokenBuffer, nil, nonce.Bytes(), key)
-}
-
-// Serializes the client id and userData, also sets the UserData buffer.
-func (t *ChallengeToken) Write(userData []byte) []byte {
-	tokenData := NewBuffer(CHALLENGE_TOKEN_BYTES)
-	t.UserData.WriteBytes(userData)
-	tokenData.WriteUint64(t.ClientId)
-	tokenData.WriteBytes(userData)
-	return tokenData.Buf
 }
 
 // Generates a new ChallengeToken from the provided buffer byte slice. Only sets the ClientId

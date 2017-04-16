@@ -3,95 +3,30 @@ package netcode
 import (
 	"log"
 	"net"
-	"sync"
 	"time"
 )
 
-type ClientManager struct {
-	maxClients int
-
-	instanceLock *sync.RWMutex
-	instances    []*ClientInstance
-
-	tokenLock *sync.RWMutex
-}
-
-func NewClientManager(maxClients int) *ClientManager {
-	m := &ClientManager{}
-	m.instances = make([]*ClientInstance, maxClients)
-	m.maxClients = maxClients
-	return m
-}
-
-func (m *ClientManager) FindByAddress(addr *net.UDPAddr) *ClientInstance {
-	m.instanceLock.Lock()
-	defer m.instanceLock.Unlock()
-	for i := 0; i < m.maxClients; i += 1 {
-		if m.instances[i] != nil && m.instances[i].address.IP.Equal(addr.IP) && m.instances[i].address.Port == addr.Port {
-			return m.instances[i]
-		}
-	}
-	return nil
-}
-
-func (m *ClientManager) FindById(id uint64) *ClientInstance {
-	m.instanceLock.Lock()
-	defer m.instanceLock.Unlock()
-	for i := 0; i < m.maxClients; i += 1 {
-		if m.instances[i] != nil && m.instances[i].clientId == id {
-			return m.instances[i]
-		}
-	}
-	return nil
-}
-
-func (m *ClientManager) FindOrAddTokenEntry() {
-
-}
-
-func (m *ClientManager) ClientCount() int {
-	m.instanceLock.RLock()
-	count := len(m.instances)
-	m.instanceLock.Unlock()
-	return count
-}
-
-type ClientInstance struct {
-	clientId   uint64
-	clientConn *NetcodeConn
-	confirmed  bool
-	connected  bool
-
-	lastSendTime     int64
-	lastRecvTime     int64
-	userData         []byte
-	replayProtection *ReplayProtection
-	address          *net.UDPAddr
-	connectToken     *ConnectToken
-	packetQueue      *PacketQueue
-}
-
-func (c *ClientInstance) SendPacket(packet Packet) error {
-	return nil
-}
-
 type Server struct {
-	serverConn *NetcodeConn
-	serverAddr *net.UDPAddr
-	shutdownCh chan struct{}
-	serverTime int64
-	running    bool
-	maxClients int
+	serverConn       *NetcodeConn
+	serverAddr       *net.UDPAddr
+	shutdownCh       chan struct{}
+	serverTime       float64
+	running          bool
+	maxClients       int
+	connectedClients int
+	timeout          float64
 
 	clientManager  *ClientManager
 	globalSequence uint64
 
 	ignoreRequests  bool
 	ignoreResponses bool
+	allowedPackets  []byte
 	protocolId      uint64
 
-	privateKey        []byte
-	challengeKey      []byte
+	privateKey   []byte
+	challengeKey []byte
+
 	challengeSequence uint64
 
 	recvBytes int
@@ -103,10 +38,30 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.protocolId = protocolId
 	s.privateKey = privateKey
 	s.maxClients = maxClients
+
 	s.globalSequence = uint64(1) << 63
-	s.clientManager = NewClientManager(maxClients)
+	s.timeout = float64(TIMEOUT_SECONDS)
+	s.clientManager = NewClientManager(s.timeout, maxClients)
 	s.shutdownCh = make(chan struct{})
+
+	// set allowed packets for this server
+	s.allowedPackets = make([]byte, ConnectionNumPackets)
+	s.allowedPackets[ConnectionRequest] = 1
+	s.allowedPackets[ConnectionResponse] = 1
+	s.allowedPackets[ConnectionKeepAlive] = 1
+	s.allowedPackets[ConnectionPayload] = 1
+	s.allowedPackets[ConnectionDisconnect] = 1
+	s.allowedPackets[ConnectionChallenge] = 1
 	return s
+}
+
+func (s *Server) SetAllowedPackets(allowedPackets []byte) {
+	s.allowedPackets = allowedPackets
+}
+
+func (s *Server) SetTimeout(duration time.Duration) {
+	s.timeout = duration.Seconds()
+	s.clientManager.setTimeout(s.timeout)
 }
 
 func (s *Server) SetIgnoreRequests(val bool) {
@@ -125,7 +80,7 @@ func (s *Server) Init() error {
 		return err
 	}
 	s.serverConn = NewNetcodeConn()
-	s.serverConn.SetRecvHandler(s.onPacketData)
+	s.serverConn.SetRecvHandler(s.OnPacketData)
 	return nil
 }
 
@@ -138,7 +93,7 @@ func (s *Server) Listen() error {
 	return nil
 }
 
-func (s *Server) onPacketData(packetData []byte, from *net.UDPAddr) {
+func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	var readPacketKey []byte
 	var replayProtection *ReplayProtection
 
@@ -146,42 +101,42 @@ func (s *Server) onPacketData(packetData []byte, from *net.UDPAddr) {
 		return
 	}
 
+	encryptionIndex := -1
+	clientIndex := s.clientManager.FindClientIndexByAddress(addr)
+	if clientIndex != -1 {
+		encryptionIndex = s.clientManager.FindEncryptionIndexByClientIndex(clientIndex)
+	} else {
+		encryptionIndex = s.clientManager.FindEncryptionEntryIndex(addr, s.serverTime)
+	}
+	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
+
 	size := len(packetData)
 	if len(packetData) == 0 {
 		log.Printf("unable to read from socket, 0 bytes returned")
 		return
 	}
 
-	log.Printf("net client connected")
-	allowedPackets := make([]byte, ConnectionNumPackets)
-	allowedPackets[ConnectionRequest] = 1
-	allowedPackets[ConnectionResponse] = 1
-	allowedPackets[ConnectionKeepAlive] = 1
-	allowedPackets[ConnectionPayload] = 1
-	allowedPackets[ConnectionDisconnect] = 1
+	log.Printf("[%s] net client connected", s.serverAddr.String())
 
 	timestamp := uint64(time.Now().Unix())
-	log.Printf("read %d from socket\n", len(packetData))
 
 	packet := NewPacket(packetData)
 	packetBuffer := NewBufferFromBytes(packetData)
-
-	client := s.clientManager.FindByAddress(from)
-	if client != nil {
-		readPacketKey = client.connectToken.ClientKey
+	log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
+	if clientIndex != -1 {
+		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection
 	}
 
-	if err := packet.Read(packetBuffer, size, s.protocolId, timestamp, readPacketKey, s.privateKey, allowedPackets, replayProtection); err != nil {
-		log.Printf("error reading packet: %s from %s\n", err, from)
+	if err := packet.Read(packetBuffer, size, s.protocolId, timestamp, readPacketKey, s.privateKey, s.allowedPackets, replayProtection); err != nil {
+		log.Printf("error reading packet: %s from %s\n", err, addr)
 		return
 	}
 
-	s.processPacket(client, packet, from, allowedPackets, timestamp)
+	s.processPacket(clientIndex, encryptionIndex, packet, addr)
 }
 
-func (s *Server) processPacket(client *ClientInstance, packet Packet, addr *net.UDPAddr, allowedPackets []byte, timestamp uint64) {
-
+func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, addr *net.UDPAddr) {
 	switch packet.GetType() {
 	case ConnectionRequest:
 		if s.ignoreRequests {
@@ -194,12 +149,12 @@ func (s *Server) processPacket(client *ClientInstance, packet Packet, addr *net.
 			return
 		}
 		log.Printf("server received connection response from %s\n", addr.String())
-		s.processConnectionResponse(client, packet, addr)
+		s.processConnectionResponse(clientIndex, encryptionIndex, packet, addr)
 	case ConnectionKeepAlive:
-		if client == nil {
+		if clientIndex == -1 {
 			return
 		}
-
+		client := s.clientManager.instances[clientIndex]
 		client.lastRecvTime = s.serverTime
 
 		if !client.confirmed {
@@ -207,10 +162,10 @@ func (s *Server) processPacket(client *ClientInstance, packet Packet, addr *net.
 			log.Printf("server confirmed connection to client %d:%s\n", client.clientId, client.address.String())
 		}
 	case ConnectionPayload:
-		if client == nil {
+		if clientIndex == -1 {
 			return
 		}
-
+		client := s.clientManager.instances[clientIndex]
 		client.lastRecvTime = s.serverTime
 
 		if !client.confirmed {
@@ -220,10 +175,12 @@ func (s *Server) processPacket(client *ClientInstance, packet Packet, addr *net.
 
 		client.packetQueue.Push(packet)
 	case ConnectionDisconnect:
-		if client == nil {
+		if clientIndex == -1 {
 			return
 		}
+		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
+
 	}
 }
 
@@ -238,79 +195,249 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 		return
 	}
 
-	for _, addr := range requestPacket.Token.ServerAddrs {
-		if !s.serverAddr.IP.Equal(addr.IP) || s.serverAddr.Port != addr.Port {
-			log.Printf("server ignored connection request. server address not in connect token whitelist\n")
-			return
+	addrFound := false
+	for _, tokenAddr := range requestPacket.Token.ServerAddrs {
+		if addressEqual(s.serverAddr, &tokenAddr) {
+			addrFound = true
+			break
 		}
 	}
 
-	client := s.clientManager.FindByAddress(addr)
-	if client != nil {
+	if !addrFound {
+		log.Printf("server ignored connection request. server address not in connect token whitelist\n")
+		return
+	}
+
+	clientIndex := s.clientManager.FindClientIndexByAddress(addr)
+	if clientIndex != -1 {
 		log.Printf("server ignored connection request. a client with this address is already connected\n")
 	}
 
-	client = s.clientManager.FindById(requestPacket.Token.ClientId)
-	if client != nil {
+	clientIndex = s.clientManager.FindClientIndexById(requestPacket.Token.ClientId)
+	if clientIndex != -1 {
 		log.Printf("server ignored connection request. a client with this id has already been used\n")
 	}
 
+	if !s.clientManager.FindOrAddTokenEntry(requestPacket.Token.Mac(), addr, s.serverTime) {
+		log.Printf("server ignored connection request. connect token has already been used\n")
+	}
+
+	if s.clientManager.ConnectedClientCount() == s.maxClients {
+		log.Printf("server denied connection request. server is full\n")
+		s.sendDeniedPacket(requestPacket.Token.ServerKey, addr)
+		return
+	}
+	log.Printf("serverTime: %f, timeout: %f\n", s.serverTime, s.serverTime+s.timeout)
+	if !s.clientManager.AddEncryptionMapping(requestPacket.Token, addr, s.serverTime, s.serverTime+s.timeout) {
+		log.Printf("server ignored connection request. failed to add encryption mapping\n")
+		return
+	}
+
+	s.sendChallengePacket(requestPacket, addr)
 }
 
-func (s *Server) processConnectionResponse(client *ClientInstance, packet Packet, addr *net.UDPAddr) {
+func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDPAddr) {
+	var bytesWritten int
+	var err error
+
+	challenge := NewChallengeToken(requestPacket.Token.ClientId)
+	challengeBuf := challenge.Write(requestPacket.Token.UserData)
+	challengeSequence := s.challengeSequence
+
+	s.challengeSequence++
+
+	if err := EncryptChallengeToken(&challengeBuf, challengeSequence, s.challengeKey); err != nil {
+		log.Printf("server ignored connection request. failed to encrypt challenge token\n")
+		return
+	}
+
+	challengePacket := &ChallengePacket{}
+	challengePacket.ChallengeTokenData = challengeBuf
+	challengePacket.ChallengeTokenSequence = challengeSequence
+
+	buffer := NewBuffer(MAX_PACKET_BYTES)
+	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.globalSequence, requestPacket.Token.ServerKey); err != nil {
+		log.Printf("server error while writing challenge packet\n")
+		return
+	}
+	s.globalSequence++
+
+	s.sendGlobalPacket(buffer.Buf[:bytesWritten], addr)
+}
+
+func (s *Server) sendGlobalPacket(packetBuffer []byte, addr *net.UDPAddr) {
+	if _, err := s.serverConn.WriteTo(packetBuffer, addr); err != nil {
+		log.Printf("error sending packet to %s\n", addr.String())
+	}
+}
+
+func (s *Server) processConnectionResponse(clientIndex, encryptionIndex int, packet Packet, addr *net.UDPAddr) {
+	var err error
+	var tokenBuffer []byte
+	var challengeToken *ChallengeToken
+
+	responsePacket, ok := packet.(*ResponsePacket)
+	if !ok {
+		return
+	}
+
+	if tokenBuffer, err = DecryptChallengeToken(responsePacket.ChallengeTokenData, responsePacket.ChallengeTokenSequence, s.challengeKey); err != nil {
+		log.Printf("failed to decrypt challenge token: %s\n", err)
+		log.Fatalf("bloop")
+		return
+	}
+
+	if challengeToken, err = ReadChallengeToken(tokenBuffer); err != nil {
+		log.Printf("failed to read challenge token: %s\n", err)
+		return
+	}
+
+	sendKey := s.clientManager.GetEncryptionEntrySendKey(encryptionIndex)
+	if sendKey == nil {
+		log.Printf("server ignored connection response. no packet send key\n")
+	}
+
+	if s.clientManager.FindClientIndexByAddress(addr) != -1 {
+		log.Printf("server ignored connection response. a client with this address is already connected")
+	}
+
+	if s.clientManager.FindClientIndexById(challengeToken.ClientId) != -1 {
+		log.Printf("server ignored connection response. a client with this id is already connected")
+	}
+
+	if s.clientManager.ConnectedClientCount() == s.maxClients {
+		log.Printf("server denied connection response. server is full\n")
+		s.sendDeniedPacket(sendKey, addr)
+		return
+	}
+
+	clientIndex = s.clientManager.FindFreeClientIndex()
+	if clientIndex == -1 {
+		log.Printf("failure to find free client index\n")
+		return
+	}
+	s.connectClient(clientIndex, encryptionIndex, challengeToken, addr)
+	return
 
 }
 
-func (s *Server) Update(time int64) error {
+func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
+	var bytesWritten int
+	var err error
+
+	deniedPacket := &DeniedPacket{}
+	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
+	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
+		log.Printf("error creating denied packet: %s\n", err)
+		return
+	}
+	s.globalSequence++
+	s.sendGlobalPacket(packetBuffer.Buf[:bytesWritten], addr)
+}
+
+func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
+
+	if s.clientManager.ConnectedClientCount() > s.maxClients {
+		log.Printf("maxium number of clients reached")
+		return
+	}
+
+	s.clientManager.SetEncryptionEntryExpiration(encryptionIndex, -1)
+	client := s.clientManager.instances[clientIndex]
+	client.serverConn = s.serverConn
+	client.clientIndex = clientIndex
+	client.connected = true
+	client.clientId = challengeToken.ClientId
+	client.protocolId = s.protocolId
+	client.sequence = 0
+	client.address = addr
+	client.lastSendTime = s.serverTime
+	client.lastRecvTime = s.serverTime
+	copy(client.userData, challengeToken.UserData.Bytes())
+	log.Printf("server accepted client %d from %s in slot: %d\n", client.clientId, addr.String(), clientIndex)
+	s.sendKeepAlive(client, clientIndex)
+}
+
+func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
+	packet := &KeepAlivePacket{}
+	packet.ClientIndex = uint32(clientIndex)
+	packet.MaxClients = uint32(s.maxClients)
+
+	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
+		log.Printf("error: encryption mapping is out of date for client %d\n", clientIndex)
+		return
+	}
+
+	writePacketKey := s.clientManager.GetEncryptionEntrySendKey(client.encryptionIndex)
+	if writePacketKey == nil {
+		log.Printf("error: unable to retrieve encryption key for client: %d\n", clientIndex)
+		return
+	}
+
+	if err := client.SendPacket(packet, writePacketKey, s.serverTime); err != nil {
+		log.Printf("%s\n", err)
+	}
+}
+
+func (s *Server) SendPackets(serverTime float64) {
+	s.clientManager.SendPackets(serverTime)
+	return
+}
+
+func (s *Server) Update(time float64) {
+	if !s.running {
+		return
+	}
+
 	s.serverTime = time
-
-	if err := s.sendPackets(); err != nil {
-		return err
-	}
-
-	if err := s.checkTimeouts(); err != nil {
-		return err
-	}
-	return nil
+	s.clientManager.SendPackets(s.serverTime)
+	s.clientManager.CheckTimeouts(s.serverTime)
 }
 
-func (s *Server) checkTimeouts() error {
-	return nil
+func (s *Server) MaxClients() int {
+	return s.maxClients
 }
 
-func (s *Server) recvPackets() error {
-	return nil
-}
-
-func (s *Server) sendPackets() error {
-	return nil
-}
-
-func (s *Server) sendClientPacket(packet Packet, client *ClientInstance) error {
-	return nil
-}
-
-func (s *Server) disconnectClient(client *ClientInstance) error {
-	return nil
-}
-
-func (s *Server) disconnectAll() error {
-	return nil
+func (s *Server) HasClients() int {
+	return s.clientManager.ConnectedClientCount()
 }
 
 func (s *Server) Stop() error {
-	if s.running {
-		close(s.shutdownCh)
-		s.serverConn.Close()
-		s.running = false
+	if !s.running {
+		return nil
 	}
+	s.clientManager.disconnectClients(s.serverTime)
+
+	s.running = false
+	s.maxClients = 0
+	s.globalSequence = 0
+	s.challengeSequence = 0
+	s.challengeKey = make([]byte, KEY_BYTES)
+	s.clientManager.resetCryptoEntries()
+	s.clientManager.resetTokenEntries()
+	close(s.shutdownCh)
+	s.running = false
+	s.serverConn.Close()
+
 	return nil
 }
 
-func (s *Server) connectClient() error {
-	return nil
+func (s *Server) RecvPayload(clientIndex int) ([]byte, uint64) {
+	packet := s.clientManager.instances[clientIndex].packetQueue.Pop()
+	if packet == nil {
+		return []byte{}, 0
+	}
+	p, ok := packet.(*PayloadPacket)
+	if !ok {
+		log.Printf("not a payload packet")
+		return []byte{}, 0
+	}
+	return p.PayloadData, p.sequence
 }
 
-func (s *Server) ConnectedClientCount() int {
-	return s.clientManager.ClientCount()
+func addressEqual(addr1, addr2 *net.UDPAddr) bool {
+	if addr1 == nil || addr2 == nil {
+		return false
+	}
+	return addr1.IP.Equal(addr2.IP) && addr1.Port == addr2.Port
 }

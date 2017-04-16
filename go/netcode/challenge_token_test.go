@@ -1,8 +1,8 @@
 package netcode
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
 func TestNewChallengeToken(t *testing.T) {
@@ -40,7 +40,7 @@ func TestNewChallengeToken(t *testing.T) {
 		t.Fatalf("token client id did not match, expected %d got %d\n", token.ClientId, newToken.ClientId)
 	}
 
-	if bytes.Compare(newToken.UserData.Buf, token.UserData.Buf) != 0 {
+	if !bytes.Equal(newToken.UserData.Buf, token.UserData.Buf) {
 		t.Fatalf("user data did not match expected\n %#v\ngot\n%#v!", token.UserData.Buf, newToken.UserData.Buf)
 	}
 }

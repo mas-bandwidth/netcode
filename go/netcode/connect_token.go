@@ -2,7 +2,7 @@ package netcode
 
 import (
 	"errors"
-	"log"
+	"net"
 	"strings"
 	"time"
 )
@@ -32,39 +32,34 @@ type ConnectToken struct {
 // Create a new empty token and empty private token
 func NewConnectToken() *ConnectToken {
 	token := &ConnectToken{}
-	token.PrivateData = NewConnectTokenPrivate()
+	token.PrivateData = &ConnectTokenPrivate{}
 	return token
 }
 
 // Generates the token and private token data with the supplied config values and sequence id.
 // This will also write and encrypt the private token
-func (token *ConnectToken) Generate(config *Config, sequence uint64) error {
+func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64, userData, privateKey []byte) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
-	token.ExpireTimestamp = token.CreateTimestamp + config.TokenExpiry
+	token.ExpireTimestamp = token.CreateTimestamp + tokenExpiry
 	token.VersionInfo = []byte(VERSION_INFO)
-	token.ProtocolId = config.ProtocolId
-	token.TimeoutSeconds = config.TimeoutSeconds
+	token.ProtocolId = protocolId
+	token.TimeoutSeconds = timeoutSeconds
 	token.Sequence = sequence
 
-	userData, err := RandomBytes(USER_DATA_BYTES)
-	if err != nil {
+	token.PrivateData = NewConnectTokenPrivate(clientId, serverAddrs, userData)
+	if err := token.PrivateData.Generate(); err != nil {
 		return err
 	}
 
-	if err = token.PrivateData.Generate(config, userData); err != nil {
-		return err
-	}
-
-	// copy directly from the private token since we don't want to generate 2 different keys
 	token.ClientKey = token.PrivateData.ClientKey
 	token.ServerKey = token.PrivateData.ServerKey
-	token.ServerAddrs = token.PrivateData.ServerAddrs
+	token.ServerAddrs = serverAddrs
 
-	if _, err = token.PrivateData.Write(); err != nil {
+	if _, err := token.PrivateData.Write(); err != nil {
 		return err
 	}
 
-	if err = token.PrivateData.Encrypt(token.ProtocolId, token.ExpireTimestamp, sequence, config.PrivateKey); err != nil {
+	if err := token.PrivateData.Encrypt(token.ProtocolId, token.ExpireTimestamp, sequence, privateKey); err != nil {
 		return err
 	}
 
@@ -83,6 +78,7 @@ func (token *ConnectToken) Write() ([]byte, error) {
 	// assumes private token has already been encrypted
 	buffer.WriteBytes(token.PrivateData.Buffer())
 
+	// writes server/client key and addresses to public part of the buffer
 	if err := token.WriteShared(buffer); err != nil {
 		return nil, err
 	}
@@ -127,7 +123,6 @@ func ReadConnectToken(tokenBuffer []byte) (*ConnectToken, error) {
 	if token.Sequence, err = buffer.GetUint64(); err != nil {
 		return nil, errors.New("read connect data has bad sequence " + err.Error())
 	}
-	log.Printf("sequence: %x\n", token.Sequence)
 
 	if privateData, err = buffer.GetBytes(CONNECT_TOKEN_PRIVATE_BYTES); err != nil {
 		return nil, errors.New("read connect data has bad private data " + err.Error())
