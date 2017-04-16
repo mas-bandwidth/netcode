@@ -50,10 +50,10 @@ type Client struct {
 	id           uint64
 	connectToken *ConnectToken
 
-	time                  int64
-	startTime             int64
-	lastPacketSendTime    int64
-	lastPacketRecvTime    int64
+	time                  float64
+	startTime             float64
+	lastPacketSendTime    float64
+	lastPacketRecvTime    float64
 	shouldDisconnect      bool
 	state                 ClientState
 	shouldDisconnectState ClientState
@@ -169,8 +169,7 @@ func (c *Client) connectNextServer() bool {
 	return true
 }
 
-func (c *Client) Update(t int64) {
-	log.Printf("Update\n")
+func (c *Client) Update(t float64) {
 	c.time = t
 
 	if err := c.send(); err != nil {
@@ -180,7 +179,7 @@ func (c *Client) Update(t int64) {
 	state := c.GetState()
 	if state > StateDisconnected && state < StateConnected {
 		expire := c.connectToken.ExpireTimestamp - c.connectToken.CreateTimestamp
-		if c.startTime+int64(expire) <= c.time {
+		if c.startTime+float64(expire) <= c.time {
 			c.Disconnect(StateTokenExpired, false)
 			return
 		}
@@ -197,8 +196,7 @@ func (c *Client) Update(t int64) {
 
 	switch c.GetState() {
 	case StateSendingConnectionRequest:
-		timeout := c.lastPacketRecvTime + int64(c.connectToken.TimeoutSeconds)
-		log.Printf("sending connection request: %d %d\n", timeout, c.time)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
 			log.Printf("connection request timed out.")
 			if c.connectNextServer() {
@@ -207,8 +205,7 @@ func (c *Client) Update(t int64) {
 			c.Disconnect(StateConnectionRequestTimedOut, false)
 		}
 	case StateSendingConnectionResponse:
-		timeout := c.lastPacketRecvTime + int64(c.connectToken.TimeoutSeconds)
-		log.Printf("sending connection response: %d %d\n", timeout, c.time)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
 			if c.connectNextServer() {
 				return
@@ -216,8 +213,7 @@ func (c *Client) Update(t int64) {
 			c.Disconnect(StateConnectionResponseTimedOut, false)
 		}
 	case StateConnected:
-		timeout := c.lastPacketRecvTime + int64(c.connectToken.TimeoutSeconds)
-		log.Printf("connection connected: %d %d\n", timeout, c.time)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
 			c.Disconnect(StateConnectionTimedOut, false)
 		}
@@ -251,7 +247,7 @@ func (c *Client) SendData(payloadData []byte) error {
 
 func (c *Client) send() error {
 	// check our send rate prior to bother sending
-	if c.lastPacketSendTime+(1/PACKET_SEND_RATE) >= c.time {
+	if c.lastPacketSendTime+float64(1/PACKET_SEND_RATE) >= c.time {
 		return nil
 	}
 
@@ -308,7 +304,7 @@ func (c *Client) onPacketData(packetData []byte, from *net.UDPAddr) {
 	var err error
 	var size int
 	var sequence uint64
-	log.Printf("%#v\n%#v\n", c.serverAddress, from)
+
 	if !addressEqual(c.serverAddress, from) {
 		log.Printf("unknown address sent us data")
 		return
@@ -359,7 +355,6 @@ func (c *Client) processPacket(packet Packet, sequence uint64) {
 			return
 		}
 
-		log.Printf("client received connection keep alive packet from server\n")
 		if state == StateSendingConnectionResponse {
 			c.clientIndex = p.ClientIndex
 			c.maxClients = p.MaxClients
@@ -370,7 +365,7 @@ func (c *Client) processPacket(packet Packet, sequence uint64) {
 		if state != StateConnected {
 			return
 		}
-		log.Printf("got payload packet.\n")
+
 		c.packetQueue.Push(packet)
 	case ConnectionDisconnect:
 		if state != StateConnected {

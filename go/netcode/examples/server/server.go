@@ -3,14 +3,14 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/wirepair/netcode.io/go/netcode"
-	"math/rand"
+	"log"
 	"net"
 	"net/http"
 	"sync/atomic"
+	"time"
 )
 
 var webServerAddr string
@@ -19,8 +19,7 @@ var numServers int
 var startingPort int
 var maxClients int
 
-var clientIds []uint64
-
+var clientId uint64
 var serverAddrs []net.UDPAddr
 
 const (
@@ -50,25 +49,25 @@ func main() {
 	// initialize server addresses for connect tokens/listening
 	serverAddrs = make([]net.UDPAddr, numServers)
 	for i := 0; i < numServers; i += 1 {
-		addr := net.UDPAddr{IP: net.ParseIP("::1"), Port: startingPort + index}
+		addr := net.UDPAddr{IP: net.ParseIP("::1"), Port: startingPort + i}
 		serverAddrs[i] = addr
 	}
 
-	clientIds := make([]uint64, numServers)
-
 	// start our netcode servers
+
 	for i := 0; i < numServers; i += 1 {
 		go serveLoop(i)
 	}
 
 	// start our web server for generating and handing out connect tokens.
-	if err := http.ListenAndServe(webServerAddr, http.Handle("/token", serveToken)); err != nil {
+	http.HandleFunc("/token", serveToken)
+	if err := http.ListenAndServe(webServerAddr, nil); err != nil {
 		log.Fatalf("error listening: %s\n", err)
 	}
 }
 
 func serveLoop(index int) {
-	serv := NewServer(&serverAddrs[index], serverKey, PROTOCOL_ID, maxClients)
+	serv := netcode.NewServer(&serverAddrs[index], serverKey, PROTOCOL_ID, maxClients)
 	if err := serv.Init(); err != nil {
 		log.Fatalf("error initializing server: %s\n", err)
 	}
@@ -82,18 +81,15 @@ func serveLoop(index int) {
 		payload[i] = byte(i)
 	}
 
-	serverTime := int64(0)
-	deltaTime := time.Duration(time.Second * 1.0 / 60.0)
+	serverTime := float64(0.0)
+	delta := float64(1.0 / 60.0)
+	deltaTime := time.Duration(delta + float64(time.Second))
+
 	count := 0
-	gotPayload := false
 	for {
 		serv.Update(serverTime)
 		if serv.HasClients() > 0 {
 			serv.SendPackets(serverTime)
-		}
-
-		if count > 0 && gotPayload == true {
-			return
 		}
 
 		for i := 0; i < serv.MaxClients(); i += 1 {
@@ -102,12 +98,11 @@ func serveLoop(index int) {
 				if len(responsePayload) == 0 {
 					break
 				}
-				gotPayload = true
-				t.Logf("got payload: %d\n", len(responsePayload))
+				log.Printf("got payload: %d\n", len(responsePayload))
 			}
 		}
 		time.Sleep(deltaTime)
-		serverTime += int64(deltaTime.Nanoseconds())
+		serverTime += deltaTime.Seconds()
 		count += 1
 	}
 }
@@ -119,10 +114,9 @@ type WebToken struct {
 }
 
 func serveToken(w http.ResponseWriter, r *http.Request) {
-	serverId := rand.Int31n(numServers) // choose a random server
-	clientId := incClientId(serverId)   // safely increment the appropriate clientId
+	clientId := incClientId() // safely increment the clientId
 
-	tokenData, err := connectTokenGenerator(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence)
+	tokenData, err := connectTokenGenerator(clientId, serverAddrs, netcode.VERSION_INFO, PROTOCOL_ID, CONNECT_TOKEN_EXPIRY, TIMEOUT_SECONDS, 0)
 	if err != nil {
 		fmt.Fprintf(w, "error")
 		return
@@ -132,20 +126,22 @@ func serveToken(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(webToken)
 }
 
-func connectTokenGenerator(clientId int, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64) ([]byte, error) {
+func connectTokenGenerator(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64) ([]byte, error) {
 	userData, err := netcode.RandomBytes(netcode.USER_DATA_BYTES)
 	if err != nil {
 		return nil, err
 	}
-
+	for _, x := range serverAddrs {
+		log.Printf("generated: %s\n", x.String())
+	}
 	connectToken := netcode.NewConnectToken()
-	if err := connectToken.Generate(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData, privateKey); err != nil {
+	if err := connectToken.Generate(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData, serverKey); err != nil {
 		return nil, err
 	}
 
 	return connectToken.Write()
 }
 
-func incClientId(index int) uint64 {
-	return atomic.AddUint64(&clientIds[index], 1)
+func incClientId() uint64 {
+	return atomic.AddUint64(&clientId, 1)
 }

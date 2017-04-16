@@ -14,8 +14,8 @@ type ClientInstance struct {
 
 	encryptionIndex  int
 	sequence         uint64
-	lastSendTime     int64
-	lastRecvTime     int64
+	lastSendTime     float64
+	lastRecvTime     float64
 	userData         []byte
 	protocolId       uint64
 	replayProtection *ReplayProtection
@@ -38,8 +38,8 @@ func (c *ClientInstance) Clear() {
 	c.confirmed = false
 	c.clientId = 0
 	c.sequence = 0
-	c.lastSendTime = 0
-	c.lastRecvTime = 0
+	c.lastSendTime = 0.0
+	c.lastRecvTime = 0.0
 	c.address = nil
 	c.clientIndex = -1
 	c.encryptionIndex = -1
@@ -47,7 +47,7 @@ func (c *ClientInstance) Clear() {
 	c.userData = make([]byte, USER_DATA_BYTES)
 }
 
-func (c *ClientInstance) SendPacket(packet Packet, writePacketKey []byte, serverTime int64) error {
+func (c *ClientInstance) SendPacket(packet Packet, writePacketKey []byte, serverTime float64) error {
 	var bytesWritten int
 	var err error
 

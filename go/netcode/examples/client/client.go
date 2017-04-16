@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"flag"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
-	"net"
+	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,14 +25,31 @@ var PRIVATE_KEY = []byte{0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea,
 	0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
 	0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1}
 
+var tokenUrl string
+var numClients int
+
+func init() {
+	flag.StringVar(&tokenUrl, "url", "http://localhost:8880/token", "site that gives out free tokens")
+	flag.IntVar(&numClients, "num", 3, "number of clients to run concurrently")
+}
+
 func main() {
+	flag.Parse()
+	wg := &sync.WaitGroup{}
 
-	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
-	servers := make([]net.UDPAddr, 1)
-	servers[0] = server
+	wg.Add(numClients)
+	for i := 0; i < numClients; i += 1 {
+		token := getConnectToken()
+		go clientLoop(wg, token)
+	}
+	wg.Wait()
+}
 
-	connectToken := testGenerateConnectToken(servers, PRIVATE_KEY)
-	deltaTime := time.Duration(time.Second * 1.0 / 60.0)
+func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
+
+	clientTime := float64(0)
+	delta := float64(1.0 / 60.0)
+	deltaTime := time.Duration(delta + float64(time.Second))
 
 	c := netcode.NewClient(connectToken)
 
@@ -38,49 +59,63 @@ func main() {
 
 	packetData := make([]byte, 1200)
 	count := 0
-	timestamp := int64(0)
+
 	// fake game loop
 	for {
-		if count == 10 {
-			log.Fatalf("error communicating with server")
+
+		if clientTime > 4.0 {
+			log.Printf("client exiting recv'd %d payloads...", count)
+			wg.Done()
 		}
-		c.Update(timestamp)
-		log.Println("sending update")
+
+		c.Update(clientTime)
 		if c.GetState() == netcode.StateConnected {
 			c.SendData(packetData)
-			log.Println("sent data")
 		}
 
 		for {
-			log.Println("recv'ing data")
 			if payload := c.RecvData(); payload == nil {
 				break
 			} else {
 				log.Printf("recv'd payload: of %d bytes\n", len(payload))
+				count++
 				return
 			}
 		}
 		time.Sleep(deltaTime)
-		timestamp += int64(deltaTime.Seconds())
-		count++
+		clientTime += deltaTime.Seconds()
 	}
 
 }
 
-func testGenerateConnectToken(servers []net.UDPAddr, privateKey []byte) *netcode.ConnectToken {
-	if privateKey == nil {
-		privateKey = PRIVATE_KEY
-	}
+// this is from the web server serving tokens...
+type WebToken struct {
+	ClientId     uint64 `json:"client_id"`
+	ConnectToken string `json:"connect_token"`
+}
 
-	userData, err := netcode.RandomBytes(netcode.USER_DATA_BYTES)
+func getConnectToken() *netcode.ConnectToken {
+
+	resp, err := http.Get(tokenUrl)
 	if err != nil {
-		log.Fatalf("error generating userdata bytes: %s\n", err)
+		log.Fatalf("error getting token from %s: %s\n", tokenUrl, err)
+	}
+	defer resp.Body.Close()
+	webToken := &WebToken{}
+
+	if err := json.NewDecoder(resp.Body).Decode(webToken); err != nil {
+		log.Fatalf("error decoding web token: %s\n", err)
+	}
+	log.Printf("Got token for clientId: %d\n", webToken.ClientId)
+
+	tokenBuffer, err := base64.StdEncoding.DecodeString(webToken.ConnectToken)
+	if err != nil {
+		log.Fatalf("error decoding connect token: %s\n", err)
 	}
 
-	connectToken := netcode.NewConnectToken()
-	// generate will write & encrypt the ConnectTokenPrivate
-	if err := connectToken.Generate(CLIENT_ID, servers, netcode.VERSION_INFO, PROTOCOL_ID, CONNECT_TOKEN_EXPIRY, TIMEOUT_SECONDS, SEQUENCE_START, userData, privateKey); err != nil {
-		log.Fatalf("error generating token: %s\n", err)
+	token, err := netcode.ReadConnectToken(tokenBuffer)
+	if err != nil {
+		log.Fatalf("error reading connect token: %s\n", err)
 	}
-	return connectToken
+	return token
 }

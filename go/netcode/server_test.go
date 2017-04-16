@@ -28,17 +28,18 @@ func TestServerListen(t *testing.T) {
 		payload[i] = byte(i)
 	}
 
-	serverTime := int64(0)
-	deltaTime := time.Duration(time.Microsecond * 1.0 / 60.0)
+	serverTime := float64(0.0)
+	delta := float64(1.0 / 60.0)
+	deltaTime := time.Duration(delta + float64(time.Second))
 	count := 0
-	gotPayload := false
+	payloadCount := 0
 	for {
 		serv.Update(serverTime)
 		if serv.HasClients() > 0 {
 			serv.SendPackets(serverTime)
 		}
 
-		if count > 0 && gotPayload == true {
+		if count > 0 && payloadCount > 1000 {
 			return
 		}
 
@@ -48,12 +49,12 @@ func TestServerListen(t *testing.T) {
 				if len(responsePayload) == 0 {
 					break
 				}
-				gotPayload = true
+				payloadCount++
 				t.Logf("got payload: %d\n", len(responsePayload))
 			}
 		}
 		time.Sleep(deltaTime)
-		serverTime += int64(deltaTime.Nanoseconds())
+		serverTime += deltaTime.Seconds()
 		count += 1
 	}
 }

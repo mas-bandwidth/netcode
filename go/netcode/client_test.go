@@ -50,7 +50,10 @@ func TestClientCommunications(t *testing.T) {
 	servers[0] = server
 
 	connectToken := testGenerateConnectToken(servers, TEST_PRIVATE_KEY, t)
-	deltaTime := time.Duration(time.Second * 1.0 / 60.0)
+
+	clientTime := float64(0)
+	delta := float64(1.0 / 60.0)
+	deltaTime := time.Duration(delta + float64(time.Second))
 
 	c := NewClient(connectToken)
 
@@ -60,13 +63,13 @@ func TestClientCommunications(t *testing.T) {
 
 	packetData := make([]byte, 1200)
 	count := 0
-	timestamp := int64(0)
+
 	// fake game loop
 	for {
 		if count == 10 {
 			t.Fatalf("error communicating with server")
 		}
-		c.Update(timestamp)
+		c.Update(clientTime)
 		fmt.Println("sending update")
 		if c.GetState() == StateConnected {
 			c.SendData(packetData)
@@ -83,7 +86,7 @@ func TestClientCommunications(t *testing.T) {
 			}
 		}
 		time.Sleep(deltaTime)
-		timestamp += int64(deltaTime.Seconds())
+		clientTime += deltaTime.Seconds()
 		count++
 	}
 }
