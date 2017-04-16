@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/wirepair/netcode.io/go/netcode"
+	"github.com/networkprotocol/netcode.io/go/netcode"
 	"log"
 	"net"
 	"net/http"
