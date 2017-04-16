@@ -1,8 +1,10 @@
 package netcode
 
 import (
+	"errors"
 	"log"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,6 +32,11 @@ type Server struct {
 	challengeSequence uint64
 
 	recvBytes int
+}
+
+type recvData struct {
+	from   *net.UDPAddr
+	packet Packet
 }
 
 func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64, maxClients int) *Server {
@@ -70,6 +77,17 @@ func (s *Server) SetIgnoreRequests(val bool) {
 
 func (s *Server) SetIgnoreResponses(val bool) {
 	s.ignoreResponses = val
+}
+
+// increments the challenge sequence and returns the un-incremented value
+func (s *Server) incChallengeSequence() uint64 {
+	val := atomic.AddUint64(&s.challengeSequence, 1)
+	return val - 1
+}
+
+func (s *Server) incGlobalSequence() uint64 {
+	val := atomic.AddUint64(&s.globalSequence, 1)
+	return val - 1
 }
 
 func (s *Server) Init() error {
@@ -242,9 +260,7 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 
 	challenge := NewChallengeToken(requestPacket.Token.ClientId)
 	challengeBuf := challenge.Write(requestPacket.Token.UserData)
-	challengeSequence := s.challengeSequence
-
-	s.challengeSequence++
+	challengeSequence := s.incChallengeSequence()
 
 	if err := EncryptChallengeToken(&challengeBuf, challengeSequence, s.challengeKey); err != nil {
 		log.Printf("server ignored connection request. failed to encrypt challenge token\n")
@@ -256,11 +272,10 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 	challengePacket.ChallengeTokenSequence = challengeSequence
 
 	buffer := NewBuffer(MAX_PACKET_BYTES)
-	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.globalSequence, requestPacket.Token.ServerKey); err != nil {
+	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.incGlobalSequence(), requestPacket.Token.ServerKey); err != nil {
 		log.Printf("server error while writing challenge packet\n")
 		return
 	}
-	s.globalSequence++
 
 	s.sendGlobalPacket(buffer.Buf[:bytesWritten], addr)
 }
@@ -326,11 +341,11 @@ func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
 
 	deniedPacket := &DeniedPacket{}
 	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
-	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.globalSequence, sendKey); err != nil {
+	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.incGlobalSequence(), sendKey); err != nil {
 		log.Printf("error creating denied packet: %s\n", err)
 		return
 	}
-	s.globalSequence++
+
 	s.sendGlobalPacket(packetBuffer.Buf[:bytesWritten], addr)
 }
 
@@ -383,14 +398,16 @@ func (s *Server) SendPackets(serverTime float64) {
 	return
 }
 
-func (s *Server) Update(time float64) {
+func (s *Server) Update(time float64) error {
 	if !s.running {
-		return
+		return errors.New("server shutdown")
 	}
 
 	s.serverTime = time
+
 	s.clientManager.SendPackets(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
+	return nil
 }
 
 func (s *Server) MaxClients() int {

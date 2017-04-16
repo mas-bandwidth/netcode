@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/networkprotocol/netcode.io/go/netcode"
+	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +21,8 @@ var maxClients int
 
 var clientId uint64
 var serverAddrs []net.UDPAddr
+
+var closeCh chan struct{}
 
 const (
 	PROTOCOL_ID          = 0x1122334455667788
@@ -45,7 +47,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-
+	closeCh = make(chan struct{}, 1)
 	// initialize server addresses for connect tokens/listening
 	serverAddrs = make([]net.UDPAddr, numServers)
 	for i := 0; i < numServers; i += 1 {
@@ -54,19 +56,19 @@ func main() {
 	}
 
 	// start our netcode servers
-
 	for i := 0; i < numServers; i += 1 {
-		go serveLoop(i)
+		go serveLoop(closeCh, i)
 	}
 
 	// start our web server for generating and handing out connect tokens.
 	http.HandleFunc("/token", serveToken)
+	http.HandleFunc("/shutdown", shutdown)
 	if err := http.ListenAndServe(webServerAddr, nil); err != nil {
 		log.Fatalf("error listening: %s\n", err)
 	}
 }
 
-func serveLoop(index int) {
+func serveLoop(closeCh chan struct{}, index int) {
 	serv := netcode.NewServer(&serverAddrs[index], serverKey, PROTOCOL_ID, maxClients)
 	if err := serv.Init(); err != nil {
 		log.Fatalf("error initializing server: %s\n", err)
@@ -83,11 +85,12 @@ func serveLoop(index int) {
 
 	serverTime := float64(0.0)
 	delta := float64(1.0 / 60.0)
-	deltaTime := time.Duration(delta + float64(time.Second))
-
+	deltaTime := time.Duration(delta * float64(time.Second))
+	log.Printf("delta: %d\n", deltaTime.Nanoseconds())
 	count := 0
 	for {
 		serv.Update(serverTime)
+
 		if serv.HasClients() > 0 {
 			serv.SendPackets(serverTime)
 		}
@@ -104,6 +107,13 @@ func serveLoop(index int) {
 		time.Sleep(deltaTime)
 		serverTime += deltaTime.Seconds()
 		count += 1
+
+		select {
+		case <-closeCh:
+			log.Printf("shutting down server")
+			serv.Stop()
+			return
+		}
 	}
 }
 
@@ -111,6 +121,11 @@ func serveLoop(index int) {
 type WebToken struct {
 	ClientId     uint64 `json:"client_id"`
 	ConnectToken string `json:"connect_token"`
+}
+
+func shutdown(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "done")
+	close(closeCh)
 }
 
 func serveToken(w http.ResponseWriter, r *http.Request) {

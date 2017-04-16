@@ -9,7 +9,7 @@ import (
 
 const CLIENT_MAX_RECEIVE_PACKETS = 64
 const SERVER_MAX_RECEIVE_PACKETS = (64 * MAX_CLIENTS)
-const PACKET_SEND_RATE = 10
+const PACKET_SEND_RATE = 10.0
 const TIMEOUT_SECONDS = 5
 const NUM_DISCONNECT_PACKETS = 10
 
@@ -112,6 +112,7 @@ func (c *Client) Connect() error {
 	}
 
 	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
+
 	c.conn = NewNetcodeConn()
 	c.conn.SetRecvHandler(c.onPacketData)
 	if err = c.conn.Dial(c.serverAddress); err != nil {
@@ -151,7 +152,10 @@ func (c *Client) resetConnectionData(newState ClientState) {
 	c.setState(newState)
 	c.Reset()
 	c.packetQueue.Clear()
+}
 
+func (c *Client) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
 }
 
 func (c *Client) connectNextServer() bool {
@@ -245,7 +249,7 @@ func (c *Client) SendData(payloadData []byte) error {
 
 func (c *Client) send() error {
 	// check our send rate prior to bother sending
-	if c.lastPacketSendTime+float64(1/PACKET_SEND_RATE) >= c.time {
+	if c.lastPacketSendTime+float64(1.0/PACKET_SEND_RATE) >= c.time {
 		return nil
 	}
 
@@ -267,8 +271,8 @@ func (c *Client) send() error {
 		return c.sendPacket(p)
 	case StateConnected:
 		p := &KeepAlivePacket{}
-		p.ClientIndex = c.clientIndex
-		p.MaxClients = c.maxClients
+		p.ClientIndex = 0
+		p.MaxClients = 0
 		log.Printf("client sent connection keep-alive packet to server\n")
 		return c.sendPacket(p)
 	}
@@ -283,8 +287,12 @@ func (c *Client) sendPacket(packet Packet) error {
 		return err
 	}
 
-	// TODO: actually check bytes written/error data
 	_, err = c.conn.Write(buffer.Buf[:packet_bytes])
+	if err != nil {
+		log.Printf("error writing packet %s to server: %s\n", packetTypeMap[packet.GetType()], err)
+	}
+	c.lastPacketSendTime = c.time
+	c.sequence++
 	return err
 }
 

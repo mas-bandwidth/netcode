@@ -33,6 +33,7 @@ type NetcodeConn struct {
 func NewNetcodeConn() *NetcodeConn {
 	c := &NetcodeConn{}
 
+	c.closeCh = make(chan struct{})
 	c.isClosed = true
 	c.maxBytes = MAX_PACKET_BYTES
 	c.recvSize = SOCKET_RCVBUF_SIZE
@@ -134,6 +135,7 @@ func (c *NetcodeConn) receiver(ch chan *netcodeData) {
 			}
 		} else {
 			log.Printf("error reading data from socket: %s\n", err)
+			return
 		}
 
 	}

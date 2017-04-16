@@ -2,7 +2,6 @@ package netcode
 
 import (
 	"errors"
-	"log"
 	"net"
 )
 
@@ -107,7 +106,6 @@ func (p *ConnectTokenPrivate) Decrypt(protocolId, expireTimestamp, sequence uint
 	}
 
 	copy(p.mac, p.TokenData.Buf[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:])
-	log.Printf("Decrypt: mac is: %#v\n%#v %d\n", p.mac, p.TokenData.Buf[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:], len(p.TokenData.Buf[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:]))
 	additionalData, nonce := buildTokenCryptData(protocolId, expireTimestamp, sequence)
 	if p.TokenData.Buf, err = DecryptAead(p.TokenData.Buf, additionalData, nonce, privateKey); err != nil {
 		return nil, err

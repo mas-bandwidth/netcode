@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"flag"
-	"github.com/networkprotocol/netcode.io/go/netcode"
+	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
 	"net/http"
 	"sync"
@@ -49,7 +49,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 
 	clientTime := float64(0)
 	delta := float64(1.0 / 60.0)
-	deltaTime := time.Duration(delta + float64(time.Second))
+	deltaTime := time.Duration(delta * float64(time.Second))
 
 	c := netcode.NewClient(connectToken)
 
@@ -57,6 +57,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 		log.Fatalf("error connecting: %s\n", err)
 	}
 
+	log.Printf("client connected, local address: %s\n", c.LocalAddr())
 	packetData := make([]byte, 1200)
 	count := 0
 

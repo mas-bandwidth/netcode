@@ -222,7 +222,6 @@ func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime f
 func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serverTime float64) bool {
 
 	if index < 0 || index > m.numCryptoEntries {
-		log.Printf("index is < 0 or > m.numCryptoEntries\n")
 		return false
 	}
 
@@ -303,7 +302,7 @@ func (m *ClientManager) SendPackets(serverTime float64) {
 			return
 		}
 
-		if instance.connected && instance.lastSendTime+(1/PACKET_SEND_RATE) < serverTime {
+		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) < serverTime {
 			packet := &KeepAlivePacket{}
 			packet.ClientIndex = uint32(instance.clientIndex)
 			packet.MaxClients = uint32(m.maxClients)
