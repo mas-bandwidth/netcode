@@ -14,8 +14,7 @@ mod connection;
 use server::connection::*;
 use socket::*;
 use error::*;
-mod replay;
-use server::replay::*;
+use channel::{self, Channel};
 
 /// Errors from creating a server.
 #[derive(Debug)]
@@ -98,8 +97,6 @@ pub struct Server<I,S> {
     clients: Vec<Option<Connection>>,
     time: f64,
 
-    send_sequence: u64,
-
     challenge_sequence: u64,
     challenge_key: [u8; NETCODE_KEY_BYTES],
 
@@ -139,7 +136,6 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                     connect_key: key_copy,
                     clients: clients,
                     time: 0.0,
-                    send_sequence: 0,
                     challenge_sequence: 0,
                     challenge_key: crypto::generate_key(),
                     client_event_idx: 0,
@@ -171,7 +167,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     }
 
     /// Sends a packet to `client_id` specified.
-    pub fn send(&mut self, client_id: ClientId, packet: &[u8]) -> Result<(), SendError> {
+    pub fn send(&mut self, client_id: ClientId, packet: &[u8]) -> Result<usize, SendError> {
         if packet.len() == 0 || packet.len() > NETCODE_MAX_PAYLOAD_SIZE {
             return Err(SendError::PacketSize)
         }
@@ -202,7 +198,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 Ok((len, addr)) => self.handle_io(&addr, &scratch[..len], out_packet),
                 Err(e) => match e.kind() {
                     io::ErrorKind::WouldBlock => Ok(None),
-                    _ => Err(e.into())
+                    _ => Err(RecvError::SocketError(e).into())
                 }
             };
 
@@ -218,9 +214,11 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 break;
             }
 
-            let result = match self.clients[self.client_event_idx] {
-                Some(ref mut c) => Server::<I,S>::tick_client(self.time, c),
-                None => TickResult::Noop
+            let clients = &mut self.clients;
+            let result = if let Some(client) = clients[self.client_event_idx].as_mut() {
+                Self::tick_client(self.time, client, &mut self.listen_socket)?
+            } else {
+                TickResult::Noop
             };
 
             let event = match result {
@@ -229,13 +227,13 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                     match state {
                         ConnectionState::TimedOut |
                         ConnectionState::Disconnected => {
-                            let client_id = self.clients[self.client_event_idx].as_ref().map(|c| c.client_id).unwrap_or(0);
-                            self.clients[self.client_event_idx] = None;
+                            let client_id = clients[self.client_event_idx].as_ref().map_or(0, |c| c.client_id);
+                            clients[self.client_event_idx] = None;
                             trace!("Client disconnected {}", client_id);
                             Some(ServerEvent::ClientDisconnect(client_id))
                         },
                         _ => {
-                            if let Some(client) = self.clients[self.client_event_idx].as_mut() {
+                            if let Some(client) = clients[self.client_event_idx].as_mut() {
                                 client.state = state.clone();
                             }
 
@@ -244,9 +242,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                     }
                 },
                 TickResult::SendKeepAlive => {
-                    let client_idx = self.client_event_idx;
-                    self.send_keepalive_packet(client_idx)?;
-                    None
+                    let client_id = clients[self.client_event_idx].as_ref().map_or(0, |c| c.client_id);
+                    Some(ServerEvent::KeepAlive(client_id))
                 }
             };
 
@@ -264,52 +261,42 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         match self.find_client_by_addr(addr) {
             None => {
                 trace!("New data on listening socket");
-                //Accept new client
-                self.handle_client_connect(addr, data, out_packet)
+
+                match packet::decode(data, self.protocol_id, None, out_packet) {
+                    Ok(packet) => match packet.1 {
+                        packet::Packet::ConnectionRequest(req) => self.handle_client_connect(addr, &req),
+                        packet => {
+                            trace!("Expected Connection Request but got packet type {}", packet.get_type_id());
+                            Ok(None)
+                        }
+                    },
+                    Err(e) => {
+                        trace!("Failed to decode connect packet: {:?}", e);
+                        Ok(None)
+                    }
+                }
             },
             Some(client_idx) => {
-                let protocol_id = self.protocol_id;
-                let challenge_key = self.challenge_key;
-
+                //Make sure we aren't still trying to connect
                 trace!("New data on client socket {}", client_idx);
-
-                if let Some(ref mut client) = self.clients[client_idx].as_mut() {
-                    let time = self.time;
-                    Self::handle_packet(time, protocol_id, &challenge_key, client, data, out_packet)
-                } else {
-                    Ok(None)
-                }
+                self.handle_packet(client_idx, data, out_packet)
             }
         }
     }
 
-    fn handle_client_connect(&mut self, addr: &SocketAddr, data: &[u8], out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
-        if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.connect_key, &self.listen_addr, data, out_packet) {
+    fn handle_client_connect(&mut self, addr: &SocketAddr, request: &packet::ConnectionRequestPacket) -> Result<Option<ServerEvent>, UpdateError> {
+        if let Some(private_data) = Self::validate_client_token(self.protocol_id, &self.listen_addr, &self.connect_key, request) {
             //See if we already have this connection
-            if let Some(idx) = self.find_client_by_id(private_data.client_id) {
+            if let Some(_) = self.find_client_by_id(private_data.client_id) {
                 trace!("Client already exists, skipping socket creation");
-                if let Some(ref mut client) = self.clients[idx] {
-                    match client.state {
-                        ConnectionState::PendingResponse(ref mut retry) => {
-                            retry.last_response = self.time;
-                        }
-                        _ => ()
-                    }
-                }
             } else {
                 //Find open index
                 match self.clients.iter().position(|v| v.is_none()) {
                     Some(idx) => {
                         let conn = Connection {
                             client_id: private_data.client_id,
-                            state: ConnectionState::PendingResponse(RetryState {
-                                last_sent: 0.0,
-                                last_response: self.time
-                            }),
-                            server_to_client_key: private_data.server_to_client_key,
-                            client_to_server_key: private_data.client_to_server_key,
-                            replay_protection: ReplayProtection::new(),
-                            addr: addr.clone(),
+                            state: ConnectionState::PendingResponse,
+                            channel: Channel::new(&private_data.server_to_client_key, &private_data.client_to_server_key, addr, self.protocol_id, idx, self.clients.len())
                         };
 
                         trace!("Accepted connection {:?}", addr);
@@ -325,6 +312,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
 
             self.challenge_sequence += 1;
 
+            trace!("Sending challenge packet");
+
             let challenge = packet::ChallengePacket::generate(
                 private_data.client_id,
                 &private_data.user_data,
@@ -334,137 +323,95 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
             //Send challenge token
             self.send_packet(private_data.client_id, &packet::Packet::Challenge(challenge), None)?;
 
-            Ok(Some(ServerEvent::ClientConnect(private_data.client_id)))
+            Ok(None)
         } else {
             trace!("Failed to accept client connection");
             Ok(Some(ServerEvent::RejectedClient))
         }
     }
 
-    fn send_packet(&mut self, client_id: ClientId, packet: &packet::Packet, payload: Option<&[u8]>) -> Result<(), SendError> {
-        self.send_sequence += 1;
+    fn send_packet(&mut self, client_id: ClientId, packet: &packet::Packet, payload: Option<&[u8]>) -> Result<usize, SendError> {
+        let socket = &mut self.listen_socket;
+        let clients = &mut self.clients;
 
-        let sequence = self.send_sequence;
-        let protocol_id = self.protocol_id;
+        //Get client idx
+        let client = clients.iter().position(|v| v.as_ref().map_or(false, |ref c| c.client_id == client_id))
+            //Then turn it into a reference
+            .map(|idx| clients[idx].as_mut()).and_then(|c| c);
 
-        let encode = if let Some(ref client) = self.find_client_by_id(client_id).and_then(|v| self.clients[v].as_ref()) {
-            let mut out_packet = [0; NETCODE_MAX_PACKET_SIZE];
-            let len = packet::encode(&mut out_packet[..], 
-                            protocol_id,
-                            &packet,
-                            Some((sequence, &client.server_to_client_key)),
-                            payload)?;
-            trace!("Sending packet with id {} and length {}", packet.get_type_id(), len);
+        if let Some(client) = client {
+            return client.channel.send(self.time, packet, payload, socket)
+        }
 
-            Ok((len, out_packet, client.addr))
-        } else {
-            trace!("Tried to send packet to invalid client id: {}", client_id);
-            return Err(SendError::InvalidClientId)
-        };
+        trace!("Unable to send packet, invalid client id {}", client_id);
 
-        encode.and_then(|(len, packet, addr)| {
-            self.listen_socket.send_to(&packet[..len], &addr).map(|_| ()).map_err(|e| e.into())
-        })
-    }
+        Err(SendError::InvalidClientId)
+   }
 
     fn send_denied_packet(&mut self, addr: &SocketAddr, key: &[u8; NETCODE_KEY_BYTES]) -> Result<(), SendError> {
-        self.send_sequence += 1;
-
         //id + sequence
         let mut packet = [0; 1 + 8];
-        packet::encode(&mut packet[..], self.protocol_id, &packet::Packet::ConnectionDenied, Some((self.send_sequence, key)), None)?;
+        packet::encode(&mut packet[..], self.protocol_id, &packet::Packet::ConnectionDenied, Some((0, key)), None)?;
 
         self.listen_socket.send_to(&packet[..], addr).map_err(|e| e.into()).map(|_| ())
     }
 
-    fn send_keepalive_packet(&mut self, client_idx: usize) -> Result<(), SendError> {
-        let client_id = self.clients[client_idx].as_ref().map(|c| c.client_id).unwrap_or(0);
-        trace!("Sending keepalive for {}", client_id);
-        let client_count = self.clients.len() as i32;
-        self.send_packet(client_id, &packet::Packet::KeepAlive(packet::KeepAlivePacket {
-            client_idx: client_idx as i32,
-            max_clients: client_count
-        }), None)
-    }
-
     fn validate_client_token(
             protocol_id: u64,
-            private_key: &[u8; NETCODE_KEY_BYTES],
             host: &SocketAddr,
-            packet: &[u8],
-            out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Option<token::PrivateData> {
-        match packet::decode(packet, protocol_id, None, out_packet) {
-            Ok(packet) => match packet.1 {
-                packet::Packet::ConnectionRequest(req) => {
-                    if req.version != *NETCODE_VERSION_STRING {
-                        trace!("Version mismatch expected {:?} but got {:?}", 
-                            NETCODE_VERSION_STRING, req.version);
+            private_key: &[u8; NETCODE_KEY_BYTES],
+            req: &packet::ConnectionRequestPacket) -> Option<token::PrivateData> {
+        if req.version != *NETCODE_VERSION_STRING {
+            trace!("Version mismatch expected {:?} but got {:?}", 
+                NETCODE_VERSION_STRING, req.version);
 
-                        return None;
-                    }
+            return None;
+        }
 
-                    let now = token::get_time_now();
-                    if now > req.token_expire {
-                        trace!("Token expired: {} > {}", now, req.token_expire);
-                        return None;
-                    }
+        let now = token::get_time_now();
+        if now > req.token_expire {
+            trace!("Token expired: {} > {}", now, req.token_expire);
+            return None;
+        }
 
-                    if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
-                        if !v.hosts.get().any(|thost| thost == *host) {
-                            info!("Client connected but didn't contain host's address.");
-                            None
-                        } else {
-                            Some(v)
-                        }
-                    } else {
-                        info!("Unable to decode connection token");
-                        None
-                    }
-                },
-                packet => {
-                    trace!("Expected Connection Request but got packet type {}", packet.get_type_id());
-                    None
-                }
-            },
-            Err(e) => {
-                trace!("Failed to decode connect packet: {:?}", e);
+        if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
+            if !v.hosts.get().any(|thost| thost == *host) {
+                info!("Client connected but didn't contain host's address.");
                 None
+            } else {
+                Some(v)
             }
+        } else {
+            info!("Unable to decode connection token");
+            None
         }
-    }
+   }
 
-    fn tick_client(time: f64, client: &mut Connection) -> TickResult {
-        match &mut client.state {
-            &mut ConnectionState::PendingResponse(ref mut retry_state) => {
-                //If we didn't timeout then persist our retry state
-                if !retry_state.has_expired(time) {
-                    TickResult::Noop
-                } else {    //Timed out, remove client and trigger event
-                    TickResult::StateChange(ConnectionState::TimedOut)
+    fn tick_client(time: f64, client: &mut Connection, socket: &mut I) -> Result<TickResult, UpdateError> {
+        let state = &client.state;
+        let result = match *state {
+            ConnectionState::PendingResponse => {
+                match client.channel.update(time, socket, false)? {
+                    channel::UpdateResult::Expired => TickResult::StateChange(ConnectionState::TimedOut),
+                    channel::UpdateResult::SentKeepAlive => TickResult::SendKeepAlive,
+                    channel::UpdateResult::Noop => TickResult::Noop
                 }
             },
-            &mut ConnectionState::Idle(ref mut retry_state) => {
-                //If we didn't timeout then persist our retry state
-                if !retry_state.has_expired(time) {
-                    if retry_state.should_send_keepalive(time) {
-                        *retry_state = retry_state.update_sent(time);
-                        TickResult::SendKeepAlive
-                    } else {
-                        TickResult::Noop
-                    }
-                } else {    //Timed out, remove client and trigger event
-                    TickResult::StateChange(ConnectionState::TimedOut)
+            ConnectionState::Idle => {
+                match client.channel.update(time, socket, true)? {
+                    channel::UpdateResult::Expired => TickResult::StateChange(ConnectionState::TimedOut),
+                    channel::UpdateResult::SentKeepAlive => TickResult::SendKeepAlive,
+                    channel::UpdateResult::Noop => TickResult::Noop
                 }
             },
-            &mut ConnectionState::TimedOut 
-                | &mut ConnectionState::Disconnected => TickResult::Noop
-        }
+            ConnectionState::TimedOut | ConnectionState::Disconnected => TickResult::Noop
+        };
+
+        Ok(result)
     }
 
-    fn handle_packet(time: f64,
-            protocol_id: u64,
-            challenge_key: &[u8; NETCODE_KEY_BYTES],
-            client: &mut Connection,
+    fn handle_packet(&mut self,
+            client_idx: usize,
             packet: &[u8],
             out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE])
                 -> Result<Option<ServerEvent>, UpdateError> {
@@ -473,64 +420,73 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
 
         trace!("Handling packet from client");
+        let (client_id, mut state, addr, decoded) = if let Some(client) = self.clients[client_idx].as_mut() {
+             let decoded = match client.channel.recv(self.time, packet, out_packet) {
+                Ok(packet) => packet,
+                Err(RecvError::DuplicateSequence) => return Ok(Some(ServerEvent::ReplayRejected(client.client_id))),
+                Err(e) => {
+                    info!("Failed to decode packet: {:?}", e);
+                    client.state = ConnectionState::Disconnected;
 
-        let (sequence, decoded) = match packet::decode(&packet, protocol_id, Some(&client.client_to_server_key), out_packet) {
-            Ok(p) => p,
-            Err(e) => {
-                info!("Failed to decode packet: {:?}", e);
-                client.state = ConnectionState::Disconnected;
-
-                return Ok(Some(ServerEvent::ClientDisconnect(client.client_id)))
-            }
+                    return Ok(Some(ServerEvent::ClientDisconnect(client.client_id)))
+                }
+            };
+ 
+            (client.client_id, client.state.clone(), client.channel.get_addr().clone(), decoded)
+        } else {
+            return Ok(None)
         };
 
-        if client.replay_protection.packet_already_received(sequence) {
-            return Ok(Some(ServerEvent::ReplayRejected(client.client_id)))
-        }
-
         //Update client state with any recieved packet
-        let (event, new_state) = match &client.state {
-            &ConnectionState::Idle(ref retry) => {
+        let event = match state {
+            ConnectionState::Idle => {
                 match decoded {
                     packet::Packet::Payload(len) => {
-                        trace!("Received payload packet from {} with size {}", client.client_id, len);
-                        (
-                            Some(ServerEvent::Packet(client.client_id, len)),
-                            ConnectionState::Idle(retry.update_response(time))
-                        )
+                        trace!("Received payload packet from {} with size {}", client_id, len);
+                        Some(ServerEvent::Packet(client_id, len))
                     },
                     packet::Packet::KeepAlive(_) => {
-                        (Some(ServerEvent::KeepAlive(client.client_id)), ConnectionState::Idle(retry.update_response(time)))
+                        Some(ServerEvent::KeepAlive(client_id))
                     },
                     packet::Packet::Disconnect => {
-                        (Some(ServerEvent::ClientDisconnect(client.client_id)), ConnectionState::Disconnected)
+                        state = ConnectionState::Disconnected;
+                        Some(ServerEvent::ClientDisconnect(client_id))
                     },
                     other => {
                         info!("Unexpected packet type {}", other.get_type_id());
-                        (None, ConnectionState::Idle(retry.update_response(time)))
+                        None
                     }
                 }
              },
-            &ConnectionState::PendingResponse(ref retry) => {
+            ConnectionState::PendingResponse => {
                 match decoded {
                     packet::Packet::Response(resp) => {
-                        let token = resp.decode(&challenge_key)?;
+                        let token = resp.decode(&self.challenge_key)?;
                         out_packet[..NETCODE_USER_DATA_BYTES].copy_from_slice(&token.user_data);
 
                         info!("client response");
 
-                        (Some(ServerEvent::ClientConnect(token.client_id)), ConnectionState::Idle(retry.update_response(time)))
+                        state = ConnectionState::Idle;
+                        Some(ServerEvent::ClientConnect(token.client_id))
+                    },
+                    packet::Packet::ConnectionRequest(req) => {
+                        self.handle_client_connect(&addr, &req)?;
+                        None
                     },
                     p => {
-                        info!("Unexpected packet type when waiting for repsonse {}", p.get_type_id());
-                        (None, ConnectionState::Idle(retry.update_response(time)))
+                        info!("Unexpected packet type when waiting for response {}", p.get_type_id());
+                        None
                     }
                 }
             },
-            s => (None, s.clone())
+            _ => None
         };
 
-        client.state = new_state;
+        trace!("state {:?}", &state);
+
+        if let Some(client) = self.clients[client_idx].as_mut() {
+            client.state = state;
+        }
 
         Ok(event)
     }
@@ -540,7 +496,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     }
 
     fn find_client_by_addr(&self, addr: &SocketAddr) -> Option<usize> {
-        self.clients.iter().position(|v| v.as_ref().map_or(false, |ref c| c.addr == *addr))
+        self.clients.iter().position(|v| v.as_ref().map_or(false, |ref c| *c.channel.get_addr() == *addr))
     }
 }
 
@@ -679,7 +635,7 @@ mod test {
 
             match event {
                 Ok(Some(ServerEvent::ClientConnect(CLIENT_ID))) => (),
-                _ => assert!(false)
+                e => assert!(false, "{:?}", e)
             }
         }
 
@@ -728,7 +684,7 @@ mod test {
             let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data) {
                 Ok((sequence, Packet::Payload(len))) => {
-                    assert_eq!(sequence, self.next_sequence);
+                    assert_eq!(sequence+1, self.next_sequence);
                     assert_eq!(payload.len(), len);
                     for i in 0..len {
                         assert_eq!(packet_data[i], payload[i]);
@@ -755,7 +711,7 @@ mod test {
     }
 
     #[test]
-    fn test_connect() {
+    fn test_connect_api() {
         let mut harness = TestHarness::<UdpSocket,()>::new(None);
         harness.send_connect_packet();
         harness.validate_challenge();

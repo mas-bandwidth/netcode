@@ -7,8 +7,8 @@ use packet;
 pub enum UpdateError {
     /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PAYLOAD_LEN` = 1775)
     PacketBufferTooSmall,
-    /// Generic io error.
-    SocketError(io::Error),
+    /// An error happened when receiving a packet.
+    RecvError(RecvError),
     /// An error when sending(usually challenge response)
     SendError(SendError),
     /// An internal error occurred
@@ -34,9 +34,26 @@ pub enum SendError {
     SocketError(io::Error)
 }
 
-impl From<io::Error> for UpdateError {
-    fn from(err: io::Error) -> UpdateError {
-        UpdateError::SocketError(err)
+/// Errors from receiving packets
+#[derive(Debug)]
+pub enum RecvError {
+    /// Failed to decode packet.
+    PacketDecodeError(packet::PacketError),
+    /// We've already received this packet before.
+    DuplicateSequence,
+    /// IO error occured on the socket.
+    SocketError(io::Error)
+}
+
+impl From<packet::PacketError> for RecvError {
+    fn from(err: packet::PacketError) -> RecvError {
+        RecvError::PacketDecodeError(err)
+    }
+}
+
+impl From<RecvError> for UpdateError {
+    fn from(err: RecvError) -> UpdateError {
+        UpdateError::RecvError(err)
     }
 }
 
@@ -61,5 +78,11 @@ impl From<packet::PacketError> for SendError {
 impl From<io::Error> for SendError {
     fn from(err: io::Error) -> SendError {
         SendError::SocketError(err)
+    }
+}
+
+impl From<io::Error> for RecvError {
+    fn from(err: io::Error) -> RecvError {
+        RecvError::SocketError(err)
     }
 }

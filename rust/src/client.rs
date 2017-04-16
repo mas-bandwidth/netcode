@@ -1,5 +1,6 @@
 use common::*;
 use error::*;
+use packet;
 use socket::SocketProvider;
 use token::ConnectToken;
 
@@ -29,6 +30,23 @@ pub enum State {
     Connected
 }
 
+enum InternalState {
+    Connecting(usize, ConnectSequence),
+    Connected(SocketAddr),
+    Disconnected
+}
+
+struct RetryState {
+    elapsed: f64,
+    retry_count: usize
+}
+
+enum ConnectSequence {
+    SendingToken(RetryState),
+    SendingChallenge(RetryState, packet::ChallengeToken),
+    PendingKeepAlive
+}
+
 pub enum ClientEvent {
     NewState(State),
     Packet(usize)
@@ -36,6 +54,7 @@ pub enum ClientEvent {
 
 pub struct Client<I,S> where I: SocketProvider<I,S> {
     state: State,
+    istate: InternalState,
     socket: I,
     socket_state: S,
     token: ConnectToken
@@ -51,6 +70,7 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
 
         Ok(Client {
             state: State::SendingConnectionRequest,
+            istate: InternalState::Connecting(0, ConnectSequence::SendingToken(RetryState { elapsed: 0.0, retry_count: 0 })),
             socket: socket,
             socket_state: socket_state,
             token: token.clone()

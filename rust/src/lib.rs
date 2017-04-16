@@ -59,6 +59,8 @@ pub mod error;
 mod crypto;
 mod server;
 mod client;
+mod channel;
+mod replay;
 mod token;
 mod packet;
 mod socket;
