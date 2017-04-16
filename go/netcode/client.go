@@ -112,7 +112,6 @@ func (c *Client) Connect() error {
 	}
 
 	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
-	log.Printf("connecting to: %s\n", c.serverAddress.String())
 	c.conn = NewNetcodeConn()
 	c.conn.SetRecvHandler(c.onPacketData)
 	if err = c.conn.Dial(c.serverAddress); err != nil {
@@ -141,7 +140,6 @@ func (c *Client) Reset() {
 }
 
 func (c *Client) resetConnectionData(newState ClientState) {
-	log.Printf("reseting connection data")
 	c.sequence = 0
 	c.clientIndex = 0
 	c.maxClients = 0

@@ -94,11 +94,11 @@ func serveLoop(index int) {
 
 		for i := 0; i < serv.MaxClients(); i += 1 {
 			for {
-				responsePayload, _ := serv.RecvPayload(i)
+				responsePayload, seq := serv.RecvPayload(i)
 				if len(responsePayload) == 0 {
 					break
 				}
-				log.Printf("got payload: %d\n", len(responsePayload))
+				log.Printf("got payload: %d with sequence: %d\n", len(responsePayload), seq)
 			}
 		}
 		time.Sleep(deltaTime)

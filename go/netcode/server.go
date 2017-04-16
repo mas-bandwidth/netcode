@@ -116,7 +116,7 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 		return
 	}
 
-	log.Printf("[%s] net client connected", s.serverAddr.String())
+	log.Printf("%s net client connected", s.serverAddr.String())
 
 	timestamp := uint64(time.Now().Unix())
 
@@ -227,7 +227,7 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 		s.sendDeniedPacket(requestPacket.Token.ServerKey, addr)
 		return
 	}
-	log.Printf("serverTime: %f, timeout: %f\n", s.serverTime, s.serverTime+s.timeout)
+
 	if !s.clientManager.AddEncryptionMapping(requestPacket.Token, addr, s.serverTime, s.serverTime+s.timeout) {
 		log.Printf("server ignored connection request. failed to add encryption mapping\n")
 		return
@@ -283,7 +283,6 @@ func (s *Server) processConnectionResponse(clientIndex, encryptionIndex int, pac
 
 	if tokenBuffer, err = DecryptChallengeToken(responsePacket.ChallengeTokenData, responsePacket.ChallengeTokenSequence, s.challengeKey); err != nil {
 		log.Printf("failed to decrypt challenge token: %s\n", err)
-		log.Fatalf("bloop")
 		return
 	}
 

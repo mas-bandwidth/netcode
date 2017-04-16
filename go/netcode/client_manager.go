@@ -157,13 +157,12 @@ func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UD
 		m.connectTokensEntries[oldestIndex].time = serverTime
 		m.connectTokensEntries[oldestIndex].address = addr
 		m.connectTokensEntries[oldestIndex].mac = connectTokenMac
-		log.Printf("new connect token added")
+		log.Printf("new connect token added for %s\n", addr.String())
 		return true
 	}
 
 	// allow connect tokens we have already seen from the same address
 	if addressEqual(m.connectTokensEntries[tokenIndex].address, addr) {
-		log.Printf("we've seen this token for this address")
 		return true
 	}
 
