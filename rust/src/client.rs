@@ -5,9 +5,10 @@ use packet;
 use socket::SocketProvider;
 use token::ConnectToken;
 
-use std::net::SocketAddr;
+use std::net::{SocketAddr, UdpSocket};
 use std::io;
 
+/// States represented by the client
 #[derive(Debug,Clone)]
 pub enum State {
     /// ConnectToken is expired.
@@ -38,11 +39,6 @@ enum InternalState {
     Disconnected
 }
 
-struct RetryState {
-    elapsed: f64,
-    retry_count: usize
-}
-
 enum ConnectSequence {
     SendingToken,
     SendingChallenge(u64, [u8; NETCODE_CHALLENGE_TOKEN_BYTES])
@@ -57,24 +53,141 @@ impl Clone for ConnectSequence {
     }
 }
 
+/// Describes event the server receives when calling `next_event(..)`.
 pub enum ClientEvent {
+    /// Client state has changed to `State`.
     NewState(State),
+    /// Channel is idle and client has sent keep alive packet.
     SentKeepAlive,
+    /// Client received packet of `usize` length, packet data is stored in `payload`.
     Packet(usize)
 }
 
+/// Netcode client object.
 pub struct Client<I,S> where I: SocketProvider<I,S> {
+    state: InternalState,
+    data: ClientData<I,S>
+}
+
+struct ClientData<I,S> where I: SocketProvider<I,S> {
     time: f64,
-    state: State,
-    istate: InternalState,
+    ext_state: State,
     channel: Channel,
     socket: I,
+    #[allow(dead_code)]
     socket_state: S,
     token: ConnectToken
 }
 
+/// UDP based netcode client.
+pub type UdpClient = Client<UdpSocket, ()>;
+
+impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
+    fn disconnect(&mut self, new_state: &mut Option<InternalState>) -> Result<Option<ClientEvent>, UpdateError> {
+        self.ext_state = State::Disconnected;
+        *new_state = Some(InternalState::Disconnected);
+
+        Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
+    }
+
+    fn update_channel(&mut self, send_keep_alive: bool) -> Result<channel::UpdateResult, UpdateError> {
+        self.channel.update(self.time, &mut self.socket, send_keep_alive).map_err(|e| e.into())
+    }
+
+    fn connect_channel(&mut self, idx: usize) {
+        match self.token.hosts.get().skip(idx).next() {
+            Some(ref addr) => self.channel = Channel::new(
+                                &self.token.client_to_server_key,
+                                &self.token.server_to_client_key,
+                                addr,
+                                self.token.protocol,
+                                0,
+                                0),
+            None => ()
+        }
+    }
+
+    fn begin_host_connect(&mut self, idx: usize) -> Result<Option<ClientEvent>, SendError> {
+        self.connect_channel(idx);
+        self.send_connect_token()?;
+        self.ext_state = State::SendingConnectionRequest;
+
+        Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
+    }
+
+    fn handle_payload(&mut self, packet: &packet::Packet, new_state: &mut Option<InternalState>) -> Result<Option<ClientEvent>, UpdateError> {
+        match packet {
+            &packet::Packet::Payload(len) => {
+                Ok(Some(ClientEvent::Packet(len)))
+            }
+            &packet::Packet::Disconnect => {
+                *new_state = Some(InternalState::Disconnected);
+                self.ext_state = State::Disconnected;
+
+                Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
+            },
+            p => {
+                trace!("Unexpected packet type {}", p.get_type_id());
+                Ok(None)
+            }
+        }
+    }
+
+    fn handle_response(&mut self, packet: &packet::Packet, state: &ConnectSequence, new_state: &mut Option<InternalState>, idx: usize) -> Result<Option<ClientEvent>, UpdateError> {
+        match packet {
+            &packet::Packet::Challenge(ref challenge) => match state {
+                &ConnectSequence::SendingToken => {
+                    trace!("Got challenge token, moving to response");
+
+                    *new_state = Some(InternalState::Connecting(idx, ConnectSequence::SendingChallenge(challenge.token_sequence, challenge.token_data)));
+                    self.ext_state = State::SendingConnectionResponse;
+
+                    Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
+                }
+                &ConnectSequence::SendingChallenge(_,_) => {
+                    trace!("Got Challenge token when sending challenge, ignoring");
+                    Ok(None)
+                }
+            },
+            &packet::Packet::KeepAlive(_) => match state {
+                &ConnectSequence::SendingToken => {
+                    trace!("Got keep-alive while sending token, ignoring");
+                    Ok(None)
+                }
+                &ConnectSequence::SendingChallenge(_,_) => {
+                    trace!("Got keep-alive while sending challenge, connection established");
+                    *new_state = Some(InternalState::Connected);
+                    self.ext_state = State::Connected;
+
+                    Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
+                }
+            },
+            p => {
+                trace!("Unexpected packet type {}, ignoring", p.get_type_id());
+                Ok(None)
+            }
+        }
+    }
+
+    fn send_connect_token(&mut self) -> Result<usize, SendError> {
+        let packet = packet::ConnectionRequestPacket::from_token(&self.token);
+        
+        self.channel.send(self.time, &packet::Packet::ConnectionRequest(packet), None, &mut self.socket)
+    }
+
+    fn send_challenge_token(&mut self, sequence: u64, token: &[u8; NETCODE_CHALLENGE_TOKEN_BYTES]) -> Result<usize, SendError> {
+        let packet = packet::ResponsePacket {
+            token_sequence: sequence,
+            token_data: *token.clone()
+        };
+
+        self.channel.send(self.time, &packet::Packet::Response(packet), None, &mut self.socket)
+    }
+}
+
 impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
-    pub fn new(token: &ConnectToken) -> Result<Client<I,S>, io::Error> {
+    /// Constructs a new client from an existing `ConnectToken`.
+    pub fn new(token: &ConnectToken) -> Result<Client<I,S>, SendError> {
         use std::str::FromStr;
 
         let mut socket_state = I::new_state();
@@ -89,119 +202,117 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
             0,
             0);
 
+        let mut data = ClientData {
+                time: 0.0,
+                ext_state: State::SendingConnectionRequest,
+                channel: channel,
+                socket: socket,
+                socket_state: socket_state,
+                token: token.clone()
+            };
+
+        data.begin_host_connect(0)?;
+
         Ok(Client {
-            time: 0.0,
-            state: State::SendingConnectionRequest,
-            istate: InternalState::Connecting(0, ConnectSequence::SendingToken),
-            channel: channel,
-            socket: socket,
-            socket_state: socket_state,
-            token: token.clone()
+            state: InternalState::Connecting(0, ConnectSequence::SendingToken),
+            data: data
         })
     }
 
+    /// Updates time elapsed since last client iteration.
     pub fn update(&mut self, elapsed: f64) -> Result<(), UpdateError> {
-        self.time += elapsed;
+        self.data.time += elapsed;
 
         Ok(())
     }
 
+    /// Checks for incoming packets and state changes. Returns `None` when no more events
+    /// are pending.
     pub fn next_event(&mut self, payload: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ClientEvent>, UpdateError> {
-        enum Action {
-            Disconnect,
-            KeepAlive,
-            NewHost,
-            SendToken(ConnectSequence),
-            Payload(usize, SocketAddr),
-            Noop
-        };
+        let mut new_state = None;
 
         let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
-        let action = match &mut self.istate {
-            &mut InternalState::Connecting(mut idx, ref req) => {
-                match self.channel.update(self.time, &mut self.socket, false)? {
-                    channel::UpdateResult::Expired => {
-                        idx += 1;
-
-                        if idx >= self.token.hosts.get().len() {
-                            Action::Disconnect
-                        } else {
-                            Action::NewHost
-                        }
-                    },
-                    channel::UpdateResult::SentKeepAlive => {
-                        Action::SendToken(req.clone())
-                    },
-                    channel::UpdateResult::Noop => Action::Noop
+        let socket_result = match self.data.socket.recv_from(&mut scratch[..]) {
+            Ok((len, addr)) => {
+                if addr == *self.data.channel.get_addr() {
+                    self.data.channel.recv(self.data.time, &scratch[..len], payload).map(|p| Some(p))?
+                } else {
+                    trace!("Discarded packet from unknown host {:?}", addr);
+                    None
                 }
             },
-            &mut InternalState::Connected => {
-                match self.channel.update(self.time, &mut self.socket, true)? {
-                    channel::UpdateResult::Expired => Action::Disconnect,
-                    channel::UpdateResult::SentKeepAlive => Action::KeepAlive,
-                    channel::UpdateResult::Noop => {
-                        match self.socket.recv_from(&mut scratch[..]) {
-                            Ok((len, addr)) => Action::Payload(len, addr),
-                            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Action::Noop,
-                            Err(e) => return Err(RecvError::SocketError(e).into())
-                        }
-                    }
-                }
-            },
-            &mut InternalState::Disconnected => Action::Noop
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => None,
+            Err(e) => return Err(RecvError::SocketError(e).into())
         };
 
-        match action {
-            Action::Disconnect => self.disconnect(),
-            Action::KeepAlive => Ok(Some(ClientEvent::SentKeepAlive)),
-            Action::NewHost => {
-                //send initial token, update addr
-                Ok(None)
-            },
-            Action::SendToken(seq) => {
-                match seq {
-                    ConnectSequence::SendingToken => self.send_connect_token(),
-                    ConnectSequence::SendingChallenge(seq, ref token) => self.send_challenge_token(seq, token)
-                }
+        //If we have any socket data process that first
+        let socket_process = if let Some(packet) = socket_result {
+            match &mut self.state {
+                &mut InternalState::Connecting(idx, ref req) => self.data.handle_response(&packet, req, &mut new_state, idx),
+                &mut InternalState::Connected => self.data.handle_payload(&packet, &mut new_state),
+                &mut InternalState::Disconnected => Ok(None)
             }
-            Action::Payload(len, addr) => {
-                self.channel.recv();
-                Ok(ClientEvent::Packet(len))
-            },
-            Action::Noop => Ok(None)
-        }
-    }
-
-    fn disconnect(&mut self) -> Result<Option<ClientEvent>, UpdateError> {
-        self.state = State::Disconnected;
-        self.istate = InternalState::Disconnected;
-
-        Ok(Some(ClientEvent::NewState(self.state.clone())))
-    }
-
-    fn send_connect_token(&mut self) -> Result<Option<ClientEvent>, UpdateError> {
-        let packet = packet::ConnectionRequestPacket::from_token(&self.token);
-        
-        self.channel.send(self.time, &packet::Packet::ConnectionRequest(packet), None, &mut self.socket)
-            .map(|_| None).map_err(|e| e.into())
-    }
-
-    fn send_challenge_token(&mut self, sequence: u64, token: &[u8; NETCODE_CHALLENGE_TOKEN_BYTES]) -> Result<Option<ClientEvent>, UpdateError> {
-        let packet = packet::ResponsePacket {
-            token_sequence: sequence,
-            token_data: *token.clone()
+        } else {
+            Ok(None)
         };
 
-        self.channel.send(self.time, &packet::Packet::Response(packet), None, &mut self.socket)
-            .map(|_| None).map_err(|e| e.into())
+        let result = match socket_process {
+            //If we didn't get a packet, see if there's some upkeep to do
+            Ok(None) => {
+                match &mut self.state {
+                    &mut InternalState::Connecting(mut idx, ref req) => {
+                            match self.data.update_channel(false)? {
+                                channel::UpdateResult::Expired => {
+                                    idx += 1;
+
+                                    if idx >= self.data.token.hosts.get().len() {
+                                        info!("Failed to connect to last host, disconnecting");
+                                        self.data.disconnect(&mut new_state)
+                                    } else {
+                                        trace!("Failed to connect to host {:?}, moving to next host", self.data.channel.get_addr());
+
+                                        self.data.begin_host_connect(idx)
+                                            .map_err(|e| e.into())
+                                    }
+                                },
+                                channel::UpdateResult::SentKeepAlive => {
+                                    let send = match req {
+                                        &ConnectSequence::SendingToken => self.data.send_connect_token(),
+                                        &ConnectSequence::SendingChallenge(seq, ref token) => self.data.send_challenge_token(seq, token)
+                                    };
+
+                                    send.map(|_| None).map_err(|e| e.into())
+                                },
+                                channel::UpdateResult::Noop => Ok(None)
+                            }
+                    },
+                    &mut InternalState::Connected => {
+                        match self.data.update_channel(true)? {
+                            channel::UpdateResult::Expired => self.data.disconnect(&mut new_state),
+                            channel::UpdateResult::SentKeepAlive => Ok(Some(ClientEvent::SentKeepAlive)),
+                            channel::UpdateResult::Noop => Ok(None)
+                        }
+                    },
+                    &mut InternalState::Disconnected => Ok(None)
+                }
+            },
+            r => r
+        };
+
+        if let Some(state) = new_state {
+            self.state = state;
+        }
+
+        result
     }
 
+    /// Sends a packet to connected server.
     pub fn send(&mut self, payload: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<usize, SendError> {
-        match self.istate {
+        match self.state {
             InternalState::Disconnected => return Err(SendError::Disconnected),
             _ => ()
         }
 
-        self.channel.send(self.time, &packet::Packet::Payload(payload.len()), Some(payload), &mut self.socket)
+        self.data.channel.send(self.data.time, &packet::Packet::Payload(payload.len()), Some(payload), &mut self.data.socket)
     }
 }

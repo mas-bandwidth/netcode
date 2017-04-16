@@ -2,7 +2,7 @@ use std::io;
 
 use packet;
 
-/// Errors from updating server.
+/// Errors from calls to next_event().
 #[derive(Debug)]
 pub enum UpdateError {
     /// Packet buffer was too small to recieve the largest packet(`NETCODE_MAX_PAYLOAD_LEN` = 1775)

@@ -1,6 +1,6 @@
 //! Rust implementation of netcode.io protocol.
 //!
-//! This crate contains [Server](struct.Server.html), Client(TBD) and [ConnectToken](struct.ConnectToken.html) used to establish a netcode.io session.
+//! This crate contains [Server](struct.Server.html), [Client](struct.Client.html) and [ConnectToken](struct.ConnectToken.html) used to establish a netcode.io session.
 //! 
 //! # Connect Token
 //! Each netcode.io session starts with a `ConnectToken`. This token is handed out by a HTTPS webserver, authentication server or other *private* avenue
@@ -55,7 +55,7 @@ extern crate lazy_static;
 pub mod capi;
 
 mod common;
-pub mod error;
+mod error;
 mod crypto;
 mod server;
 mod client;
@@ -68,4 +68,6 @@ mod socket;
 pub use token::{ConnectToken};
 pub use common::{NETCODE_MAX_PACKET_SIZE, NETCODE_MAX_PAYLOAD_SIZE, NETCODE_USER_DATA_BYTES};
 pub use server::{UdpServer, Server, ServerEvent};
+pub use client::{UdpClient, Client, ClientEvent};
 pub use crypto::{generate_key};
+pub use error::*;
