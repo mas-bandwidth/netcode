@@ -97,9 +97,11 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
 void netcode_client_update( struct netcode_client_t * client, double time );
 
+uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client );
+
 void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes );
+void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
 
 void netcode_client_free_packet( struct netcode_client_t * client, void * packet );
 
@@ -127,9 +129,11 @@ void netcode_server_disconnect_client( struct netcode_server_t * server, int cli
 
 void netcode_server_disconnect_all_clients( struct netcode_server_t * server );
 
+uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, int client_index );
+
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes );
+void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
 
 void netcode_server_free_packet( struct netcode_server_t * server, void * packet );
 

@@ -80,6 +80,7 @@ pub struct ConnectToken {
     pub timeout_sec: u32
 }
 
+/// Private data encapsulated by Connect token.
 pub struct PrivateData {
     /// Unique client id, determined by the server.
     pub client_id: u64,
@@ -127,13 +128,20 @@ pub fn get_time_now() -> u64 {
 
 impl ConnectToken {
     /// Generates a new connection token.
-    /// `addrs` - List of allowed hosts to connect to.
-    /// `private_key` - Server private key that will be used to authenticate requests.
-    /// `expire_sec` - How long this token is valid for in seconds.
-    /// `sequence` - Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
-    /// `protocol` - Client specific protocol.
-    /// `client_id` - Unique client identifier.
-    /// `user_data` - Client specific userdata.
+    /// # Arguments
+    /// `addrs`: List of allowed hosts to connect to.
+    ///
+    /// `private_key`: Server private key that will be used to authenticate requests.
+    ///
+    /// `expire_sec`: How long this token is valid for in seconds.
+    ///
+    /// `sequence`: Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
+    ///
+    /// `protocol`: Client specific protocol.
+    ///
+    /// `client_id`: Unique client identifier.
+    ///
+    /// `user_data`: Client specific userdata.
     pub fn generate<H>(hosts: H,
                        private_key: &[u8; NETCODE_KEY_BYTES],
                        expire_sec: usize,
@@ -443,6 +451,9 @@ impl<'a> ExactSizeIterator for HostIterator<'a> {
 #[cfg(test)]
 use std::str::FromStr;
 
+#[cfg(test)]
+pub const NETCODE_CONNECT_TOKEN_BYTES: usize = 2048;
+
 #[test]
 fn read_write() {
     let mut private_key = [0; NETCODE_KEY_BYTES];
@@ -515,10 +526,54 @@ fn decode() {
     }
 }
 
+#[cfg(test)]
+fn capi_connect_token<I>(hosts: I, private_key: &[u8; NETCODE_KEY_BYTES], expire: i32, client_id: u64, protocol: u64, sequence: u64)
+        -> Result<[u8; NETCODE_CONNECT_TOKEN_BYTES], ()>
+        where I: Iterator<Item=String> {
+    use capi;
+    use std::ffi::CString;
+
+    let mut host_list_ptr = [::std::ptr::null_mut(); NETCODE_MAX_SERVERS_PER_CONNECT];
+    let mut host_count = 0;
+
+    for (i,host) in hosts.enumerate().take(NETCODE_MAX_SERVERS_PER_CONNECT) {
+        let cstr = CString::new(host).unwrap();
+        host_list_ptr[i] = cstr.into_raw();
+        host_count += 1;
+    }
+
+    let mut token = [0; NETCODE_CONNECT_TOKEN_BYTES];
+
+    let result = unsafe {
+        match capi::netcode_generate_connect_token(host_count,
+            host_list_ptr.as_ptr() as *mut *mut i8,
+            expire,
+            client_id,
+            protocol,
+            sequence,
+            ::std::mem::transmute(private_key.as_ptr()),
+            token.as_mut_ptr()
+            ) {
+                0 => Err(()),
+                _ => Ok(token)
+        }
+    };
+
+    //Make sure to free our memory that we passed to netcode
+    for host in &mut host_list_ptr[..] {
+        if *host != ::std::ptr::null_mut() {
+            unsafe {
+                CString::from_raw(*host);
+            }
+        }
+        *host = ::std::ptr::null_mut();
+    }
+
+    result
+}
+
 #[test]
 fn interop_read() {
-    use wrapper;
-
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
 
@@ -530,7 +585,7 @@ fn interop_read() {
     let protocol = 0x112233445566;
     let client_id = 0x665544332211;
 
-    let result = wrapper::ConnectToken::from_hosts(
+    let result = capi_connect_token(
             ["127.0.0.1:8080".to_string()].iter().cloned(),
             &private_key,
             expire,
@@ -538,7 +593,7 @@ fn interop_read() {
             protocol,
             sequence).unwrap();
 
-    let conv = ConnectToken::read(&mut io::Cursor::new(result.get_bytes())).unwrap();
+    let conv = ConnectToken::read(&mut io::Cursor::new(&result[..])).unwrap();
 
     assert_eq!(conv.sequence, sequence);
     assert_eq!(conv.protocol, protocol);
@@ -547,7 +602,10 @@ fn interop_read() {
 
 #[test]
 fn interop_write() {
-    use wrapper;
+    #[allow(unused_variables)]
+    let lock = ::common::test::FFI_LOCK.lock().unwrap();
+
+    use capi;
 
     let mut private_key = [0; NETCODE_KEY_BYTES];
     crypto::random_bytes(&mut private_key);
@@ -573,8 +631,8 @@ fn interop_write() {
     token.write(&mut io::Cursor::new(&mut scratch[..])).unwrap();
 
     unsafe {
-        let mut output: wrapper::private::netcode_connect_token_t = ::std::mem::uninitialized();
-        assert_eq!(wrapper::private::netcode_read_connect_token(scratch.as_mut_ptr(), scratch.len() as i32, &mut output), 1);
+        let mut output: capi::netcode_connect_token_t = ::std::mem::uninitialized();
+        assert_eq!(capi::netcode_read_connect_token(scratch.as_mut_ptr(), scratch.len() as i32, &mut output), 1);
         
         assert_eq!(output.sequence, sequence);
         assert_eq!(output.expire_timestamp, output.create_timestamp + expire as u64);

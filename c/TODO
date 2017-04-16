@@ -24,6 +24,8 @@ DONE
 
     Added code to cache the user data per-client on connect, and an accessor function: netcode_server_client_user_data
 
+    Extended interface so client and server can get next packet sequence # to be sent, and on packet receive can get sequence # of packet. This lets users exploit the 64bit packet sequence for reliability. Without this, it's wasted and the user has to send their own sequence #.
+
 TODO
     
     Should implement a client/server soak test, eg. repeated connect/disconnect, this is an important aspect to demonstrate stability of the server over time.

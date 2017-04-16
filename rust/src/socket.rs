@@ -18,7 +18,7 @@ impl SocketProvider<UdpSocket,()> for UdpSocket {
         ()
     }
 
-    fn bind(addr: &SocketAddr, state: &mut ()) -> Result<UdpSocket, io::Error> {
+    fn bind(addr: &SocketAddr, _state: &mut ()) -> Result<UdpSocket, io::Error> {
         let socket = net2::UdpBuilder::new_v4()?.reuse_address(true)?.bind(addr)?;
         socket.set_nonblocking(true)?;
 
@@ -53,7 +53,7 @@ impl SocketProvider<UdpSocket,()> for UdpSocket {
 #[cfg(test)]
 pub mod capi_simulator {
     use super::*;
-    use wrapper::private::*;
+    use capi::*;
 
     use std::rc::{Rc, Weak};
     use std::cell::RefCell;

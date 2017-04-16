@@ -1996,7 +1996,8 @@ struct netcode_packet_queue_t
 {
     int num_packets;
     int start_index;
-    void * packets[NETCODE_PACKET_QUEUE_SIZE];
+    void * packet_data[NETCODE_PACKET_QUEUE_SIZE];
+    uint64_t packet_sequence[NETCODE_PACKET_QUEUE_SIZE];
 };
 
 void netcode_packet_queue_init( struct netcode_packet_queue_t * queue )
@@ -2004,36 +2005,41 @@ void netcode_packet_queue_init( struct netcode_packet_queue_t * queue )
     assert( queue );
     queue->num_packets = 0;
     queue->start_index = 0;
-    memset( queue->packets, 0, sizeof( queue->packets ) );
+    memset( queue->packet_data, 0, sizeof( queue->packet_data ) );
+    memset( queue->packet_sequence, 0, sizeof( queue->packet_sequence ) );
 }
 
 void netcode_packet_queue_clear( struct netcode_packet_queue_t * queue )
 {
     queue->num_packets = 0;
     queue->start_index = 0;
-    memset( queue->packets, 0, sizeof( queue->packets ) );
+    memset( queue->packet_data, 0, sizeof( queue->packet_data ) );
+    memset( queue->packet_sequence, 0, sizeof( queue->packet_sequence ) );
 }
 
-int netcode_packet_queue_push( struct netcode_packet_queue_t * queue, void * packet )
+int netcode_packet_queue_push( struct netcode_packet_queue_t * queue, void * packet_data, uint64_t packet_sequence )
 {
     assert( queue );
-    assert( packet );
+    assert( packet_data );
     if ( queue->num_packets == NETCODE_PACKET_QUEUE_SIZE )
     {
-        free( packet );
+        free( packet_data );
         return 0;
     }
     int index = ( queue->start_index + queue->num_packets ) % NETCODE_PACKET_QUEUE_SIZE;
-    queue->packets[index] = packet;
+    queue->packet_data[index] = packet_data;
+    queue->packet_sequence[index] = packet_sequence;
     queue->num_packets++;
     return 1;
 }
 
-void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue )
+void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue, uint64_t * packet_sequence )
 {
     if ( queue->num_packets == 0 )
         return NULL;
-    void * packet = queue->packets[queue->start_index];
+    void * packet = queue->packet_data[queue->start_index];
+    if ( packet_sequence )
+        *packet_sequence = queue->packet_sequence[queue->start_index];
     queue->start_index = ( queue->start_index + 1 ) % NETCODE_PACKET_QUEUE_SIZE;
     queue->num_packets--;
     return packet;
@@ -2416,7 +2422,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 
     while ( 1 )
     {
-        void * packet = netcode_packet_queue_pop( &client->packet_receive_queue );
+        void * packet = netcode_packet_queue_pop( &client->packet_receive_queue, NULL );
         if ( !packet )
             break;
         free( packet );
@@ -2471,8 +2477,6 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
 {
     assert( client );
     assert( packet );
-
-    (void) sequence;
 
     uint8_t packet_type = ( (uint8_t*) packet ) [0];
 
@@ -2539,7 +2543,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
             {
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection payload packet from server\n" );
 
-                netcode_packet_queue_push( &client->packet_receive_queue, packet );
+                netcode_packet_queue_push( &client->packet_receive_queue, packet, sequence );
 
                 client->last_packet_receive_time = client->time;
 
@@ -2811,6 +2815,12 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     }
 }
 
+uint64_t netcode_client_next_send_packet_sequence( struct netcode_client_t * client )
+{
+    assert( client );
+    return client->sequence;  
+}
+
 void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes )
 {
     assert( client );
@@ -2833,12 +2843,12 @@ void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * pac
     netcode_client_send_packet_to_server_internal( client, packet );
 }
 
-void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes )
+void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence )
 {
     assert( client );
     assert( packet_bytes );
 
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &client->packet_receive_queue );
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &client->packet_receive_queue, packet_sequence );
     
     if ( packet )
     {
@@ -3469,7 +3479,7 @@ void netcode_server_stop( struct netcode_server_t * server )
     {
         while ( 1 )
         {
-            void * packet = netcode_packet_queue_pop( &server->client_packet_queue[i] );
+            void * packet = netcode_packet_queue_pop( &server->client_packet_queue[i], NULL );
             if ( !packet )
                 break;
             free( packet );
@@ -3789,7 +3799,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
                     server->client_confirmed[client_index] = 1;
                 }
 
-                netcode_packet_queue_push( &server->client_packet_queue[client_index], packet );
+                netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
 
                 return;
             }
@@ -3962,6 +3972,15 @@ uint64_t netcode_server_client_id( struct netcode_server_t * server, int client_
     return server->client_id[client_index];
 }
 
+uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, int client_index )
+{
+    assert( client_index >= 0 );
+    assert( client_index < server->max_clients );
+    if ( !server->client_connected[client_index] )
+        return 0;
+    return server->client_sequence[client_index];    
+}
+
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
 {
     assert( server );
@@ -3998,7 +4017,7 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
     netcode_server_send_client_packet( server, packet, client_index );
 }
 
-void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes )
+void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence )
 {
     assert( server );
     assert( packet_bytes );
@@ -4009,7 +4028,7 @@ void * netcode_server_receive_packet( struct netcode_server_t * server, int clie
     assert( client_index >= 0 );
     assert( client_index < server->max_clients );
 
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &server->client_packet_queue[client_index] );
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &server->client_packet_queue[client_index], packet_sequence );
     
     if ( packet )
     {
@@ -4275,7 +4294,7 @@ static void test_queue()
 
     // attempting to pop a packet off an empty queue should return NULL
 
-    check( netcode_packet_queue_pop( &queue ) == NULL );
+    check( netcode_packet_queue_pop( &queue, NULL ) == NULL );
 
     // add some packets to the queue and make sure they pop off in the correct order
     {
@@ -4287,14 +4306,17 @@ static void test_queue()
         for ( i = 0; i < NUM_PACKETS; ++i )
         {
             packets[i] = malloc( (i+1) * 256 );
-            check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+            check( netcode_packet_queue_push( &queue, packets[i], (uint64_t) i ) == 1 );
         }
 
         check( queue.num_packets == NUM_PACKETS );
 
         for ( i = 0; i < NUM_PACKETS; ++i )
         {
-            void * packet = netcode_packet_queue_pop( &queue );
+            uint64_t sequence;
+
+            void * packet = netcode_packet_queue_pop( &queue, &sequence );
+            check( sequence == (uint64_t) i ) ;
             check( packet == packets[i] );
             free( packet );
         }
@@ -4304,7 +4326,7 @@ static void test_queue()
 
     check( queue.num_packets == 0 );
 
-    check( netcode_packet_queue_pop( &queue ) == NULL );
+    check( netcode_packet_queue_pop( &queue, NULL ) == NULL );
 
     // test that the packet queue can be filled to max capacity
 
@@ -4314,20 +4336,22 @@ static void test_queue()
     for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
         packets[i] = malloc( i * 256 );
-        check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+        check( netcode_packet_queue_push( &queue, packets[i], (uint64_t) i ) == 1 );
     }
 
     check( queue.num_packets == NETCODE_PACKET_QUEUE_SIZE );
 
     // when the queue is full, attempting to push a packet should fail and return 0
 
-    check( netcode_packet_queue_push( &queue, malloc( 100 ) ) == 0 );
+    check( netcode_packet_queue_push( &queue, malloc( 100 ), 0 ) == 0 );
 
     // make sure all packets pop off in the correct order
 
     for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
-        void * packet = netcode_packet_queue_pop( &queue );
+        uint64_t sequence;
+        void * packet = netcode_packet_queue_pop( &queue, &sequence );
+        check( sequence == (uint64_t) i );
         check( packet == packets[i] );
         free( packet );
     }
@@ -4337,7 +4361,7 @@ static void test_queue()
     for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
         packets[i] = malloc( i * 256 );
-        check( netcode_packet_queue_push( &queue, packets[i] ) == 1 );
+        check( netcode_packet_queue_push( &queue, packets[i], (uint64_t) i ) == 1 );
     }
 
     // clear the queue and make sure that all packets are freed
@@ -4347,7 +4371,7 @@ static void test_queue()
     check( queue.start_index == 0 );
     check( queue.num_packets == 0 );
     for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
-        check( queue.packets[i] == NULL );
+        check( queue.packet_data[i] == NULL );
 }
 
 static void test_endian()
@@ -5385,9 +5409,11 @@ void test_client_server_connect()
         while ( 1 )             
         {
             int packet_bytes;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes );
+            uint64_t packet_sequence;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
+            (void) packet_sequence;
             assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
             assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
             client_num_packets_received++;
@@ -5397,9 +5423,11 @@ void test_client_server_connect()
         while ( 1 )             
         {
             int packet_bytes;
-            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes );
+            uint64_t packet_sequence;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
+            (void) packet_sequence;
             assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
             assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
             server_num_packets_received++;
@@ -5650,9 +5678,11 @@ void test_client_server_multiple_clients()
                 while ( 1 )             
                 {
                     int packet_bytes;
-                    void * packet = netcode_client_receive_packet( client[j], &packet_bytes );
+                    uint64_t packet_sequence;
+                    void * packet = netcode_client_receive_packet( client[j], &packet_bytes, &packet_sequence );
                     if ( !packet )
                         break;
+                    (void) packet_sequence;
                     assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
                     assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
                     client_num_packets_received[j]++;
@@ -5665,9 +5695,11 @@ void test_client_server_multiple_clients()
                 while ( 1 )             
                 {
                     int packet_bytes;
-                    void * packet = netcode_server_receive_packet( server, j, &packet_bytes );
+                    uint64_t packet_sequence;
+                    void * packet = netcode_server_receive_packet( server, j, &packet_bytes, &packet_sequence );
                     if ( !packet )
                         break;
+                    (void) packet_sequence;
                     assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
                     assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
                     server_num_packets_received[j]++;
@@ -5807,9 +5839,11 @@ void test_client_server_multiple_servers()
         while ( 1 )             
         {
             int packet_bytes;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes );
+            uint64_t packet_sequence;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
+            (void) packet_sequence;
             assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
             assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
             client_num_packets_received++;
@@ -5819,7 +5853,8 @@ void test_client_server_multiple_servers()
         while ( 1 )             
         {
             int packet_bytes;
-            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes );
+            uint64_t packet_sequence;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
             assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
