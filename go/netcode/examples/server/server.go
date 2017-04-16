@@ -122,7 +122,7 @@ func serveToken(w http.ResponseWriter, r *http.Request) {
 	serverId := rand.Int31n(numServers) // choose a random server
 	clientId := incClientId(serverId)   // safely increment the appropriate clientId
 
-	tokenData, err := connectTokenGenerator(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData)
+	tokenData, err := connectTokenGenerator(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence)
 	if err != nil {
 		fmt.Fprintf(w, "error")
 		return
@@ -132,15 +132,14 @@ func serveToken(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(webToken)
 }
 
-func connectTokenGenerator(clientId int, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64, userData []byte) ([]byte, error) {
-
-	clientKey, err := netcode.GenerateKey()
+func connectTokenGenerator(clientId int, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64) ([]byte, error) {
+	userData, err := netcode.RandomBytes(netcode.USER_DATA_BYTES)
 	if err != nil {
-		return nil, errors.New("error generating clientKey: %s\n", err)
+		return nil, err
 	}
 
 	connectToken := netcode.NewConnectToken()
-	if err := connectToken.Generate(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData, clientKey, serverKey); err != nil {
+	if err := connectToken.Generate(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData, privateKey); err != nil {
 		return nil, err
 	}
 

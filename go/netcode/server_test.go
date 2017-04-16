@@ -53,7 +53,7 @@ func TestServerListen(t *testing.T) {
 			}
 		}
 		time.Sleep(deltaTime)
-		serverTime += int64(deltaTime.Nanoseconds() / 1000)
+		serverTime += int64(deltaTime.Nanoseconds())
 		count += 1
 	}
 }

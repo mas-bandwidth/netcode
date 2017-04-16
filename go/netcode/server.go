@@ -14,6 +14,7 @@ type Server struct {
 	running          bool
 	maxClients       int
 	connectedClients int
+	timeout          int64
 
 	clientManager  *ClientManager
 	globalSequence uint64
@@ -39,7 +40,8 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.maxClients = maxClients
 
 	s.globalSequence = uint64(1) << 63
-	s.clientManager = NewClientManager(maxClients)
+	s.timeout = int64(time.Duration(time.Second * TIMEOUT_SECONDS))
+	s.clientManager = NewClientManager(s.timeout, maxClients)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -55,6 +57,11 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 
 func (s *Server) SetAllowedPackets(allowedPackets []byte) {
 	s.allowedPackets = allowedPackets
+}
+
+func (s *Server) SetTimeout(duration time.Duration) {
+	s.timeout = int64(duration)
+	s.clientManager.setTimeout(s.timeout)
 }
 
 func (s *Server) SetIgnoreRequests(val bool) {
@@ -217,8 +224,8 @@ func (s *Server) processConnectionRequest(packet Packet, addr *net.UDPAddr) {
 		s.sendDeniedPacket(requestPacket.Token.ServerKey, addr)
 		return
 	}
-
-	if !s.clientManager.AddEncryptionMapping(requestPacket.Token, addr, s.serverTime, s.serverTime+TIMEOUT_SECONDS) {
+	log.Printf("serverTime: %d, timeout: %d\n", s.serverTime, s.serverTime+s.timeout)
+	if !s.clientManager.AddEncryptionMapping(requestPacket.Token, addr, s.serverTime, s.serverTime+s.timeout) {
 		log.Printf("server ignored connection request. failed to add encryption mapping\n")
 		return
 	}
