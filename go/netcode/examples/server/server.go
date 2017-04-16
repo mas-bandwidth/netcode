@@ -22,6 +22,7 @@ var maxClients int
 var clientId uint64
 var serverAddrs []net.UDPAddr
 
+var httpServer *http.Server
 var closeCh chan struct{}
 
 const (
@@ -63,7 +64,9 @@ func main() {
 	// start our web server for generating and handing out connect tokens.
 	http.HandleFunc("/token", serveToken)
 	http.HandleFunc("/shutdown", shutdown)
-	if err := http.ListenAndServe(webServerAddr, nil); err != nil {
+
+	httpServer = &http.Server{Addr: webServerAddr}
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatalf("error listening: %s\n", err)
 	}
 }
@@ -112,6 +115,7 @@ func serveLoop(closeCh chan struct{}, index int) {
 		case <-closeCh:
 			log.Printf("shutting down server")
 			serv.Stop()
+			httpServer.Shutdown(nil)
 			return
 		}
 	}

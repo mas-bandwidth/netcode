@@ -32,11 +32,7 @@ type Server struct {
 	challengeSequence uint64
 
 	recvBytes int
-}
-
-type recvData struct {
-	from   *net.UDPAddr
-	packet Packet
+	packetCh  chan *netcodeData
 }
 
 func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64, maxClients int) *Server {
@@ -49,6 +45,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
+	s.packetCh = make(chan *netcodeData)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -98,7 +95,7 @@ func (s *Server) Init() error {
 		return err
 	}
 	s.serverConn = NewNetcodeConn()
-	s.serverConn.SetRecvHandler(s.OnPacketData)
+	s.serverConn.SetRecvHandler(s.handleNetcodeData)
 	return nil
 }
 
@@ -111,6 +108,35 @@ func (s *Server) Listen() error {
 	return nil
 }
 
+func (s *Server) SendPackets(serverTime float64) {
+	s.clientManager.SendPackets(serverTime)
+	return
+}
+
+func (s *Server) Update(time float64) error {
+	if !s.running {
+		return errors.New("server shutdown")
+	}
+
+	s.serverTime = time
+
+	// empty recv'd data from channel so we can have safe access to client manager data structures
+	for recv := range s.packetCh {
+		s.OnPacketData(recv.data, recv.from)
+	}
+	s.clientManager.SendPackets(s.serverTime)
+	s.clientManager.CheckTimeouts(s.serverTime)
+	return nil
+}
+
+func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
+	if len(packetData) == 0 {
+		log.Printf("unable to read from socket, 0 bytes returned")
+		return
+	}
+	s.packetCh <- &netcodeData{data: packetData, from: addr}
+}
+
 func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	var readPacketKey []byte
 	var replayProtection *ReplayProtection
@@ -118,6 +144,8 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	if !s.running {
 		return
 	}
+
+	size := len(packetData)
 
 	encryptionIndex := -1
 	clientIndex := s.clientManager.FindClientIndexByAddress(addr)
@@ -127,12 +155,6 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 		encryptionIndex = s.clientManager.FindEncryptionEntryIndex(addr, s.serverTime)
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
-
-	size := len(packetData)
-	if len(packetData) == 0 {
-		log.Printf("unable to read from socket, 0 bytes returned")
-		return
-	}
 
 	log.Printf("%s net client connected", s.serverAddr.String())
 
@@ -391,23 +413,6 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	if err := client.SendPacket(packet, writePacketKey, s.serverTime); err != nil {
 		log.Printf("%s\n", err)
 	}
-}
-
-func (s *Server) SendPackets(serverTime float64) {
-	s.clientManager.SendPackets(serverTime)
-	return
-}
-
-func (s *Server) Update(time float64) error {
-	if !s.running {
-		return errors.New("server shutdown")
-	}
-
-	s.serverTime = time
-
-	s.clientManager.SendPackets(s.serverTime)
-	s.clientManager.CheckTimeouts(s.serverTime)
-	return nil
 }
 
 func (s *Server) MaxClients() int {
