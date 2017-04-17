@@ -2,8 +2,6 @@ use std::net::{SocketAddr, UdpSocket};
 use std::io;
 use std::time::Duration;
 
-use net2;
-
 pub trait SocketProvider<I,S> {
     fn new_state() -> S;
     fn bind(addr: &SocketAddr, state: &mut S) -> Result<I, io::Error>;
@@ -19,7 +17,7 @@ impl SocketProvider<UdpSocket,()> for UdpSocket {
     }
 
     fn bind(addr: &SocketAddr, _state: &mut ()) -> Result<UdpSocket, io::Error> {
-        let socket = net2::UdpBuilder::new_v4()?.reuse_address(true)?.bind(addr)?;
+        let socket = UdpSocket::bind(addr)?;
         socket.set_nonblocking(true)?;
 
         Ok(socket)
@@ -32,8 +30,8 @@ impl SocketProvider<UdpSocket,()> for UdpSocket {
     fn set_recv_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         match duration {
             Some(duration) => {
-                self.set_nonblocking(false)?;
-                self.set_read_timeout(Some(duration))
+                self.set_read_timeout(Some(duration))?;
+                self.set_nonblocking(false)
             },
             None => {
                 self.set_nonblocking(true)

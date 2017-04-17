@@ -80,6 +80,22 @@ pub struct ConnectToken {
     pub timeout_sec: u32
 }
 
+impl Clone for ConnectToken {
+    fn clone(&self) -> ConnectToken {
+        ConnectToken {
+            protocol: self.protocol,
+            create_utc: self.create_utc,
+            expire_utc: self.expire_utc,
+            sequence: self.sequence,
+            private_data: self.private_data,
+            hosts: self.hosts.clone(),
+            client_to_server_key: self.client_to_server_key,
+            server_to_client_key: self.server_to_client_key,
+            timeout_sec: self.timeout_sec
+        }
+    }
+}
+
 /// Private data encapsulated by Connect token.
 pub struct PrivateData {
     /// Unique client id, determined by the server.

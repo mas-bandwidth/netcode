@@ -5,6 +5,7 @@ use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian};
 
 use common::*;
 use crypto;
+use token;
 
 const PACKET_CONNECTION: u8 = 0;
 const PACKET_CONNECTION_DENIED: u8 = 1;
@@ -220,6 +221,16 @@ pub struct ConnectionRequestPacket {
 }
 
 impl ConnectionRequestPacket {
+    pub fn from_token(token: &token::ConnectToken) -> ConnectionRequestPacket {
+        ConnectionRequestPacket {
+            version: NETCODE_VERSION_STRING.clone(),
+            protocol_id: token.protocol,
+            token_expire: token.expire_utc,
+            sequence: token.sequence,
+            private_data: token.private_data
+        }
+    }
+
     pub fn read<R>(source: &mut R) -> Result<ConnectionRequestPacket, io::Error> where R: io::Read {
         let mut version = [0; NETCODE_VERSION_LEN];
         source.read_exact(&mut version[..])?;
@@ -254,6 +265,15 @@ impl ConnectionRequestPacket {
 pub struct ChallengeToken {
     pub client_id: u64,
     pub user_data: [u8; NETCODE_USER_DATA_BYTES]
+}
+
+impl Clone for ChallengeToken {
+    fn clone(&self) -> ChallengeToken {
+        ChallengeToken {
+            client_id: self.client_id,
+            user_data: self.user_data
+        }
+    }
 }
 
 impl ChallengeToken {
