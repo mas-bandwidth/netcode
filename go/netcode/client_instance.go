@@ -21,7 +21,6 @@ type ClientInstance struct {
 	protocolId       uint64
 	replayProtection *ReplayProtection
 	address          *net.UDPAddr
-	connectToken     *ConnectToken
 	packetQueue      *PacketQueue
 }
 

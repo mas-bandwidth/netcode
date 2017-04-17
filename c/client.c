@@ -54,7 +54,7 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
+    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );
 
     double time = 0.0;
     double delta_time = 1.0 / 60.0;

@@ -111,7 +111,6 @@ func (s *Server) SendPayloads(payloadData []byte, serverTime float64) {
 	if !s.running {
 		return
 	}
-	log.Printf("sending payloads")
 	s.clientManager.sendPayloads(payloadData, serverTime)
 }
 

@@ -291,10 +291,13 @@ func (m *ClientManager) getEncryptionEntryKey(index int, sendKey bool) []byte {
 func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
+		if instance.encryptionIndex == -1 {
+			continue
+		}
 
 		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
 		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
-			return
+			continue
 		}
 
 		if !instance.confirmed {
@@ -304,10 +307,11 @@ func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 			instance.SendPacket(packet, writePacketKey, serverTime)
 		}
 
+		log.Printf("%t %f %f %t\n", instance.connected, instance.lastSendTime+float64(1.0/PACKET_SEND_RATE), serverTime, (instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) <= serverTime))
 		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) <= serverTime {
 			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
 				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
-				return
+				continue
 			}
 			packet := NewPayloadPacket(payloadData)
 			log.Printf("SENDING PAYLOAD PACKET")
@@ -319,16 +323,19 @@ func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 func (m *ClientManager) SendPackets(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
+		if !instance.connected {
+			continue
+		}
+
 		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
 		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
-			return
+			continue
 		}
 
 		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) <= serverTime {
-
 			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
 				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
-				return
+				continue
 			}
 
 			packet := &KeepAlivePacket{}
