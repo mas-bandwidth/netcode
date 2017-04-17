@@ -1,13 +1,11 @@
 package main
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"flag"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
 	"math/rand"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 )
@@ -21,11 +19,14 @@ const (
 	TIMEOUT_SECONDS      = 1
 )
 
-var tokenUrl string
+var PRIVATE_KEY = []byte{0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea,
+	0x9a, 0x65, 0x62, 0xf6, 0x6f, 0x2b, 0x30, 0xe4,
+	0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
+	0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1}
+
 var numClients int
 
 func init() {
-	flag.StringVar(&tokenUrl, "url", "http://localhost:8880/token", "site that gives out free tokens")
 	flag.IntVar(&numClients, "num", 3, "number of clients to run concurrently")
 }
 
@@ -35,7 +36,7 @@ func main() {
 
 	for i := 0; i < numClients; i += 1 {
 		wg.Add(1)
-		token := getConnectToken()
+		token := getConnectToken(uint64(i))
 		go clientLoop(wg, token)
 	}
 	wg.Wait()
@@ -54,7 +55,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 	}
 
 	log.Printf("client connected, local address: %s\n", c.LocalAddr())
-	packetData := make([]byte, 64)
+	packetData := make([]byte, netcode.MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(packetData); i += 1 {
 		packetData[i] = byte(i)
 	}
@@ -64,7 +65,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 	// fake game loop
 	for {
 
-		if clientTime > 6.0 {
+		if clientTime > 20.0 {
 			log.Printf("client exiting recv'd %d payloads...", count)
 			wg.Done()
 			return
@@ -89,34 +90,22 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 
 }
 
-// this is from the web server serving tokens...
-type WebToken struct {
-	ClientId     uint64 `json:"client_id"`
-	ConnectToken string `json:"connect_token"`
-}
+func getConnectToken(clientId uint64) *netcode.ConnectToken {
+	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
+	servers := make([]net.UDPAddr, 1)
+	servers[0] = server
 
-func getConnectToken() *netcode.ConnectToken {
+	privateKey := PRIVATE_KEY
 
-	resp, err := http.Get(tokenUrl)
+	userData, err := netcode.RandomBytes(netcode.USER_DATA_BYTES)
 	if err != nil {
-		log.Fatalf("error getting token from %s: %s\n", tokenUrl, err)
-	}
-	defer resp.Body.Close()
-	webToken := &WebToken{}
-
-	if err := json.NewDecoder(resp.Body).Decode(webToken); err != nil {
-		log.Fatalf("error decoding web token: %s\n", err)
-	}
-	log.Printf("Got token for clientId: %d\n", webToken.ClientId)
-
-	tokenBuffer, err := base64.StdEncoding.DecodeString(webToken.ConnectToken)
-	if err != nil {
-		log.Fatalf("error decoding connect token: %s\n", err)
+		log.Fatalf("error generating userdata bytes: %s\n", err)
 	}
 
-	token, err := netcode.ReadConnectToken(tokenBuffer)
-	if err != nil {
-		log.Fatalf("error reading connect token: %s\n", err)
+	connectToken := netcode.NewConnectToken()
+	// generate will write & encrypt the ConnectTokenPrivate
+	if err := connectToken.Generate(clientId, servers, netcode.VERSION_INFO, PROTOCOL_ID, CONNECT_TOKEN_EXPIRY, TIMEOUT_SECONDS, SEQUENCE_START, userData, privateKey); err != nil {
+		log.Fatalf("error generating token: %s\n", err)
 	}
-	return token
+	return connectToken
 }

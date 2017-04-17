@@ -45,7 +45,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
-	s.packetCh = make(chan *netcodeData)
+	s.packetCh = make(chan *netcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -164,13 +164,13 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
 
-	log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
+	//log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
 
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
 	packetBuffer := NewBufferFromBytes(packetData)
-	log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
+	//log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	if clientIndex != -1 {
 		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection
@@ -228,6 +228,7 @@ func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, 
 		}
 		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
+		s.clientManager.disconnectClient(client, client.clientIndex, s.serverTime, false)
 	}
 }
 
@@ -389,6 +390,7 @@ func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken 
 	client := s.clientManager.instances[clientIndex]
 	client.serverConn = s.serverConn
 	client.clientIndex = clientIndex
+	client.encryptionIndex = encryptionIndex
 	client.connected = true
 	client.clientId = challengeToken.ClientId
 	client.protocolId = s.protocolId
@@ -407,7 +409,7 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	packet.MaxClients = uint32(s.maxClients)
 	log.Printf("sendKeepAlive: %d %#v\n", client.clientId, client.address)
 	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
-		log.Printf("error: encryption mapping is out of date for client %d\n", clientIndex)
+		log.Printf("error: encryption mapping is out of date for client %d encIndex: %d addr: %s\n", clientIndex, client.encryptionIndex, client.address.String())
 		panic("bloop")
 		return
 	}

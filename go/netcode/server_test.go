@@ -23,7 +23,7 @@ func TestServerListen(t *testing.T) {
 		t.Fatalf("error listening: %s\n", err)
 	}
 
-	payload := make([]byte, MAX_PACKET_BYTES)
+	payload := make([]byte, MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(payload); i += 1 {
 		payload[i] = byte(i)
 	}

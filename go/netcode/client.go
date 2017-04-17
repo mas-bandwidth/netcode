@@ -79,7 +79,7 @@ func NewClient(connectToken *ConnectToken) *Client {
 	c := &Client{connectToken: connectToken}
 	c.lastPacketRecvTime = -1
 	c.lastPacketSendTime = -1
-	c.packetCh = make(chan *netcodeData)
+	c.packetCh = make(chan *netcodeData, PACKET_QUEUE_SIZE)
 	c.setState(StateDisconnected)
 	c.shouldDisconnect = false
 	c.challengeData = make([]byte, CHALLENGE_TOKEN_BYTES)
@@ -154,6 +154,7 @@ func (c *Client) resetConnectionData(newState ClientState) {
 	c.setState(newState)
 	c.Reset()
 	c.packetQueue.Clear()
+	c.conn.Close()
 }
 
 func (c *Client) LocalAddr() net.Addr {
@@ -174,6 +175,11 @@ func (c *Client) connectNextServer() bool {
 
 	log.Printf("client connecting to next server %s (%d/%d)\n", c.serverAddress.String(), c.serverIndex, len(c.connectToken.ServerAddrs))
 	c.setState(StateSendingConnectionRequest)
+
+	if err := c.Connect(); err != nil {
+		log.Printf("error connecting to next server: %s\n", err)
+		return false
+	}
 	return true
 }
 
@@ -259,7 +265,6 @@ func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
 }
 
 func (c *Client) SendData(payloadData []byte) error {
-	log.Printf("sending %d data\n", len(payloadData))
 	if c.GetState() != StateConnected {
 		return errors.New("client not connected, unable to send packet")
 	}
@@ -340,14 +345,12 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	var sequence uint64
 
 	if !addressEqual(c.serverAddress, from) {
-		log.Printf("unknown address sent us data")
+		log.Printf("unknown address sent us data %s != %s\n", c.serverAddress.String(), from.String())
 		return
 	}
 
 	size = len(packetData)
-
 	timestamp := uint64(time.Now().Unix())
-	log.Printf("read %d from socket\n", len(packetData))
 
 	packet := NewPacket(packetData)
 	packetBuffer := NewBufferFromBytes(packetData)
@@ -359,7 +362,8 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 }
 
 func (c *Client) processPacket(packet Packet, sequence uint64) {
-	log.Printf("processing packet of type: %s\n", packetTypeMap[packet.GetType()])
+	//log.Printf("processing packet of type: %s\n", packetTypeMap[packet.GetType()])
+
 	state := c.GetState()
 	switch packet.GetType() {
 	case ConnectionDenied:
