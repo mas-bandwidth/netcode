@@ -66,9 +66,7 @@ func main() {
 	http.HandleFunc("/shutdown", shutdown)
 
 	httpServer = &http.Server{Addr: webServerAddr}
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatalf("error listening: %s\n", err)
-	}
+	httpServer.ListenAndServe()
 }
 
 func serveLoop(closeCh chan struct{}, index int) {
@@ -89,9 +87,19 @@ func serveLoop(closeCh chan struct{}, index int) {
 	serverTime := float64(0.0)
 	delta := float64(1.0 / 60.0)
 	deltaTime := time.Duration(delta * float64(time.Second))
-	log.Printf("delta: %d\n", deltaTime.Nanoseconds())
+
 	count := 0
 	for {
+		select {
+		case <-closeCh:
+			log.Printf("shutting down server")
+			serv.Stop()
+			if err := httpServer.Close(); err != nil {
+				log.Printf("error shutting down http server: %s\n", err)
+			}
+			return
+		default:
+		}
 		serv.Update(serverTime)
 
 		if serv.HasClients() > 0 {
@@ -111,13 +119,6 @@ func serveLoop(closeCh chan struct{}, index int) {
 		serverTime += deltaTime.Seconds()
 		count += 1
 
-		select {
-		case <-closeCh:
-			log.Printf("shutting down server")
-			serv.Stop()
-			httpServer.Shutdown(nil)
-			return
-		}
 	}
 }
 

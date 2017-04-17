@@ -72,12 +72,14 @@ type Client struct {
 	conn             *NetcodeConn
 	packetQueue      *PacketQueue
 	allowedPackets   []byte
+	packetCh         chan *netcodeData
 }
 
 func NewClient(connectToken *ConnectToken) *Client {
 	c := &Client{connectToken: connectToken}
 	c.lastPacketRecvTime = -1
 	c.lastPacketSendTime = -1
+	c.packetCh = make(chan *netcodeData)
 	c.setState(StateDisconnected)
 	c.shouldDisconnect = false
 	c.challengeData = make([]byte, CHALLENGE_TOKEN_BYTES)
@@ -114,7 +116,7 @@ func (c *Client) Connect() error {
 	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
 
 	c.conn = NewNetcodeConn()
-	c.conn.SetRecvHandler(c.onPacketData)
+	c.conn.SetRecvHandler(c.handleNetcodeData)
 	if err = c.conn.Dial(c.serverAddress); err != nil {
 		return err
 	}
@@ -158,6 +160,10 @@ func (c *Client) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
+func (c *Client) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
 func (c *Client) connectNextServer() bool {
 	if c.serverIndex+1 >= len(c.connectToken.ServerAddrs) {
 		return false
@@ -174,8 +180,10 @@ func (c *Client) connectNextServer() bool {
 func (c *Client) Update(t float64) {
 	c.time = t
 
+	c.recv()
+
 	if err := c.send(); err != nil {
-		log.Fatalf("error sending packet: %s\n", err)
+		log.Printf("error sending packet: %s\n", err)
 	}
 
 	state := c.GetState()
@@ -220,6 +228,19 @@ func (c *Client) Update(t float64) {
 			c.Disconnect(StateConnectionTimedOut, false)
 		}
 	}
+}
+
+func (c *Client) recv() {
+	// empty recv'd data from channel so we can have safe access to client manager data structures
+	for {
+		select {
+		case recv := <-c.packetCh:
+			c.OnPacketData(recv.data, recv.from)
+		default:
+			goto DONE
+		}
+	}
+DONE:
 }
 
 func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
@@ -305,8 +326,17 @@ func (c *Client) RecvData() []byte {
 	return p.PayloadData
 }
 
+// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// that the recv'd data is > 0 < maxBytes and is of a valid packet type before
+// this is even called.
+// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
+// which is what we want since we want to synchronize access from the Update call.
+func (c *Client) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
+	c.packetCh <- &netcodeData{data: packetData, from: addr}
+}
+
 // called asynchronously whenever a new packet of data arrives from the NetcodeConn.
-func (c *Client) onPacketData(packetData []byte, from *net.UDPAddr) {
+func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	var err error
 	var size int
 	var sequence uint64

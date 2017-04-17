@@ -121,19 +121,26 @@ func (s *Server) Update(time float64) error {
 	s.serverTime = time
 
 	// empty recv'd data from channel so we can have safe access to client manager data structures
-	for recv := range s.packetCh {
-		s.OnPacketData(recv.data, recv.from)
+	for {
+		select {
+		case recv := <-s.packetCh:
+			s.OnPacketData(recv.data, recv.from)
+		default:
+			goto DONE
+		}
 	}
+DONE:
 	s.clientManager.SendPackets(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
 	return nil
 }
 
+// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// that the recv'd data is > 0 < maxBytes and is of a valid packet type before
+// this is even called.
+// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
+// which is what we want since we want to synchronize access from the Update call.
 func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
-	if len(packetData) == 0 {
-		log.Printf("unable to read from socket, 0 bytes returned")
-		return
-	}
 	s.packetCh <- &netcodeData{data: packetData, from: addr}
 }
 
@@ -398,9 +405,10 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	packet := &KeepAlivePacket{}
 	packet.ClientIndex = uint32(clientIndex)
 	packet.MaxClients = uint32(s.maxClients)
-
+	log.Printf("sendKeepAlive: %d %#v\n", client.clientId, client.address)
 	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
 		log.Printf("error: encryption mapping is out of date for client %d\n", clientIndex)
+		panic("bloop")
 		return
 	}
 

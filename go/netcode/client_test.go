@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const testClientCommsEnabled = false
+const testClientCommsEnabled = true
 
 const (
 	TEST_PROTOCOL_ID          = 0x1122334455667788

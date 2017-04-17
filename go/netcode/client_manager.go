@@ -226,7 +226,6 @@ func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serve
 	}
 
 	if !addressEqual(m.cryptoEntries[index].address, addr) {
-		log.Printf("%#v != %#v\n", m.cryptoEntries[index].address, addr)
 		return false
 	}
 
@@ -251,6 +250,7 @@ func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime floa
 		}
 
 		m.clearCryptoEntry(entry)
+		log.Printf("removed crypto entry: %#v\n", m.cryptoEntries[i].address)
 
 		if i+1 == m.numCryptoEntries {
 			index := i - 1
@@ -346,9 +346,10 @@ func (m *ClientManager) disconnectClient(client *ClientInstance, clientIndex int
 			}
 		}
 	}
-
+	log.Printf("client address before clear: %#v\n", client.address)
 	m.RemoveEncryptionEntry(client.address, serverTime)
 	client.Clear()
+	log.Printf("client address after clear: %#v\n", client.address)
 }
 
 func (m *ClientManager) ConnectedClientCount() int {
