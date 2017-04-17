@@ -7,7 +7,6 @@ pub const NETCODE_USER_DATA_BYTES: usize = 256;
 pub const NETCODE_CONNECT_TOKEN_PRIVATE_BYTES: usize = 1024;
 
 pub const NETCODE_TIMEOUT_SECONDS: u32 = 5;
-pub const NETCODE_KEEPALIVE_RETRY: f64 = 1.0 / 10.0;
 
 pub const NETCODE_MAX_SERVERS_PER_CONNECT: usize = 16;
 
