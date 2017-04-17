@@ -141,11 +141,13 @@ func (c *NetcodeConn) receiver(ch chan *netcodeData) {
 	}
 }
 
+// read does the actual connection read call, verifies we have a
+// buffer > 0 and < maxBytes and is of a valid packet type before
+// we bother to attempt to actually dispatch it to the recvHandlerFn.
 func (c *NetcodeConn) read() (*netcodeData, error) {
 	var n int
 	var from *net.UDPAddr
 	var err error
-
 	netData := &netcodeData{}
 	netData.data = make([]byte, c.maxBytes)
 
@@ -154,11 +156,25 @@ func (c *NetcodeConn) read() (*netcodeData, error) {
 		return nil, err
 	}
 
-	netData.from = from
+	if n == 0 {
+		return nil, errors.New("socket error: 0 byte length recv'd")
+	}
+
+	if n > c.maxBytes {
+		return nil, errors.New("packet size was > maxBytes")
+	}
+
+	if NewPacket(netData.data) == nil {
+		return nil, errors.New("data was not a valid netcode.io packet")
+	}
+
+	// check if it's a valid packet
 	netData.data = netData.data[:n]
+	netData.from = from
 	return netData, nil
 }
 
+// dispatch the netcodeData to the bound recvHandler function.
 func (c *NetcodeConn) readLoop() {
 	dataCh := make(chan *netcodeData)
 	go c.receiver(dataCh)

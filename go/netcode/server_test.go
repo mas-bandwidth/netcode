@@ -23,26 +23,21 @@ func TestServerListen(t *testing.T) {
 		t.Fatalf("error listening: %s\n", err)
 	}
 
-	payload := make([]byte, MAX_PACKET_BYTES)
+	payload := make([]byte, MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(payload); i += 1 {
 		payload[i] = byte(i)
 	}
 
 	serverTime := float64(0.0)
 	delta := float64(1.0 / 60.0)
-	deltaTime := time.Duration(delta + float64(time.Second))
+	deltaTime := time.Duration(delta * float64(time.Second))
 	count := 0
 	payloadCount := 0
 	for {
 		serv.Update(serverTime)
-		if serv.HasClients() > 0 {
-			serv.SendPackets(serverTime)
-		}
-
-		if count > 0 && payloadCount > 1000 {
+		if count > 0 && payloadCount > 100 {
 			return
 		}
-
 		for i := 0; i < serv.MaxClients(); i += 1 {
 			for {
 				responsePayload, _ := serv.RecvPayload(i)
@@ -53,6 +48,12 @@ func TestServerListen(t *testing.T) {
 				t.Logf("got payload: %d\n", len(responsePayload))
 			}
 		}
+
+		// do simulation/process payload packets
+
+		// send payloads to clients
+		serv.SendPayloads(payload, serverTime)
+
 		time.Sleep(deltaTime)
 		serverTime += deltaTime.Seconds()
 		count += 1

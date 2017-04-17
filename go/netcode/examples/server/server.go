@@ -66,9 +66,7 @@ func main() {
 	http.HandleFunc("/shutdown", shutdown)
 
 	httpServer = &http.Server{Addr: webServerAddr}
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatalf("error listening: %s\n", err)
-	}
+	httpServer.ListenAndServe()
 }
 
 func serveLoop(closeCh chan struct{}, index int) {
@@ -81,7 +79,7 @@ func serveLoop(closeCh chan struct{}, index int) {
 		log.Fatalf("error listening: %s\n", err)
 	}
 
-	payload := make([]byte, MAX_PACKET_BYTES)
+	payload := make([]byte, 640)
 	for i := 0; i < len(payload); i += 1 {
 		payload[i] = byte(i)
 	}
@@ -89,35 +87,40 @@ func serveLoop(closeCh chan struct{}, index int) {
 	serverTime := float64(0.0)
 	delta := float64(1.0 / 60.0)
 	deltaTime := time.Duration(delta * float64(time.Second))
-	log.Printf("delta: %d\n", deltaTime.Nanoseconds())
+
 	count := 0
 	for {
-		serv.Update(serverTime)
-
-		if serv.HasClients() > 0 {
-			serv.SendPackets(serverTime)
-		}
-
-		for i := 0; i < serv.MaxClients(); i += 1 {
-			for {
-				responsePayload, seq := serv.RecvPayload(i)
-				if len(responsePayload) == 0 {
-					break
-				}
-				log.Printf("got payload: %d with sequence: %d\n", len(responsePayload), seq)
-			}
-		}
-		time.Sleep(deltaTime)
-		serverTime += deltaTime.Seconds()
-		count += 1
-
 		select {
 		case <-closeCh:
 			log.Printf("shutting down server")
 			serv.Stop()
-			httpServer.Shutdown(nil)
+			if err := httpServer.Close(); err != nil {
+				log.Printf("error shutting down http server: %s\n", err)
+			}
 			return
+		default:
 		}
+
+		serv.Update(serverTime)
+		for i := 0; i < serv.MaxClients(); i += 1 {
+			for {
+				responsePayload, _ := serv.RecvPayload(i)
+				if len(responsePayload) == 0 {
+					break
+				}
+				//log.Printf("server: %s got payload: %d with sequence: %d\n", serverAddrs[index].String(), len(responsePayload), seq)
+			}
+		}
+
+		// do simulation/process payload packets
+
+		// send payloads to clients
+		serv.SendPayloads(payload, serverTime)
+
+		time.Sleep(deltaTime)
+		serverTime += deltaTime.Seconds()
+		count += 1
+
 	}
 }
 
@@ -140,7 +143,7 @@ func serveToken(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "error")
 		return
 	}
-
+	log.Printf("issuing new token for clientId: %d\n", clientId)
 	webToken := WebToken{ClientId: clientId, ConnectToken: base64.StdEncoding.EncodeToString(tokenData)}
 	json.NewEncoder(w).Encode(webToken)
 }
@@ -150,9 +153,7 @@ func connectTokenGenerator(clientId uint64, serverAddrs []net.UDPAddr, versionIn
 	if err != nil {
 		return nil, err
 	}
-	for _, x := range serverAddrs {
-		log.Printf("generated: %s\n", x.String())
-	}
+
 	connectToken := netcode.NewConnectToken()
 	if err := connectToken.Generate(clientId, serverAddrs, versionInfo, protocolId, tokenExpiry, timeoutSeconds, sequence, userData, serverKey); err != nil {
 		return nil, err

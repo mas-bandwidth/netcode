@@ -45,7 +45,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
-	s.packetCh = make(chan *netcodeData)
+	s.packetCh = make(chan *netcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -55,7 +55,6 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.allowedPackets[ConnectionKeepAlive] = 1
 	s.allowedPackets[ConnectionPayload] = 1
 	s.allowedPackets[ConnectionDisconnect] = 1
-	s.allowedPackets[ConnectionChallenge] = 1
 	return s
 }
 
@@ -108,9 +107,11 @@ func (s *Server) Listen() error {
 	return nil
 }
 
-func (s *Server) SendPackets(serverTime float64) {
-	s.clientManager.SendPackets(serverTime)
-	return
+func (s *Server) SendPayloads(payloadData []byte, serverTime float64) {
+	if !s.running {
+		return
+	}
+	s.clientManager.sendPayloads(payloadData, serverTime)
 }
 
 func (s *Server) Update(time float64) error {
@@ -121,19 +122,26 @@ func (s *Server) Update(time float64) error {
 	s.serverTime = time
 
 	// empty recv'd data from channel so we can have safe access to client manager data structures
-	for recv := range s.packetCh {
-		s.OnPacketData(recv.data, recv.from)
+	for {
+		select {
+		case recv := <-s.packetCh:
+			s.OnPacketData(recv.data, recv.from)
+		default:
+			goto DONE
+		}
 	}
+DONE:
 	s.clientManager.SendPackets(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
 	return nil
 }
 
+// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// that the recv'd data is > 0 < maxBytes and is of a valid packet type before
+// this is even called.
+// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
+// which is what we want since we want to synchronize access from the Update call.
 func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
-	if len(packetData) == 0 {
-		log.Printf("unable to read from socket, 0 bytes returned")
-		return
-	}
 	s.packetCh <- &netcodeData{data: packetData, from: addr}
 }
 
@@ -156,13 +164,13 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
 
-	log.Printf("%s net client connected", s.serverAddr.String())
+	//log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
 
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
 	packetBuffer := NewBufferFromBytes(packetData)
-	log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
+	//log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	if clientIndex != -1 {
 		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection
@@ -220,7 +228,7 @@ func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, 
 		}
 		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
-
+		s.clientManager.disconnectClient(client, client.clientIndex, s.serverTime, false)
 	}
 }
 
@@ -382,6 +390,7 @@ func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken 
 	client := s.clientManager.instances[clientIndex]
 	client.serverConn = s.serverConn
 	client.clientIndex = clientIndex
+	client.encryptionIndex = encryptionIndex
 	client.connected = true
 	client.clientId = challengeToken.ClientId
 	client.protocolId = s.protocolId
@@ -398,9 +407,10 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	packet := &KeepAlivePacket{}
 	packet.ClientIndex = uint32(clientIndex)
 	packet.MaxClients = uint32(s.maxClients)
-
+	log.Printf("sendKeepAlive: %d %#v\n", client.clientId, client.address)
 	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
-		log.Printf("error: encryption mapping is out of date for client %d\n", clientIndex)
+		log.Printf("error: encryption mapping is out of date for client %d encIndex: %d addr: %s\n", clientIndex, client.encryptionIndex, client.address.String())
+		panic("bloop")
 		return
 	}
 

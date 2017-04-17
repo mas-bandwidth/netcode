@@ -173,12 +173,14 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 	// already list
 	for i := 0; i < m.maxEntries; i += 1 {
 		entry := m.cryptoEntries[i]
-		if entry.address != nil && addressEqual(entry.address, addr) && entry.lastAccess+m.timeout >= serverTime {
+
+		lastAccessTimeout := entry.lastAccess + m.timeout
+		if entry.address != nil && addressEqual(entry.address, addr) && (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) {
 			entry.expireTime = expireTime
 			entry.lastAccess = serverTime
 			copy(entry.sendKey, connectToken.ServerKey)
 			copy(entry.recvKey, connectToken.ClientKey)
-			log.Printf("re-added encryption mapping for %s\n", addr.String())
+			log.Printf("re-added encryption mapping for %s encIdx: %d\n", addr.String(), i)
 			return true
 		}
 	}
@@ -192,7 +194,7 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 			entry.lastAccess = serverTime
 			copy(entry.sendKey, connectToken.ServerKey)
 			copy(entry.recvKey, connectToken.ClientKey)
-			log.Printf("added encryption mapping for %s\n", addr.String())
+			log.Printf("added new encryption mapping for %s encIdx: %d\n", addr.String(), i)
 			if i+1 > m.numCryptoEntries {
 				m.numCryptoEntries = i + 1
 			}
@@ -210,7 +212,8 @@ func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime f
 			continue
 		}
 
-		if addressEqual(entry.address, addr) && entry.lastAccess+m.timeout >= serverTime && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
+		lastAccessTimeout := entry.lastAccess + m.timeout
+		if addressEqual(entry.address, addr) && (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
 			entry.lastAccess = serverTime
 			return i
 		}
@@ -226,7 +229,7 @@ func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serve
 	}
 
 	if !addressEqual(m.cryptoEntries[index].address, addr) {
-		log.Printf("%#v != %#v\n", m.cryptoEntries[index].address, addr)
+		log.Printf("Touch: idx %d addr %s != %s\n", index, m.cryptoEntries[index].address.String(), addr.String())
 		return false
 	}
 
@@ -255,7 +258,8 @@ func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime floa
 		if i+1 == m.numCryptoEntries {
 			index := i - 1
 			for index >= 0 {
-				if m.cryptoEntries[index].lastAccess+m.timeout >= serverTime && (m.cryptoEntries[index].expireTime < 0 || m.cryptoEntries[index].expireTime > serverTime) {
+				lastAccessTimeout := m.cryptoEntries[index].lastAccess + m.timeout
+				if (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) && (m.cryptoEntries[index].expireTime < 0 || m.cryptoEntries[index].expireTime > serverTime) {
 					break
 				}
 				index--
@@ -289,20 +293,55 @@ func (m *ClientManager) getEncryptionEntryKey(index int, sendKey bool) []byte {
 	return m.cryptoEntries[index].recvKey
 }
 
+func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
+	for i := 0; i < m.maxClients; i += 1 {
+		instance := m.instances[i]
+		if instance.encryptionIndex == -1 {
+			continue
+		}
+
+		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
+		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
+			continue
+		}
+
+		if !instance.confirmed {
+			packet := &KeepAlivePacket{}
+			packet.ClientIndex = uint32(instance.clientIndex)
+			packet.MaxClients = uint32(m.maxClients)
+			instance.SendPacket(packet, writePacketKey, serverTime)
+		}
+
+		if instance.connected {
+			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+				continue
+			}
+			packet := NewPayloadPacket(payloadData)
+			instance.SendPacket(packet, writePacketKey, serverTime)
+		}
+	}
+}
+
 func (m *ClientManager) SendPackets(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
+		if !instance.connected {
+			continue
+		}
+
 		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
 		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
-			return
+			continue
 		}
 
-		if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
-			log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
-			return
-		}
+		shouldSendTime := instance.lastSendTime + float64(1.0/PACKET_SEND_RATE)
+		if instance.connected && (shouldSendTime < serverTime || floatEquals(shouldSendTime, serverTime)) {
+			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+				continue
+			}
 
-		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) < serverTime {
 			packet := &KeepAlivePacket{}
 			packet.ClientIndex = uint32(instance.clientIndex)
 			packet.MaxClients = uint32(m.maxClients)
@@ -314,7 +353,9 @@ func (m *ClientManager) SendPackets(serverTime float64) {
 func (m *ClientManager) CheckTimeouts(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
-		if instance.connected && (instance.lastRecvTime+m.timeout <= serverTime) {
+		timeout := instance.lastRecvTime + m.timeout
+
+		if instance.connected && (timeout < serverTime || floatEquals(timeout, serverTime)) {
 			log.Printf("server timed out client: %d\n", i)
 			m.disconnectClient(instance, i, serverTime, false)
 		}
@@ -346,7 +387,6 @@ func (m *ClientManager) disconnectClient(client *ClientInstance, clientIndex int
 			}
 		}
 	}
-
 	m.RemoveEncryptionEntry(client.address, serverTime)
 	client.Clear()
 }
@@ -361,4 +401,13 @@ func (m *ClientManager) ConnectedClientCount() int {
 	}
 
 	return count
+}
+
+const EPSILON float64 = 0.000001
+
+func floatEquals(a, b float64) bool {
+	if (a-b) < EPSILON && (b-a) < EPSILON {
+		return true
+	}
+	return false
 }
