@@ -477,32 +477,37 @@ mod test {
             }
 
             harness.client.send(&data[..i]).unwrap();
-            let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
             if let Some(server) = harness.server.as_mut() {
-                server.update(0.0).unwrap();
-                match server.next_event(&mut payload) {
-                    Ok(Some(ServerEvent::Packet(client_id, len))) => {
-                        assert_eq!(len, i);
-                        assert_eq!(client_id, CLIENT_ID);
-                        for d in 0..i {
-                            assert_eq!(payload[d], data[d]);
-                        }
-                    },
-                    Ok(e) => assert!(false, "{:?}", e),
-                    Err(e) => assert!(false, "{:?}", e)
+                {
+                    server.update(0.0).unwrap();
+                    let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
+                    match server.next_event(&mut payload) {
+                        Ok(Some(ServerEvent::Packet(client_id, len))) => {
+                            assert_eq!(len, i);
+                            assert_eq!(client_id, CLIENT_ID);
+                            for d in 0..i {
+                                assert_eq!(payload[d], data[d]);
+                            }
+                        },
+                        Ok(e) => assert!(false, "{:?}", e),
+                        Err(e) => assert!(false, "{:?}", e)
+                    }
                 }
 
-                server.send(CLIENT_ID, &data[..i]).unwrap();
-                harness.client.update(0.0).unwrap();
-                match harness.client.next_event(&mut payload) {
-                    Ok(Some(ClientEvent::Packet(len))) => {
-                        assert_eq!(len, i);
-                        for d in 0..i {
-                            assert_eq!(payload[d], data[d]);
-                        }
-                    },
-                    Ok(e) => assert!(false, "{:?}", e),
-                    Err(e) => assert!(false, "{:?}", e)
+                {
+                    server.send(CLIENT_ID, &data[..i]).unwrap();
+                    harness.client.update(0.0).unwrap();
+                    let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
+                    match harness.client.next_event(&mut payload) {
+                        Ok(Some(ClientEvent::Packet(len))) => {
+                            assert_eq!(len, i);
+                            for d in 0..i {
+                                assert_eq!(payload[d], data[d]);
+                            }
+                        },
+                        Ok(e) => assert!(false, "{:?}", e),
+                        Err(e) => assert!(false, "{:?}", e)
+                    }
                 }
             } else {
                 assert!(false);
