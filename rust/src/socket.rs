@@ -32,8 +32,8 @@ impl SocketProvider<UdpSocket,()> for UdpSocket {
     fn set_recv_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         match duration {
             Some(duration) => {
-                self.set_nonblocking(false)?;
-                self.set_read_timeout(Some(duration))
+                self.set_read_timeout(Some(duration))?;
+                self.set_nonblocking(false)
             },
             None => {
                 self.set_nonblocking(true)

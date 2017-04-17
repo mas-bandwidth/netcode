@@ -7,6 +7,8 @@ use token::ConnectToken;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::io;
+#[cfg(test)]
+use std::time::Duration;
 
 /// States represented by the client
 #[derive(Debug,Clone)]
@@ -54,6 +56,7 @@ impl Clone for ConnectSequence {
 }
 
 /// Describes event the server receives when calling `next_event(..)`.
+#[derive(Clone, Debug)]
 pub enum ClientEvent {
     /// Client state has changed to `State`.
     NewState(State),
@@ -96,13 +99,16 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
 
     fn connect_channel(&mut self, idx: usize) {
         match self.token.hosts.get().skip(idx).next() {
-            Some(ref addr) => self.channel = Channel::new(
+            Some(ref addr) => {
+                trace!("Created new channel to {:?}", addr);
+                self.channel = Channel::new(
                                 &self.token.client_to_server_key,
                                 &self.token.server_to_client_key,
                                 addr,
                                 self.token.protocol,
                                 0,
-                                0),
+                                0)
+            },
             None => ()
         }
     }
@@ -141,6 +147,7 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
 
                     *new_state = Some(InternalState::Connecting(idx, ConnectSequence::SendingChallenge(challenge.token_sequence, challenge.token_data)));
                     self.ext_state = State::SendingConnectionResponse;
+                    self.send_challenge_token(challenge.token_sequence, &challenge.token_data)?;
 
                     Ok(Some(ClientEvent::NewState(self.ext_state.clone())))
                 }
@@ -188,11 +195,16 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
 impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
     /// Constructs a new client from an existing `ConnectToken`.
     pub fn new(token: &ConnectToken) -> Result<Client<I,S>, SendError> {
+        Self::new_with_state(token, I::new_state())
+    }
+
+    fn new_with_state(token: &ConnectToken, mut socket_state: S) -> Result<Client<I,S>, SendError> {
         use std::str::FromStr;
 
-        let mut socket_state = I::new_state();
-        let local_addr = SocketAddr::from_str("0.0.0.0:0").unwrap();
+        let local_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
         let socket = I::bind(&local_addr, &mut socket_state)?;
+
+        trace!("Client created on socket {:?}", socket.local_addr().unwrap());
 
         let channel = Channel::new(
             &token.client_to_server_key,
@@ -314,5 +326,127 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
         }
 
         self.data.channel.send(self.data.time, &packet::Packet::Payload(payload.len()), Some(payload), &mut self.data.socket)
+    }
+
+    /// Gets the current state of our client.
+    pub fn get_state(&self) -> State {
+        self.data.ext_state.clone()
+    }
+
+    #[cfg(test)]
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
+        self.data.socket.set_recv_timeout(duration)
+    }
+    
+    #[cfg(test)]
+    pub fn get_socket_state(&mut self) -> &mut S {
+        &mut self.data.socket_state
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use server::*;
+    use token;
+    use crypto;
+    use std::time::Duration;
+
+    const PROTOCOL_ID: u64 = 0xFFCC;
+    const MAX_CLIENTS: usize = 256;
+    const CLIENT_ID: u64 = 0xFFEEDD;
+
+    struct TestHarness<I,S> where I: SocketProvider<I,S> {
+        client: Client<I,S>,
+        server: Option<Server<I,S>>
+    }
+
+    
+    #[allow(dead_code)]
+    fn enable_logging() {
+        use env_logger::LogBuilder;
+        use log::LogLevelFilter;
+
+        LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
+
+        use capi::*;
+        unsafe {
+            netcode_log_level(NETCODE_LOG_LEVEL_DEBUG as i32);
+        }
+    }
+
+    impl<S,I> TestHarness<I,S> where I: SocketProvider<I,S>, S: Clone {
+        pub fn new(in_token: Option<ConnectToken>) -> TestHarness<I,S> {
+            let private_key = crypto::generate_key();
+
+            let addr = format!("127.0.0.1:0");
+            let (server, mut client) = if let Some(ref token) = in_token {
+                let client = Client::<I,S>::new_with_state(token, I::new_state()).unwrap();
+                (None, client)
+            } else {
+                let mut server = Server::<I,S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+                server.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+                let token = Self::generate_connect_token(&private_key, server.get_local_addr().unwrap());
+                let client = Client::<I,S>::new_with_state(&token, server.get_socket_state().clone()).unwrap();
+                (Some(server), client)
+            };
+
+            client.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+
+            TestHarness {
+                server: server,
+                client: client
+            }
+        }
+
+
+        pub fn generate_connect_token(private_key: &[u8; NETCODE_KEY_BYTES], addr: SocketAddr) -> token::ConnectToken {
+            token::ConnectToken::generate(
+                                [addr].iter().cloned(),
+                                private_key,
+                                30, //Expire
+                                0,
+                                PROTOCOL_ID,
+                                CLIENT_ID, //Client Id
+                                None).unwrap()
+        }
+
+        pub fn update_client(&mut self) -> Option<ClientEvent> {
+            let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
+            self.client.update(0.0).unwrap();
+            self.client.next_event(&mut scratch).unwrap()
+        }
+
+        pub fn update_server(&mut self) -> Option<ServerEvent> {
+            if let Some(ref mut server) = self.server {
+                let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
+                server.update(0.0).unwrap();
+                server.next_event(&mut scratch).unwrap()
+            } else {
+                None
+            }
+        }
+    }
+ 
+    #[test]
+    fn test_client_connect() {
+        let mut harness = TestHarness::<UdpSocket,()>::new(None);
+
+        match harness.client.get_state() {
+            State::SendingConnectionRequest => (),
+            _ => assert!(false)
+        }
+
+        harness.update_server();
+        match harness.update_client().unwrap() {
+            ClientEvent::NewState(State::SendingConnectionResponse) => (),
+            s => assert!(false, "{:?}", s)
+        }
+        
+        harness.update_server();
+        match harness.update_client().unwrap() {
+            ClientEvent::NewState(State::Connected) => (),
+            s => assert!(false, "{:?}", s)
+        }
     }
 }

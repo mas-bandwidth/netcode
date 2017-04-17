@@ -151,19 +151,9 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
     }
 
-    #[cfg(test)]
-    fn get_socket_state(&mut self) -> &mut S {
-        &mut self.socket_state
-    }
-
     /// Gets the local port that this server is bound to.
     pub fn get_local_addr(&self) -> Result<SocketAddr, io::Error> {
         self.listen_socket.local_addr()
-    }
-
-    #[cfg(test)]
-    fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
-        self.listen_socket.set_recv_timeout(duration)
     }
 
     /// Sends a packet to `client_id` specified.
@@ -375,7 +365,11 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         }
 
         if let Ok(v) = token::PrivateData::decode(&req.private_data, protocol_id, req.token_expire, req.sequence, private_key) {
-            if !v.hosts.get().any(|thost| thost == *host) {
+            let has_host = v.hosts.get().any(|thost| {
+                    thost == *host || (host.port() == 0 && thost.ip() == host.ip())
+                });
+
+            if !has_host {
                 info!("Client connected but didn't contain host's address.");
                 None
             } else {
@@ -464,6 +458,10 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                         let token = resp.decode(&self.challenge_key)?;
                         out_packet[..NETCODE_USER_DATA_BYTES].copy_from_slice(&token.user_data);
 
+                        if let Some(client) = self.clients[client_idx].as_mut() {
+                            client.channel.send_keep_alive(self.time, &mut self.listen_socket)?;
+                        }
+
                         info!("client response");
 
                         state = ConnectionState::Idle;
@@ -498,6 +496,16 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     fn find_client_by_addr(&self, addr: &SocketAddr) -> Option<usize> {
         self.clients.iter().position(|v| v.as_ref().map_or(false, |ref c| *c.channel.get_addr() == *addr))
     }
+
+    #[cfg(test)]
+    pub fn get_socket_state(&mut self) -> &mut S {
+        &mut self.socket_state
+    }
+
+    #[cfg(test)]
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
+        self.listen_socket.set_recv_timeout(duration)
+    }
 }
 
 #[cfg(test)]
@@ -529,7 +537,7 @@ mod test {
 
             let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
             let mut server = Server::<I,S>::new(&addr, MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
-            server.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+            server.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
             let socket = I::bind(&Self::str_to_addr(&addr), server.get_socket_state()).unwrap();
 
             TestHarness {
@@ -599,7 +607,7 @@ mod test {
 
         fn read_challenge(&mut self) -> ChallengePacket {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
+            self.socket.set_recv_timeout(Some(Duration::from_secs(15))).unwrap();
             let (read, _) = self.socket.recv_from(&mut data).unwrap();
 
             let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
@@ -636,6 +644,13 @@ mod test {
             match event {
                 Ok(Some(ServerEvent::ClientConnect(CLIENT_ID))) => (),
                 e => assert!(false, "{:?}", e)
+            }
+
+            let mut scratch = [0; NETCODE_MAX_PACKET_SIZE];
+            let (keep_alive, _) = self.socket.recv_from(&mut scratch).unwrap();
+            match packet::decode(&scratch[..keep_alive], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut data).unwrap() {
+                (_, Packet::KeepAlive(_)) => (),
+                (_, p) => assert!(false, "{:?}", p.get_type_id())
             }
         }
 
@@ -678,13 +693,13 @@ mod test {
 
         fn validate_send_payload(&mut self, payload: &[u8]) {
             let mut data = [0; NETCODE_MAX_PACKET_SIZE];
-            self.socket.set_recv_timeout(Some(Duration::from_secs(1))).unwrap();
+            self.socket.set_recv_timeout(Some(Duration::from_secs(15))).unwrap();
             let (read,_) = self.socket.recv_from(&mut data).unwrap();
 
             let mut packet_data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             match packet::decode(&data[..read], PROTOCOL_ID, Some(&self.connect_token.server_to_client_key), &mut packet_data) {
                 Ok((sequence, Packet::Payload(len))) => {
-                    assert_eq!(sequence+1, self.next_sequence);
+                    assert_eq!(sequence, self.next_sequence);
                     assert_eq!(payload.len(), len);
                     for i in 0..len {
                         assert_eq!(packet_data[i], payload[i]);

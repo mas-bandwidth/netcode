@@ -109,15 +109,19 @@ impl Channel {
         Ok(packet)
     }
 
+    pub fn send_keep_alive<I,S>(&mut self, elapsed: f64, socket: &mut I) -> Result<usize, SendError> where I: SocketProvider<I,S> {
+        let keep_alive = KeepAlivePacket {
+            client_idx: self.client_idx as i32,
+            max_clients: self.max_clients as i32
+        };
+
+        self.send(elapsed, &Packet::KeepAlive(keep_alive), None, socket)
+    }
+
     pub fn update<I,S>(&mut self, elapsed: f64, socket: &mut I, send_keep_alive: bool) -> Result<UpdateResult, SendError> where I: SocketProvider<I,S> {
         if self.keep_alive.should_send_keepalive(elapsed) {
-            let keep_alive = KeepAlivePacket {
-                client_idx: self.client_idx as i32,
-                max_clients: self.max_clients as i32
-            };
-
             if send_keep_alive {
-                self.send(elapsed, &Packet::KeepAlive(keep_alive), None, socket)?;
+                self.send_keep_alive(elapsed, socket)?;
             }
 
             return Ok(UpdateResult::SentKeepAlive)
