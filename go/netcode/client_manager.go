@@ -250,7 +250,6 @@ func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime floa
 		}
 
 		m.clearCryptoEntry(entry)
-		log.Printf("removed crypto entry: %#v\n", m.cryptoEntries[i].address)
 
 		if i+1 == m.numCryptoEntries {
 			index := i - 1
@@ -289,6 +288,34 @@ func (m *ClientManager) getEncryptionEntryKey(index int, sendKey bool) []byte {
 	return m.cryptoEntries[index].recvKey
 }
 
+func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
+	for i := 0; i < m.maxClients; i += 1 {
+		instance := m.instances[i]
+
+		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
+		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
+			return
+		}
+
+		if !instance.confirmed {
+			packet := &KeepAlivePacket{}
+			packet.ClientIndex = uint32(instance.clientIndex)
+			packet.MaxClients = uint32(m.maxClients)
+			instance.SendPacket(packet, writePacketKey, serverTime)
+		}
+
+		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) <= serverTime {
+			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+				return
+			}
+			packet := NewPayloadPacket(payloadData)
+			log.Printf("SENDING PAYLOAD PACKET")
+			instance.SendPacket(packet, writePacketKey, serverTime)
+		}
+	}
+}
+
 func (m *ClientManager) SendPackets(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
@@ -297,12 +324,13 @@ func (m *ClientManager) SendPackets(serverTime float64) {
 			return
 		}
 
-		if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
-			log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
-			return
-		}
+		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) <= serverTime {
 
-		if instance.connected && instance.lastSendTime+float64(1.0/PACKET_SEND_RATE) < serverTime {
+			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+				return
+			}
+
 			packet := &KeepAlivePacket{}
 			packet.ClientIndex = uint32(instance.clientIndex)
 			packet.MaxClients = uint32(m.maxClients)

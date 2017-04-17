@@ -2,6 +2,7 @@ package netcode
 
 import (
 	"errors"
+	"log"
 	"net"
 )
 
@@ -57,7 +58,10 @@ func (c *ClientInstance) SendPacket(packet Packet, writePacketKey []byte, server
 		return errors.New("error: unable to write packet: " + err.Error())
 	}
 
-	c.serverConn.WriteTo(packetBuffer.Buf[:bytesWritten], c.address)
+	if _, err := c.serverConn.WriteTo(packetBuffer.Buf[:bytesWritten], c.address); err != nil {
+		log.Printf("error writing to client: %s\n", err)
+	}
+	log.Printf("write %s to: %s\n", packetTypeMap[packet.GetType()], c.address.String())
 	c.sequence++
 	c.lastSendTime = serverTime
 	return nil

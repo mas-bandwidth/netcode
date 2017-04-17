@@ -237,10 +237,9 @@ func (c *Client) recv() {
 		case recv := <-c.packetCh:
 			c.OnPacketData(recv.data, recv.from)
 		default:
-			goto DONE
+			return
 		}
 	}
-DONE:
 }
 
 func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
@@ -260,7 +259,7 @@ func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
 }
 
 func (c *Client) SendData(payloadData []byte) error {
-	log.Printf("sending data\n")
+	log.Printf("sending %d data\n", len(payloadData))
 	if c.GetState() != StateConnected {
 		return errors.New("client not connected, unable to send packet")
 	}
@@ -317,13 +316,13 @@ func (c *Client) sendPacket(packet Packet) error {
 	return err
 }
 
-func (c *Client) RecvData() []byte {
+func (c *Client) RecvData() ([]byte, uint64) {
 	packet := c.packetQueue.Pop()
 	p, ok := packet.(*PayloadPacket)
 	if !ok {
-		return nil
+		return nil, 0
 	}
-	return p.PayloadData
+	return p.PayloadData, p.sequence
 }
 
 // write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
@@ -335,7 +334,6 @@ func (c *Client) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
 	c.packetCh <- &netcodeData{data: packetData, from: addr}
 }
 
-// called asynchronously whenever a new packet of data arrives from the NetcodeConn.
 func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	var err error
 	var size int
@@ -347,10 +345,6 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	}
 
 	size = len(packetData)
-	if len(packetData) == 0 {
-		log.Printf("unable to read from socket, 0 bytes returned")
-		return
-	}
 
 	timestamp := uint64(time.Now().Unix())
 	log.Printf("read %d from socket\n", len(packetData))

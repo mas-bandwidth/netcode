@@ -55,7 +55,6 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.allowedPackets[ConnectionKeepAlive] = 1
 	s.allowedPackets[ConnectionPayload] = 1
 	s.allowedPackets[ConnectionDisconnect] = 1
-	s.allowedPackets[ConnectionChallenge] = 1
 	return s
 }
 
@@ -108,9 +107,12 @@ func (s *Server) Listen() error {
 	return nil
 }
 
-func (s *Server) SendPackets(serverTime float64) {
-	s.clientManager.SendPackets(serverTime)
-	return
+func (s *Server) SendPayloads(payloadData []byte, serverTime float64) {
+	if !s.running {
+		return
+	}
+	log.Printf("sending payloads")
+	s.clientManager.sendPayloads(payloadData, serverTime)
 }
 
 func (s *Server) Update(time float64) error {
@@ -163,7 +165,7 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
 
-	log.Printf("%s net client connected", s.serverAddr.String())
+	log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
 
 	timestamp := uint64(time.Now().Unix())
 
@@ -227,7 +229,6 @@ func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, 
 		}
 		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
-
 	}
 }
 
