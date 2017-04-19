@@ -261,6 +261,21 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         Ok(None)
     }
 
+    /// Sends a disconnect and removes client.
+    pub fn disconnect(&mut self, client_id: ClientId) -> Result<(), SendError> {
+        if let Some(client) = Self::find_client_by_id(&mut self.clients, client_id) {
+            self.internal.handle_client_disconnect(client)?;
+        }
+
+        let idx = self.clients.iter().position(|c| c.as_ref().map_or(false, |c| c.client_id == client_id));
+
+        if let Some(idx) = idx {
+            self.clients[idx] = None;
+        }
+
+        Ok(())
+    }
+
     fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], payload: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         let result = if let Some(client) = Self::find_client_by_addr(&mut self.clients, addr) {
             //Make sure we aren't still trying to connect
@@ -452,6 +467,13 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
                 Ok(None)
             }
         }
+    }
+
+    fn handle_client_disconnect(&mut self, client: &mut Connection) -> Result<(), SendError> {
+        self.send_packet(client, &packet::Packet::Disconnect, None)?;
+        client.state = ConnectionState::Disconnected;
+
+        Ok(())
     }
 
     fn handle_packet(&mut self,
