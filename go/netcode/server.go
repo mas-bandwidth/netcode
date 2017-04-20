@@ -131,7 +131,7 @@ func (s *Server) Update(time float64) error {
 		}
 	}
 DONE:
-	s.clientManager.SendPackets(s.serverTime)
+	s.clientManager.SendKeepAlives(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
 	return nil
 }
@@ -407,7 +407,7 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	packet := &KeepAlivePacket{}
 	packet.ClientIndex = uint32(clientIndex)
 	packet.MaxClients = uint32(s.maxClients)
-	log.Printf("sendKeepAlive: %d %#v\n", client.clientId, client.address)
+
 	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
 		log.Printf("error: encryption mapping is out of date for client %d encIndex: %d addr: %s\n", clientIndex, client.encryptionIndex, client.address.String())
 		panic("bloop")

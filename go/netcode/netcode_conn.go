@@ -164,11 +164,11 @@ func (c *NetcodeConn) read() (*netcodeData, error) {
 		return nil, errors.New("packet size was > maxBytes")
 	}
 
+	// check if it's a valid packet
 	if NewPacket(netData.data) == nil {
 		return nil, errors.New("data was not a valid netcode.io packet")
 	}
 
-	// check if it's a valid packet
 	netData.data = netData.data[:n]
 	netData.from = from
 	return netData, nil

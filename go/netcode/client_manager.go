@@ -323,7 +323,7 @@ func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 	}
 }
 
-func (m *ClientManager) SendPackets(serverTime float64) {
+func (m *ClientManager) SendKeepAlives(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
 		if !instance.connected {
@@ -336,7 +336,7 @@ func (m *ClientManager) SendPackets(serverTime float64) {
 		}
 
 		shouldSendTime := instance.lastSendTime + float64(1.0/PACKET_SEND_RATE)
-		if instance.connected && (shouldSendTime < serverTime || floatEquals(shouldSendTime, serverTime)) {
+		if shouldSendTime < serverTime || floatEquals(shouldSendTime, serverTime) {
 			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
 				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
 				continue

@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/pkg/profile"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync/atomic"
 	"time"
 )
@@ -43,12 +46,16 @@ func init() {
 	flag.StringVar(&webServerAddr, "webaddr", ":8880", "the web server token supplier address to bind to")
 	flag.IntVar(&numServers, "numservers", 3, "number of servers to start on successive ports")
 	flag.IntVar(&startingPort, "port", 40000, "starting port number, increments by 1 for number of servers")
-	flag.IntVar(&maxClients, "maxclients", 8, "number of clients per server")
+	flag.IntVar(&maxClients, "maxclients", 256, "number of clients per server")
 }
 
 func main() {
 	flag.Parse()
 	closeCh = make(chan struct{}, 1)
+
+	ctrlCloseCh := make(chan os.Signal, 1)
+	signal.Notify(ctrlCloseCh, os.Interrupt)
+
 	// initialize server addresses for connect tokens/listening
 	serverAddrs = make([]net.UDPAddr, numServers)
 	for i := 0; i < numServers; i += 1 {
@@ -56,20 +63,23 @@ func main() {
 		serverAddrs[i] = addr
 	}
 
+	p := profile.Start(profile.MemProfile, profile.ProfilePath("."), profile.NoShutdownHook)
+	defer p.Stop()
+
 	// start our netcode servers
 	for i := 0; i < numServers; i += 1 {
-		go serveLoop(closeCh, i)
+		go serveLoop(closeCh, ctrlCloseCh, i)
 	}
 
 	// start our web server for generating and handing out connect tokens.
 	http.HandleFunc("/token", serveToken)
-	http.HandleFunc("/shutdown", shutdown)
+	http.HandleFunc("/shutdown", serveShutdown)
 
 	httpServer = &http.Server{Addr: webServerAddr}
 	httpServer.ListenAndServe()
 }
 
-func serveLoop(closeCh chan struct{}, index int) {
+func serveLoop(closeCh chan struct{}, ctrlCloseCh chan os.Signal, index int) {
 	serv := netcode.NewServer(&serverAddrs[index], serverKey, PROTOCOL_ID, maxClients)
 	if err := serv.Init(); err != nil {
 		log.Fatalf("error initializing server: %s\n", err)
@@ -79,7 +89,7 @@ func serveLoop(closeCh chan struct{}, index int) {
 		log.Fatalf("error listening: %s\n", err)
 	}
 
-	payload := make([]byte, 640)
+	payload := make([]byte, netcode.MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(payload); i += 1 {
 		payload[i] = byte(i)
 	}
@@ -91,12 +101,11 @@ func serveLoop(closeCh chan struct{}, index int) {
 	count := 0
 	for {
 		select {
+		case <-ctrlCloseCh:
+			shutdown(serv)
+			return
 		case <-closeCh:
-			log.Printf("shutting down server")
-			serv.Stop()
-			if err := httpServer.Close(); err != nil {
-				log.Printf("error shutting down http server: %s\n", err)
-			}
+			shutdown(serv)
 			return
 		default:
 		}
@@ -124,13 +133,22 @@ func serveLoop(closeCh chan struct{}, index int) {
 	}
 }
 
+func shutdown(serv *netcode.Server) {
+	log.Printf("shutting down server")
+	serv.Stop()
+	if err := httpServer.Close(); err != nil {
+		log.Printf("error shutting down http server: %s\n", err)
+	}
+	return
+}
+
 // this is for the web server serving tokens...
 type WebToken struct {
 	ClientId     uint64 `json:"client_id"`
 	ConnectToken string `json:"connect_token"`
 }
 
-func shutdown(w http.ResponseWriter, r *http.Request) {
+func serveShutdown(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "done")
 	close(closeCh)
 }

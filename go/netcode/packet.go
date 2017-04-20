@@ -406,9 +406,8 @@ func (p *PayloadPacket) Write(buffer *Buffer, protocolId, sequence uint64, write
 	if err != nil {
 		return -1, err
 	}
-
 	encryptedStart := buffer.Pos
-	buffer.WriteBytesN([]byte(p.PayloadData), int(p.PayloadBytes))
+	buffer.WriteBytesN(p.PayloadData, int(p.PayloadBytes))
 	encryptedFinish := buffer.Pos
 	return encryptPacket(buffer, encryptedStart, encryptedFinish, prefixByte, protocolId, sequence, writePacketKey)
 }
