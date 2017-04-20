@@ -13,10 +13,6 @@ use std::time::Duration;
 /// States represented by the client
 #[derive(Debug,Clone)]
 pub enum State {
-    /// ConnectToken is expired.
-    ConnectTokenExpired,
-    /// ConnectToken is invalid.
-    InvalidConnectToken,
     /// Connection timed out.
     ConnectionTimedOut,
     /// Connection response timed out.
@@ -125,7 +121,11 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
         match packet {
             &packet::Packet::Payload(len) => {
                 Ok(Some(ClientEvent::Packet(len)))
-            }
+            },
+            &packet::Packet::KeepAlive(_) => {
+                trace!("Heard keep alive from server");
+                Ok(None)
+            },
             &packet::Packet::Disconnect => {
                 *new_state = Some(InternalState::Disconnected);
                 self.ext_state = State::Disconnected;
@@ -289,8 +289,14 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
                                 },
                                 channel::UpdateResult::SentKeepAlive => {
                                     let send = match req {
-                                        &ConnectSequence::SendingToken => self.data.send_connect_token(),
-                                        &ConnectSequence::SendingChallenge(seq, ref token) => self.data.send_challenge_token(seq, token)
+                                        &ConnectSequence::SendingToken => {
+                                            trace!("Sending connect token");
+                                            self.data.send_connect_token()
+                                        },
+                                        &ConnectSequence::SendingChallenge(seq, ref token) => {
+                                            trace!("Sending challenge token");
+                                            self.data.send_challenge_token(seq, token)
+                                        }
                                     };
 
                                     send.map(|_| None).map_err(|e| e.into())
@@ -301,7 +307,10 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
                     &mut InternalState::Connected => {
                         match self.data.update_channel(true)? {
                             channel::UpdateResult::Expired => self.data.disconnect(&mut new_state),
-                            channel::UpdateResult::SentKeepAlive => Ok(Some(ClientEvent::SentKeepAlive)),
+                            channel::UpdateResult::SentKeepAlive => {
+                                trace!("Sent keep alive");
+                                Ok(Some(ClientEvent::SentKeepAlive))
+                            },
                             channel::UpdateResult::Noop => Ok(None)
                         }
                     },
@@ -331,6 +340,13 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
         }
 
         self.data.channel.send(self.data.time, &packet::Packet::Payload(payload.len()), Some(payload), &mut self.data.socket)
+    }
+
+    //Disconnects this client and notifies server.
+    pub fn disconnect(&mut self) -> Result<(), SendError> {
+        self.data.ext_state = State::Disconnected;
+        self.state = InternalState::Disconnected;
+        self.data.channel.send(self.data.time, &packet::Packet::Disconnect, None, &mut self.data.socket).map(|_| ())
     }
 
     /// Gets the current state of our client.

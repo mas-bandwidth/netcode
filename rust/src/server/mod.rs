@@ -47,7 +47,7 @@ pub enum ServerEvent {
     /// We received a packet, `out_packet` will be filled with data based on `usize`, contains the client id that reieved the packet and length of the packet.
     Packet(ClientId, usize),
     /// We received a keep alive packet with included client id.
-    KeepAlive(ClientId),
+    SentKeepAlive(ClientId),
     /// Client failed connection token validation
     RejectedClient,
     /// Replay detection heard duplicate packet and rejected it.
@@ -110,6 +110,8 @@ struct ServerInternal<I,S> {
     challenge_key: [u8; NETCODE_KEY_BYTES],
 
     client_event_idx: usize,
+
+    token_sequence: u64,
 }
 
 enum TickResult {
@@ -148,7 +150,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                         time: 0.0,
                         challenge_sequence: 0,
                         challenge_key: crypto::generate_key(),
-                        client_event_idx: 0
+                        client_event_idx: 0,
+                        token_sequence: 0
                     }
                 })
             },
@@ -160,6 +163,26 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 }
             }
         }
+    }
+
+    /// Generates a connection token with `client_id` that expires after `expire_secs` with an optional user_data.
+    pub fn generate_token(&mut self, expire_secs: usize, client_id: u64, user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>) -> Result<token::ConnectToken, token::GenerateError> {
+        self.internal.token_sequence += 1;
+
+        let addr = if self.internal.listen_addr.port() == 0 {
+            self.get_local_addr()?
+        } else {
+            self.internal.listen_addr
+        };
+
+        token::ConnectToken::generate(
+            [addr].iter().cloned(),
+            &self.internal.connect_key,
+            expire_secs,
+            self.internal.token_sequence,
+            self.internal.protocol_id,
+            client_id,
+            user_data)
     }
 
     /// Gets the local port that this server is bound to.
@@ -247,7 +270,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
                 },
                 TickResult::SendKeepAlive => {
                     let client_id = clients[self.internal.client_event_idx].as_ref().map_or(0, |c| c.client_id);
-                    Some(ServerEvent::KeepAlive(client_id))
+                    Some(ServerEvent::SentKeepAlive(client_id))
                 }
             };
 
@@ -279,7 +302,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     fn handle_io(&mut self, addr: &SocketAddr, data: &[u8], payload: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
         let result = if let Some(client) = Self::find_client_by_addr(&mut self.clients, addr) {
             //Make sure we aren't still trying to connect
-            trace!("New data on client socket {}", client.client_id);
+            trace!("New data on client socket {} {:?}", client.client_id, client.channel.get_addr());
             Some(self.internal.handle_packet(client, data, payload))
         } else {
             None
@@ -433,15 +456,24 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
         let result = match *state {
             ConnectionState::PendingResponse => {
                 match client.channel.update(self.time, &mut self.listen_socket, false)? {
-                    channel::UpdateResult::Expired => TickResult::StateChange(ConnectionState::TimedOut),
-                    channel::UpdateResult::SentKeepAlive => TickResult::SendKeepAlive,
+                    channel::UpdateResult::Expired => {
+                        trace!("Failed to hear from client {}, timed out", client.client_id);
+                        TickResult::StateChange(ConnectionState::TimedOut)
+                    },
+                    channel::UpdateResult::SentKeepAlive => TickResult::Noop,
                     channel::UpdateResult::Noop => TickResult::Noop
                 }
             },
             ConnectionState::Idle => {
                 match client.channel.update(self.time, &mut self.listen_socket, true)? {
-                    channel::UpdateResult::Expired => TickResult::StateChange(ConnectionState::TimedOut),
-                    channel::UpdateResult::SentKeepAlive => TickResult::SendKeepAlive,
+                    channel::UpdateResult::Expired => {
+                        trace!("Failed to hear from client {}, timed out", client.client_id);
+                        TickResult::StateChange(ConnectionState::TimedOut)
+                    },
+                    channel::UpdateResult::SentKeepAlive => {
+                        trace!("Sent keep alive to client {}", client.client_id);
+                        TickResult::SendKeepAlive
+                    },
                     channel::UpdateResult::Noop => TickResult::Noop
                 }
             },
@@ -470,6 +502,8 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
     }
 
     fn handle_client_disconnect(&mut self, client: &mut Connection) -> Result<(), SendError> {
+        trace!("Disconnecting client {}", client.client_id);
+
         self.send_packet(client, &packet::Packet::Disconnect, None)?;
         client.state = ConnectionState::Disconnected;
 
@@ -507,9 +541,11 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
                         Some(ServerEvent::Packet(client.client_id, len))
                     },
                     packet::Packet::KeepAlive(_) => {
-                        Some(ServerEvent::KeepAlive(client.client_id))
+                        trace!("Heard keep alive from client {}", client.client_id);
+                        Some(ServerEvent::SentKeepAlive(client.client_id))
                     },
                     packet::Packet::Disconnect => {
+                        trace!("Received disconnect from client {}", client.client_id);
                         state = Some(ConnectionState::Disconnected);
                         Some(ServerEvent::ClientDisconnect(client.client_id))
                     },
@@ -731,7 +767,7 @@ mod test {
 
                         break;
                     },
-                    Ok(Some(ServerEvent::KeepAlive(cid))) => {
+                    Ok(Some(ServerEvent::SentKeepAlive(cid))) => {
                         assert_eq!(cid, CLIENT_ID);
                     },
                     o => assert!(false, "unexpected {:?}", o)
