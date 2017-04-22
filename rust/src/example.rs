@@ -1,3 +1,11 @@
+//! Sample netcode echo client + server. This is the bare minimum needed to show a full
+//! working example. Creates two threads one for the server and one for the client.
+//! The main thread listens for new lines and sends them to the client with a mpsc channel.
+//! The client will then send the string to the server and the server will echo it back to the
+//! client. Note that since this is a UDP based protocol it's expected some messages will be dropped.
+//! Once done the string "exit" will cause the client to disconnect which the server will then 
+//! terminate when it hears the disconnect from the client.
+
 extern crate netcode;
 extern crate time;
 extern crate log;
@@ -35,13 +43,15 @@ fn sleep_for_tick(last_tick: &mut f64) -> f64 {
 }
 
 fn main() {
+    //Uncomment the below block to turn on verbose debugging for netcode
+    /*
     {
         use env_logger::LogBuilder;
         use log::LogLevelFilter;
 
-        //Uncomment the below line to turn on verbose debugging for netcode
-        //LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
+        LogBuilder::new().filter(None, LogLevelFilter::Trace).init().unwrap();
     }
+    */
 
     let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &netcode::generate_key()).unwrap();
     let token = server.generate_token(TOKEN_LIFETIME, CLIENT_ID, None).unwrap();
