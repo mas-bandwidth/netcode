@@ -520,7 +520,7 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
         }
 
         trace!("Handling packet from client");
-            let decoded = match client.channel.recv(self.time, packet, out_packet) {
+        let decoded = match client.channel.recv(self.time, packet, out_packet) {
             Ok(packet) => packet,
             Err(RecvError::DuplicateSequence) => return Ok(Some(ServerEvent::ReplayRejected(client.client_id))),
             Err(e) => {
