@@ -164,7 +164,7 @@ impl ConnectToken {
                        sequence: u64,
                        protocol: u64,
                        client_id: u64,
-                       user_data: Option<&[u8; 256]>)
+                       user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>)
                        -> Result<ConnectToken, GenerateError>
                           where H: ExactSizeIterator<Item=SocketAddr> {
         if hosts.len() > NETCODE_MAX_SERVERS_PER_CONNECT {

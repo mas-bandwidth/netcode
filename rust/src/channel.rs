@@ -7,7 +7,7 @@ use socket::SocketProvider;
 use std::net::SocketAddr;
 
 pub const TIMEOUT_SECONDS: u32 = 5;
-pub const KEEPALIVE_RETRY: f64 = 1.0 / 10.0;
+pub const KEEPALIVE_RETRY: f64 = 1.0 / 1.0;
 
 #[derive(Clone, Debug)]
 pub struct KeepAliveState {
@@ -23,18 +23,12 @@ impl KeepAliveState {
         }
     }
 
-    pub fn update_sent(&self, time: f64) -> KeepAliveState {
-        KeepAliveState {
-            last_sent: time,
-            last_response: self.last_response
-        }
+    pub fn update_sent(&mut self, time: f64) {
+        self.last_sent = time;
     }
 
-    pub fn update_response(&self, response: f64) -> KeepAliveState {
-        KeepAliveState {
-            last_sent: self.last_sent,
-            last_response: response
-        }
+    pub fn update_response(&mut self, response: f64) {
+        self.last_response = response;
     }
 
     pub fn has_expired(&self, time: f64) -> bool {
@@ -121,6 +115,7 @@ impl Channel {
     pub fn update<I,S>(&mut self, elapsed: f64, socket: &mut I, send_keep_alive: bool) -> Result<UpdateResult, SendError> where I: SocketProvider<I,S> {
         if self.keep_alive.should_send_keepalive(elapsed) {
             if send_keep_alive {
+                trace!("Sending keep alive");
                 self.send_keep_alive(elapsed, socket)?;
             }
 

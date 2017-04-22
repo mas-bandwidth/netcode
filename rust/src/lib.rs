@@ -18,8 +18,7 @@
 //!
 //! const PROTOCOL_ID: u64 = 0xFFEE;
 //! const MAX_CLIENTS: usize = 32;
-//! let private_key = netcode::generate_key();
-//! let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+//! let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &netcode::generate_key()).unwrap();
 //!
 //! //loop {
 //!     server.update(1.0 / 10.0);
@@ -67,6 +66,6 @@ mod socket;
 pub use token::{ConnectToken};
 pub use common::{NETCODE_MAX_PACKET_SIZE, NETCODE_MAX_PAYLOAD_SIZE, NETCODE_USER_DATA_BYTES};
 pub use server::{UdpServer, Server, ServerEvent};
-pub use client::{UdpClient, Client, ClientEvent};
+pub use client::{UdpClient, Client, ClientEvent, State as ClientState};
 pub use crypto::{generate_key};
 pub use error::*;
