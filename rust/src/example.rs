@@ -60,7 +60,7 @@ fn main() {
         let mut last = 0.0;
         loop {
             let elapsed = sleep_for_tick(&mut last);
-            server.update(elapsed).unwrap();
+            server.update(elapsed);
 
             let mut packet = [0; NETCODE_MAX_PAYLOAD_SIZE];
             while let Some(event) = server.next_event(&mut packet).unwrap() {
@@ -90,7 +90,7 @@ fn main() {
         let mut last = 0.0;
         loop {
             let elapsed = sleep_for_tick(&mut last);
-            client.update(elapsed).unwrap();
+            client.update(elapsed);
 
             let mut packet = [0; NETCODE_MAX_PAYLOAD_SIZE];
             while let Some(event) = client.next_event(&mut packet).unwrap() {
