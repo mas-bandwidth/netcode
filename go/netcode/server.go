@@ -94,6 +94,8 @@ func (s *Server) Init() error {
 		return err
 	}
 	s.serverConn = NewNetcodeConn()
+	s.serverConn.SetReadBuffer(SOCKET_RCVBUF_SIZE * s.maxClients)
+	s.serverConn.SetWriteBuffer(SOCKET_SNDBUF_SIZE * s.maxClients)
 	s.serverConn.SetRecvHandler(s.handleNetcodeData)
 	return nil
 }
@@ -136,11 +138,11 @@ DONE:
 	return nil
 }
 
-// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// write the netcodeData to our buffered packet channel. The NetcodeConn verifies
 // that the recv'd data is > 0 < maxBytes and is of a valid packet type before
 // this is even called.
-// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
-// which is what we want since we want to synchronize access from the Update call.
+// NOTE: we will block the netcodeConn from processing which is what we want since
+// we want to synchronize access from the Update call.
 func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
 	s.packetCh <- &netcodeData{data: packetData, from: addr}
 }

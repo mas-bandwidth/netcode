@@ -214,7 +214,7 @@ func (c *Client) Update(t float64) {
 	case StateSendingConnectionRequest:
 		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
-			log.Printf("connection request timed out.")
+			log.Printf("connection request timed out.\n")
 			if c.connectNextServer() {
 				return
 			}

@@ -6,7 +6,7 @@ import (
 	"flag"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
-	"math/rand"
+	//"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -54,18 +54,19 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 	}
 
 	log.Printf("client connected, local address: %s\n", c.LocalAddr())
-	packetData := make([]byte, 64)
+	packetData := make([]byte, netcode.MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(packetData); i += 1 {
 		packetData[i] = byte(i)
 	}
 
 	count := 0
-	time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
+	ticks := 0
+	//time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
 	// fake game loop
 	for {
 
 		if clientTime > 6.0 {
-			log.Printf("client exiting recv'd %d payloads...", count)
+			log.Printf("client exiting recv'd %d payloads... from %d ticks", count, ticks)
 			wg.Done()
 			return
 		}
@@ -85,6 +86,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 		}
 		time.Sleep(deltaTime)
 		clientTime += deltaTime.Seconds()
+		ticks++
 	}
 
 }

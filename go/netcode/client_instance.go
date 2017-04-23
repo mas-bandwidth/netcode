@@ -61,8 +61,6 @@ func (c *ClientInstance) SendPacket(packet Packet, writePacketKey []byte, server
 		log.Printf("error writing to client: %s\n", err)
 	}
 
-	//log.Printf("write %s to: %s\n", packetTypeMap[packet.GetType()], c.address.String())
-
 	c.sequence++
 	c.lastSendTime = serverTime
 	return nil
