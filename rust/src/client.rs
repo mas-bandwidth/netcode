@@ -13,10 +13,6 @@ use std::time::Duration;
 /// States represented by the client
 #[derive(Debug,Clone)]
 pub enum State {
-    /// ConnectToken is expired.
-    ConnectTokenExpired,
-    /// ConnectToken is invalid.
-    InvalidConnectToken,
     /// Connection timed out.
     ConnectionTimedOut,
     /// Connection response timed out.
@@ -125,7 +121,11 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
         match packet {
             &packet::Packet::Payload(len) => {
                 Ok(Some(ClientEvent::Packet(len)))
-            }
+            },
+            &packet::Packet::KeepAlive(_) => {
+                trace!("Heard keep alive from server");
+                Ok(None)
+            },
             &packet::Packet::Disconnect => {
                 *new_state = Some(InternalState::Disconnected);
                 self.ext_state = State::Disconnected;
@@ -232,10 +232,8 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
     }
 
     /// Updates time elapsed since last client iteration.
-    pub fn update(&mut self, elapsed: f64) -> Result<(), UpdateError> {
+    pub fn update(&mut self, elapsed: f64) {
         self.data.time += elapsed;
-
-        Ok(())
     }
 
     /// Checks for incoming packets and state changes. Returns `None` when no more events
@@ -289,8 +287,14 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
                                 },
                                 channel::UpdateResult::SentKeepAlive => {
                                     let send = match req {
-                                        &ConnectSequence::SendingToken => self.data.send_connect_token(),
-                                        &ConnectSequence::SendingChallenge(seq, ref token) => self.data.send_challenge_token(seq, token)
+                                        &ConnectSequence::SendingToken => {
+                                            trace!("Sending connect token");
+                                            self.data.send_connect_token()
+                                        },
+                                        &ConnectSequence::SendingChallenge(seq, ref token) => {
+                                            trace!("Sending challenge token");
+                                            self.data.send_challenge_token(seq, token)
+                                        }
                                     };
 
                                     send.map(|_| None).map_err(|e| e.into())
@@ -301,11 +305,14 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
                     &mut InternalState::Connected => {
                         match self.data.update_channel(true)? {
                             channel::UpdateResult::Expired => self.data.disconnect(&mut new_state),
-                            channel::UpdateResult::SentKeepAlive => Ok(Some(ClientEvent::SentKeepAlive)),
+                            channel::UpdateResult::SentKeepAlive => {
+                                trace!("Sent keep alive");
+                                Ok(Some(ClientEvent::SentKeepAlive))
+                            },
                             channel::UpdateResult::Noop => Ok(None)
                         }
                     },
-                    &mut InternalState::Disconnected => Ok(None)
+                    &mut InternalState::Disconnected => Ok(Some(ClientEvent::NewState(State::Disconnected)))
                 }
             },
             r => r
@@ -331,6 +338,13 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
         }
 
         self.data.channel.send(self.data.time, &packet::Packet::Payload(payload.len()), Some(payload), &mut self.data.socket)
+    }
+
+    //Disconnects this client and notifies server.
+    pub fn disconnect(&mut self) -> Result<(), SendError> {
+        self.data.ext_state = State::Disconnected;
+        self.state = InternalState::Disconnected;
+        self.data.channel.send(self.data.time, &packet::Packet::Disconnect, None, &mut self.data.socket).map(|_| ())
     }
 
     /// Gets the current state of our client.
@@ -418,14 +432,14 @@ mod test {
 
         pub fn update_client(&mut self) -> Option<ClientEvent> {
             let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
-            self.client.update(0.0).unwrap();
+            self.client.update(0.0);
             self.client.next_event(&mut scratch).unwrap()
         }
 
         pub fn update_server(&mut self) -> Option<ServerEvent> {
             if let Some(ref mut server) = self.server {
                 let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
-                server.update(0.0).unwrap();
+                server.update(0.0);
                 server.next_event(&mut scratch).unwrap()
             } else {
                 None
@@ -479,7 +493,7 @@ mod test {
             harness.client.send(&data[..i]).unwrap();
             if let Some(server) = harness.server.as_mut() {
                 {
-                    server.update(0.0).unwrap();
+                    server.update(0.0);
                     let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match server.next_event(&mut payload) {
                         Ok(Some(ServerEvent::Packet(client_id, len))) => {
@@ -496,7 +510,7 @@ mod test {
 
                 {
                     server.send(CLIENT_ID, &data[..i]).unwrap();
-                    harness.client.update(0.0).unwrap();
+                    harness.client.update(0.0);
                     let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.client.next_event(&mut payload) {
                         Ok(Some(ClientEvent::Packet(len))) => {
