@@ -72,14 +72,15 @@ type Client struct {
 	conn             *NetcodeConn
 	packetQueue      *PacketQueue
 	allowedPackets   []byte
-	packetCh         chan *netcodeData
+	packetCh         chan *NetcodeData
 }
 
 func NewClient(connectToken *ConnectToken) *Client {
 	c := &Client{connectToken: connectToken}
+
 	c.lastPacketRecvTime = -1
 	c.lastPacketSendTime = -1
-	c.packetCh = make(chan *netcodeData, PACKET_QUEUE_SIZE)
+	c.packetCh = make(chan *NetcodeData, PACKET_QUEUE_SIZE)
 	c.setState(StateDisconnected)
 	c.shouldDisconnect = false
 	c.challengeData = make([]byte, CHALLENGE_TOKEN_BYTES)
@@ -99,6 +100,10 @@ func NewClient(connectToken *ConnectToken) *Client {
 
 func (c *Client) GetState() ClientState {
 	return c.state
+}
+
+func (c *Client) SetId(id uint64) {
+	c.id = id
 }
 
 func (c *Client) setState(newState ClientState) {
@@ -126,6 +131,25 @@ func (c *Client) Connect() error {
 
 	c.setState(StateSendingConnectionRequest)
 	return nil
+}
+
+func (c *Client) connectNextServer() bool {
+	if c.serverIndex+1 >= len(c.connectToken.ServerAddrs) {
+		return false
+	}
+
+	c.serverIndex++
+	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
+
+	c.Reset()
+
+	log.Printf("client[%d] connecting to next server %s (%d/%d)\n", c.id, c.serverAddress.String(), c.serverIndex, len(c.connectToken.ServerAddrs))
+	if err := c.Connect(); err != nil {
+		log.Printf("error connecting to next server: %s\n", err)
+		return false
+	}
+	c.setState(StateSendingConnectionRequest)
+	return true
 }
 
 func (c *Client) Close() error {
@@ -165,24 +189,6 @@ func (c *Client) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-func (c *Client) connectNextServer() bool {
-	if c.serverIndex+1 >= len(c.connectToken.ServerAddrs) {
-		return false
-	}
-
-	c.serverIndex++
-	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
-
-	log.Printf("client connecting to next server %s (%d/%d)\n", c.serverAddress.String(), c.serverIndex, len(c.connectToken.ServerAddrs))
-	c.setState(StateSendingConnectionRequest)
-
-	if err := c.Connect(); err != nil {
-		log.Printf("error connecting to next server: %s\n", err)
-		return false
-	}
-	return true
-}
-
 func (c *Client) Update(t float64) {
 	c.time = t
 
@@ -196,13 +202,14 @@ func (c *Client) Update(t float64) {
 	if state > StateDisconnected && state < StateConnected {
 		expire := c.connectToken.ExpireTimestamp - c.connectToken.CreateTimestamp
 		if c.startTime+float64(expire) <= c.time {
+			log.Printf("client[%d] connect failed. connect token expired\n", c.id)
 			c.Disconnect(StateTokenExpired, false)
 			return
 		}
 	}
 
 	if c.shouldDisconnect {
-		log.Printf("client should disconnect -> %s\n", clientStateMap[c.shouldDisconnectState])
+		log.Printf("client[%d] should disconnect -> %s\n", c.id, clientStateMap[c.shouldDisconnectState])
 		if c.connectNextServer() {
 			return
 		}
@@ -214,7 +221,7 @@ func (c *Client) Update(t float64) {
 	case StateSendingConnectionRequest:
 		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
-			log.Printf("connection request timed out.\n")
+			log.Printf("client[%d] connection request timed out.\n", c.id)
 			if c.connectNextServer() {
 				return
 			}
@@ -223,6 +230,7 @@ func (c *Client) Update(t float64) {
 	case StateSendingConnectionResponse:
 		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
+			log.Printf("client[%d] connect failed. connection response timed out\n", c.id)
 			if c.connectNextServer() {
 				return
 			}
@@ -231,13 +239,14 @@ func (c *Client) Update(t float64) {
 	case StateConnected:
 		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
 		if timeout < c.time {
+			log.Printf("client[%d] connection timed out\n", c.id)
 			c.Disconnect(StateConnectionTimedOut, false)
 		}
 	}
 }
 
 func (c *Client) recv() {
-	// empty recv'd data from channel so we can have safe access to client manager data structures
+	// empty recv'd data from channel
 	for {
 		select {
 		case recv := <-c.packetCh:
@@ -249,8 +258,9 @@ func (c *Client) recv() {
 }
 
 func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
-	log.Printf("disconnected: %s\n", clientStateMap[reason])
+	log.Printf("client[%d] disconnected: %s\n", c.id, clientStateMap[reason])
 	if c.GetState() <= StateDisconnected {
+		log.Printf("state <= StateDisconnected")
 		return nil
 	}
 
@@ -286,19 +296,19 @@ func (c *Client) send() error {
 		p.ConnectTokenExpireTimestamp = c.connectToken.ExpireTimestamp
 		p.ConnectTokenSequence = c.connectToken.Sequence
 		p.ConnectTokenData = c.connectToken.PrivateData.Buffer()
-		log.Printf("client sent connection request packet to server\n")
+		log.Printf("client[%d] sent connection request packet to server\n", c.id)
 		return c.sendPacket(p)
 	case StateSendingConnectionResponse:
 		p := &ResponsePacket{}
 		p.ChallengeTokenSequence = c.challengeSequence
 		p.ChallengeTokenData = c.challengeData
-		log.Printf("client sent connection response packet to server\n")
+		log.Printf("client[%d] sent connection response packet to server\n", c.id)
 		return c.sendPacket(p)
 	case StateConnected:
 		p := &KeepAlivePacket{}
 		p.ClientIndex = 0
 		p.MaxClients = 0
-		log.Printf("client sent connection keep-alive packet to server\n")
+		log.Printf("client[%d] sent connection keep-alive packet to server\n", c.id)
 		return c.sendPacket(p)
 	}
 
@@ -333,10 +343,8 @@ func (c *Client) RecvData() ([]byte, uint64) {
 // write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
 // that the recv'd data is > 0 < maxBytes and is of a valid packet type before
 // this is even called.
-// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
-// which is what we want since we want to synchronize access from the Update call.
-func (c *Client) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
-	c.packetCh <- &netcodeData{data: packetData, from: addr}
+func (c *Client) handleNetcodeData(packetData *NetcodeData) {
+	c.packetCh <- packetData
 }
 
 func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
@@ -345,7 +353,7 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	var sequence uint64
 
 	if !addressEqual(c.serverAddress, from) {
-		log.Printf("unknown address sent us data %s != %s\n", c.serverAddress.String(), from.String())
+		log.Printf("client[%d] unknown/old server address sent us data %s != %s\n", c.id, c.serverAddress.String(), from.String())
 		return
 	}
 
@@ -393,7 +401,6 @@ func (c *Client) processPacket(packet Packet, sequence uint64) {
 			c.clientIndex = p.ClientIndex
 			c.maxClients = p.MaxClients
 			c.setState(StateConnected)
-			log.Printf("client connected to server\n")
 		}
 	case ConnectionPayload:
 		if state != StateConnected {

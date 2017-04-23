@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-type netcodeData struct {
+type NetcodeData struct {
 	data []byte
 	from *net.UDPAddr
 }
@@ -16,7 +16,7 @@ const (
 	SOCKET_SNDBUF_SIZE = 1024 * 1024
 )
 
-type NetcodeRecvHandler func(data []byte, addr *net.UDPAddr)
+type NetcodeRecvHandler func(data *NetcodeData)
 
 type NetcodeConn struct {
 	conn     *net.UDPConn
@@ -124,18 +124,21 @@ func (c *NetcodeConn) create() error {
 	return nil
 }
 
-func (c *NetcodeConn) receiver(ch chan *netcodeData) {
+func (c *NetcodeConn) receiver(ch chan *NetcodeData) {
 	for {
 
-		if netData, err := c.read(); err == nil {
+		if err := c.read(); err == nil {
 			select {
-			case ch <- netData:
 			case <-c.closeCh:
 				return
+			default:
+				continue
 			}
 		} else {
+			if c.isClosed {
+				return
+			}
 			log.Printf("error reading data from socket: %s\n", err)
-			return
 		}
 
 	}
@@ -144,46 +147,39 @@ func (c *NetcodeConn) receiver(ch chan *netcodeData) {
 // read does the actual connection read call, verifies we have a
 // buffer > 0 and < maxBytes and is of a valid packet type before
 // we bother to attempt to actually dispatch it to the recvHandlerFn.
-func (c *NetcodeConn) read() (*netcodeData, error) {
+func (c *NetcodeConn) read() error {
 	var n int
 	var from *net.UDPAddr
 	var err error
-	netData := &netcodeData{}
+	netData := &NetcodeData{}
 	netData.data = make([]byte, c.maxBytes)
 
 	n, from, err = c.conn.ReadFromUDP(netData.data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if n == 0 {
-		return nil, errors.New("socket error: 0 byte length recv'd")
+		return errors.New("socket error: 0 byte length recv'd")
 	}
 
 	if n > c.maxBytes {
-		return nil, errors.New("packet size was > maxBytes")
+		return errors.New("packet size was > maxBytes")
 	}
 
 	// check if it's a valid packet
 	if NewPacket(netData.data) == nil {
-		return nil, errors.New("data was not a valid netcode.io packet")
+		return errors.New("data was not a valid netcode.io packet")
 	}
 
 	netData.data = netData.data[:n]
 	netData.from = from
-	return netData, nil
+	c.recvHandlerFn(netData)
+	return nil
 }
 
-// dispatch the netcodeData to the bound recvHandler function.
+// dispatch the NetcodeData to the bound recvHandler function.
 func (c *NetcodeConn) readLoop() {
-	dataCh := make(chan *netcodeData)
+	dataCh := make(chan *NetcodeData)
 	go c.receiver(dataCh)
-	for {
-		select {
-		case data := <-dataCh:
-			c.recvHandlerFn(data.data, data.from)
-		case <-c.closeCh:
-			return
-		}
-	}
 }

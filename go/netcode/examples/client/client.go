@@ -12,15 +12,6 @@ import (
 	"time"
 )
 
-const (
-	PROTOCOL_ID          = 0x1122334455667788
-	CONNECT_TOKEN_EXPIRY = 30
-	SERVER_PORT          = 40000
-	CLIENT_ID            = 0x1
-	SEQUENCE_START       = 1000
-	TIMEOUT_SECONDS      = 1
-)
-
 var tokenUrl string
 var numClients int
 
@@ -35,19 +26,20 @@ func main() {
 
 	for i := 0; i < numClients; i += 1 {
 		wg.Add(1)
-		token := getConnectToken()
-		go clientLoop(wg, token)
+		token, id := getConnectToken()
+		go clientLoop(wg, id, token)
 	}
 	wg.Wait()
 }
 
-func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
+func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToken) {
 
 	clientTime := float64(0)
 	delta := float64(1.0 / 60.0)
 	deltaTime := time.Duration(delta * float64(time.Second))
 
 	c := netcode.NewClient(connectToken)
+	c.SetId(id)
 
 	if err := c.Connect(); err != nil {
 		log.Fatalf("error connecting: %s\n", err)
@@ -97,7 +89,7 @@ type WebToken struct {
 	ConnectToken string `json:"connect_token"`
 }
 
-func getConnectToken() *netcode.ConnectToken {
+func getConnectToken() (*netcode.ConnectToken, uint64) {
 
 	resp, err := http.Get(tokenUrl)
 	if err != nil {
@@ -120,5 +112,5 @@ func getConnectToken() *netcode.ConnectToken {
 	if err != nil {
 		log.Fatalf("error reading connect token: %s\n", err)
 	}
-	return token
+	return token, webToken.ClientId
 }

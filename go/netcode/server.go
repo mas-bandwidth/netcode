@@ -32,7 +32,7 @@ type Server struct {
 	challengeSequence uint64
 
 	recvBytes int
-	packetCh  chan *netcodeData
+	packetCh  chan *NetcodeData
 }
 
 func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64, maxClients int) *Server {
@@ -45,7 +45,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
-	s.packetCh = make(chan *netcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
+	s.packetCh = make(chan *NetcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -143,8 +143,8 @@ DONE:
 // this is even called.
 // NOTE: we will block the netcodeConn from processing which is what we want since
 // we want to synchronize access from the Update call.
-func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
-	s.packetCh <- &netcodeData{data: packetData, from: addr}
+func (s *Server) handleNetcodeData(packetData *NetcodeData) {
+	s.packetCh <- packetData
 }
 
 func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
