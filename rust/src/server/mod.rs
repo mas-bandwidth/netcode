@@ -61,31 +61,37 @@ type ClientVec = Vec<Option<Connection>>;
 
 /// Netcode server object.
 /// # Example
-/// ```
-/// use netcode::UdpServer;
-/// use netcode::ServerEvent;
+/// ```rust
+/// use netcode::{UdpServer, ServerEvent};
 ///
-/// const PROTOCOL_ID: u64 = 0xFFEE;
-/// const MAX_CLIENTS: usize = 32;
-/// let private_key = netcode::generate_key();
-/// let mut server = UdpServer::new("127.0.0.1:0", MAX_CLIENTS, PROTOCOL_ID, &private_key).unwrap();
+/// fn run_server() {
+///     const PROTOCOL_ID: u64 = 0xFFEE;
+///     const MAX_CLIENTS: usize = 32;
+///     let mut server = UdpServer::new("127.0.0.1:0",
+///                                     MAX_CLIENTS,
+///                                     PROTOCOL_ID,
+///                                     &netcode::generate_key()).unwrap();
 ///
-/// //loop {
-///     server.update(1.0 / 10.0);
-///     let mut packet_data = [0; netcode::NETCODE_MAX_PAYLOAD_SIZE];
-///     match server.next_event(&mut packet_data) {
-///         Ok(Some(e)) => {
-///             match e {
-///                 ServerEvent::ClientConnect(_id) => {},
-///                 ServerEvent::ClientDisconnect(_id) => {},
-///                 ServerEvent::Packet(_id,_size) => {},
-///                 _ => ()
-///             }
-///         },
-///         Ok(None) => (),
-///         Err(err) => Err(err).unwrap()
+///     loop {
+///         server.update(1.0 / 10.0);
+///         let mut packet_data = [0; netcode::NETCODE_MAX_PAYLOAD_SIZE];
+///         match server.next_event(&mut packet_data) {
+///             Ok(Some(e)) => {
+///                 match e {
+///                     ServerEvent::ClientConnect(_id) => {},
+///                     ServerEvent::ClientDisconnect(_id) => {},
+///                     ServerEvent::Packet(_id,_size) => {},
+///                     _ => ()
+///                 }
+///             },
+///             Ok(None) => (),
+///             Err(err) => Err(err).unwrap()
+///         }
+///
+///         //Tick world/gamestate/etc.
+///         //Sleep till next frame.
 ///     }
-/// //}
+/// }
 /// ```
 pub struct Server<I,S> {
     //@todo: We could probably use a free list or something smarter here if
@@ -206,10 +212,8 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     }
 
     /// Updates time elapsed since last server iteration.
-    pub fn update(&mut self, elapsed: f64) -> Result<(), io::Error> {
+    pub fn update(&mut self, elapsed: f64) {
         self.internal.update(elapsed);
-
-        Ok(())
     }
     
     /// Checks for incoming packets, client connection and disconnections. Returns `None` when no more events
@@ -685,7 +689,7 @@ mod test {
         
         fn validate_challenge(&mut self) {
             let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
-            self.server.update(0.0).unwrap();
+            self.server.update(0.0);
             self.server.next_event(&mut data).unwrap();
         }
 
@@ -722,7 +726,7 @@ mod test {
 
         fn validate_response(&mut self) {
             let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
-            self.server.update(0.0).unwrap();
+            self.server.update(0.0);
             let event = self.server.next_event(&mut data);
 
             match event {
@@ -753,7 +757,7 @@ mod test {
         }
 
         fn validate_recv_payload(&mut self, payload: &[u8]) {
-            self.server.update(0.0).unwrap();
+            self.server.update(0.0);
             let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
 
             loop {
@@ -827,7 +831,7 @@ mod test {
         harness.send_connect_packet();
 
         let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
-        harness.server.update(0.0).unwrap();
+        harness.server.update(0.0);
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
             _ => assert!(false)
@@ -842,7 +846,7 @@ mod test {
         harness.send_connect_packet();
 
         let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
-        harness.server.update(0.0).unwrap();
+        harness.server.update(0.0);
         match harness.server.next_event(&mut data) {
             Ok(Some(ServerEvent::RejectedClient)) => {},
             _ => assert!(false)
@@ -868,7 +872,7 @@ mod test {
         harness.validate_recv_payload(&data);
 
         harness.socket.send_to(&packet[..plen], harness.server.get_local_addr().unwrap()).unwrap();
-        harness.server.update(0.0).unwrap();
+        harness.server.update(0.0);
         let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
         match harness.server.next_event(&mut scratch) {
             Ok(Some(ServerEvent::ReplayRejected(cid))) => assert_eq!(cid, CLIENT_ID),
@@ -926,7 +930,7 @@ mod test {
             loop {
                 netcode_network_simulator_update(sim.borrow_mut().sim, time);
 
-                harness.server.update(1.0 / 10.0).unwrap();
+                harness.server.update(1.0 / 10.0);
                 loop {
                     let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {
@@ -1014,7 +1018,7 @@ mod test {
             loop {
                 netcode_network_simulator_update(sim.borrow_mut().sim, time);
 
-                harness.server.update(1.0 / 10.0).unwrap();
+                harness.server.update(1.0 / 10.0);
                 loop {
                     let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.server.next_event(&mut data) {

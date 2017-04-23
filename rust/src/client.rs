@@ -232,10 +232,8 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
     }
 
     /// Updates time elapsed since last client iteration.
-    pub fn update(&mut self, elapsed: f64) -> Result<(), UpdateError> {
+    pub fn update(&mut self, elapsed: f64) {
         self.data.time += elapsed;
-
-        Ok(())
     }
 
     /// Checks for incoming packets and state changes. Returns `None` when no more events
@@ -314,7 +312,7 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
                             channel::UpdateResult::Noop => Ok(None)
                         }
                     },
-                    &mut InternalState::Disconnected => Ok(None)
+                    &mut InternalState::Disconnected => Ok(Some(ClientEvent::NewState(State::Disconnected)))
                 }
             },
             r => r
@@ -434,14 +432,14 @@ mod test {
 
         pub fn update_client(&mut self) -> Option<ClientEvent> {
             let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
-            self.client.update(0.0).unwrap();
+            self.client.update(0.0);
             self.client.next_event(&mut scratch).unwrap()
         }
 
         pub fn update_server(&mut self) -> Option<ServerEvent> {
             if let Some(ref mut server) = self.server {
                 let mut scratch = [0; NETCODE_MAX_PAYLOAD_SIZE];
-                server.update(0.0).unwrap();
+                server.update(0.0);
                 server.next_event(&mut scratch).unwrap()
             } else {
                 None
@@ -495,7 +493,7 @@ mod test {
             harness.client.send(&data[..i]).unwrap();
             if let Some(server) = harness.server.as_mut() {
                 {
-                    server.update(0.0).unwrap();
+                    server.update(0.0);
                     let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match server.next_event(&mut payload) {
                         Ok(Some(ServerEvent::Packet(client_id, len))) => {
@@ -512,7 +510,7 @@ mod test {
 
                 {
                     server.send(CLIENT_ID, &data[..i]).unwrap();
-                    harness.client.update(0.0).unwrap();
+                    harness.client.update(0.0);
                     let mut payload = [0; NETCODE_MAX_PAYLOAD_SIZE];
                     match harness.client.next_event(&mut payload) {
                         Ok(Some(ClientEvent::Packet(len))) => {

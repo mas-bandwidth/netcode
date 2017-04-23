@@ -35,3 +35,5 @@ Docker/netcode.io
 docs
 *.exe
 go/netcode/examples/client/client.exe
+target
+Cargo.lock
