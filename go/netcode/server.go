@@ -171,14 +171,13 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
-	packetBuffer := NewBufferFromBytes(packetData)
 	//log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	if clientIndex != -1 {
 		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection
 	}
 
-	if err := packet.Read(packetBuffer, size, s.protocolId, timestamp, readPacketKey, s.privateKey, s.allowedPackets, replayProtection); err != nil {
+	if err := packet.Read(packetData, size, s.protocolId, timestamp, readPacketKey, s.privateKey, s.allowedPackets, replayProtection); err != nil {
 		log.Printf("error reading packet: %s from %s\n", err, addr)
 		return
 	}
@@ -303,13 +302,13 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 	challengePacket.ChallengeTokenData = challengeBuf
 	challengePacket.ChallengeTokenSequence = challengeSequence
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.incGlobalSequence(), requestPacket.Token.ServerKey); err != nil {
 		log.Printf("server error while writing challenge packet\n")
 		return
 	}
 
-	s.sendGlobalPacket(buffer.Buf[:bytesWritten], addr)
+	s.sendGlobalPacket(buffer[:bytesWritten], addr)
 }
 
 func (s *Server) sendGlobalPacket(packetBuffer []byte, addr *net.UDPAddr) {
@@ -372,13 +371,13 @@ func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
 	var err error
 
 	deniedPacket := &DeniedPacket{}
-	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
+	packetBuffer := make([]byte, MAX_PACKET_BYTES)
 	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.incGlobalSequence(), sendKey); err != nil {
 		log.Printf("error creating denied packet: %s\n", err)
 		return
 	}
 
-	s.sendGlobalPacket(packetBuffer.Buf[:bytesWritten], addr)
+	s.sendGlobalPacket(packetBuffer[:bytesWritten], addr)
 }
 
 func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {

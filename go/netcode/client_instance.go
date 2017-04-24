@@ -22,12 +22,14 @@ type ClientInstance struct {
 	replayProtection *ReplayProtection
 	address          *net.UDPAddr
 	packetQueue      *PacketQueue
+	packetData       []byte
 }
 
 func NewClientInstance() *ClientInstance {
 	c := &ClientInstance{}
 	c.userData = make([]byte, USER_DATA_BYTES)
 	c.packetQueue = NewPacketQueue(PACKET_QUEUE_SIZE)
+	c.packetData = make([]byte, MAX_PACKET_BYTES)
 	c.replayProtection = NewReplayProtection()
 	return c
 }
@@ -44,20 +46,21 @@ func (c *ClientInstance) Clear() {
 	c.clientIndex = -1
 	c.encryptionIndex = -1
 	c.packetQueue.Clear()
+
+	// todo probably don't need to re-make these.
 	c.userData = make([]byte, USER_DATA_BYTES)
+	c.packetData = make([]byte, MAX_PACKET_BYTES)
 }
 
 func (c *ClientInstance) SendPacket(packet Packet, writePacketKey []byte, serverTime float64) error {
 	var bytesWritten int
 	var err error
 
-	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
-
-	if bytesWritten, err = packet.Write(packetBuffer, c.protocolId, c.sequence, writePacketKey); err != nil {
+	if bytesWritten, err = packet.Write(c.packetData, c.protocolId, c.sequence, writePacketKey); err != nil {
 		return errors.New("error: unable to write packet: " + err.Error())
 	}
 
-	if _, err := c.serverConn.WriteTo(packetBuffer.Buf[:bytesWritten], c.address); err != nil {
+	if _, err := c.serverConn.WriteTo(c.packetData[:bytesWritten], c.address); err != nil {
 		log.Printf("error writing to client: %s\n", err)
 	}
 

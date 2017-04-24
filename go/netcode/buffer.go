@@ -20,6 +20,14 @@ func NewBuffer(size int) *Buffer {
 	return b
 }
 
+// Creates a new Buffer using the original backing slice
+func NewBufferFromRef(buf []byte) *Buffer {
+	b := &Buffer{}
+	b.Buf = buf
+	b.Pos = 0
+	return b
+}
+
 // Creates a new buffer from a byte slice
 func NewBufferFromBytes(buf []byte) *Buffer {
 	b := &Buffer{}
