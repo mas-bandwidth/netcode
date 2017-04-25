@@ -34,6 +34,7 @@
 // NOTE: This has been modified to reduce allocations, still no where near as
 // good as golang.org/x/crypto/chacha20poly1305, but that package does not
 // support the original 64bit nonces.
+
 package netcode
 
 import (
@@ -98,7 +99,7 @@ func (k *chacha20Key) Seal(dst, nonce, plaintext, data []byte) []byte {
 
 	tag := tag(pk, plaintext, data)
 
-	return append(dst, append(plaintext, tag...)...)
+	return append(plaintext, tag...)
 }
 
 func (k *chacha20Key) Open(dst, nonce, ciphertext, data []byte) ([]byte, error) {
@@ -148,11 +149,14 @@ func tag(key [32]byte, ciphertext, data []byte) []byte {
 	binary.LittleEndian.PutUint64(m[len(data):], uint64(len(data)))
 
 	copy(m[len(data)+8:], ciphertext)
-	binary.LittleEndian.PutUint64(m[len(data)+8+len(ciphertext):],
-		uint64(len(ciphertext)))
+	binary.LittleEndian.PutUint64(m[len(data)+8+len(ciphertext):], uint64(len(ciphertext)))
 
 	var out [poly1305.TagSize]byte
 	poly1305.Sum(&out, m, &key)
 
 	return out[0:]
+}
+
+func roundTo16(n int) int {
+	return 16 * ((n + 15) / 16)
 }

@@ -378,10 +378,13 @@ func testBuildRequestPacket(connectTokenKey []byte, t *testing.T) (*RequestPacke
 		t.Fatalf("error writing private data: %s\n", err)
 	}
 
-	decryptedToken, err := connectToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
+	tokenData, err := connectToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
 	if err != nil {
 		t.Fatalf("error decrypting connect token: %s", err)
 	}
+	decryptedToken := make([]byte, len(tokenData))
+	copy(decryptedToken, tokenData)
+
 	// need to re-encrypt the private data
 	connectToken.PrivateData.TokenData.Reset()
 	// have to regrow the slice to contain MAC_BYTES

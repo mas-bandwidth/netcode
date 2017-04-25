@@ -53,12 +53,11 @@ func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToke
 
 	count := 0
 	ticks := 0
-	//time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
 	// fake game loop
 	for {
 
 		if clientTime > 6.0 {
-			log.Printf("client exiting recv'd %d payloads... from %d ticks", count, ticks)
+			log.Printf("client[%d] exiting recv'd %d payloads... from %d ticks", id, count, ticks)
 			wg.Done()
 			return
 		}

@@ -2,7 +2,6 @@ package netcode
 
 import (
 	"errors"
-	"log"
 	"net"
 )
 
@@ -35,7 +34,6 @@ func (p *ConnectTokenPrivate) Generate() error {
 func NewConnectTokenPrivateEncrypted(buffer []byte) *ConnectTokenPrivate {
 	p := &ConnectTokenPrivate{}
 	p.mac = make([]byte, MAC_BYTES)
-	log.Printf("private encrypted: %d\n", len(buffer))
 	p.TokenData = NewBufferFromRef(buffer)
 	return p
 }
@@ -91,7 +89,6 @@ func (token *ConnectTokenPrivate) Encrypt(protocolId, expireTimestamp, sequence 
 	}
 
 	if len(token.TokenData.Buf) != CONNECT_TOKEN_PRIVATE_BYTES {
-		log.Printf("%d %d\n", len(token.TokenData.Buf), CONNECT_TOKEN_PRIVATE_BYTES)
 		return errors.New("error in encrypt invalid token private byte size")
 	}
 
