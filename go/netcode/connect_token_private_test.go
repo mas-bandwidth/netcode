@@ -49,6 +49,10 @@ func TestConnectTokenPrivate(t *testing.T) {
 	testComparePrivateTokens(token1, token2, t)
 
 	token2.TokenData.Reset()
+	// have to regrow the slice to contain MAC_BYTES
+	mac := make([]byte, MAC_BYTES)
+	token2.TokenData.Buf = append(token2.TokenData.Buf, mac...)
+	t.Logf("%d\n", token2.TokenData.Len())
 	if _, err = token2.Write(); err != nil {
 		t.Fatalf("error writing token2 buffer")
 	}
