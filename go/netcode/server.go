@@ -293,7 +293,7 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 	challengeBuf := challenge.Write(requestPacket.Token.UserData)
 	challengeSequence := s.incChallengeSequence()
 
-	if err := EncryptChallengeToken(&challengeBuf, challengeSequence, s.challengeKey); err != nil {
+	if err := EncryptChallengeToken(challengeBuf, challengeSequence, s.challengeKey); err != nil {
 		log.Printf("server ignored connection request. failed to encrypt challenge token\n")
 		return
 	}

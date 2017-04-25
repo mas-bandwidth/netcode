@@ -2,7 +2,7 @@ package netcode
 
 import (
 	"crypto/rand"
-	"github.com/codahale/chacha20poly1305"
+	//"github.com/codahale/chacha20poly1305"
 )
 
 // Generates random bytes
@@ -18,19 +18,19 @@ func GenerateKey() ([]byte, error) {
 }
 
 // Encrypts the message in place with the nonce and key and optional additional buffer
-func EncryptAead(message *[]byte, additional, nonce, key []byte) error {
-	aead, err := chacha20poly1305.New(key)
+func EncryptAead(message []byte, additional, nonce, key []byte) error {
+	aead, err := NewChaChaInline(key)
 	if err != nil {
 		return err
 	}
-	*message = aead.Seal(nil, nonce, *message, additional)
+	message = aead.Seal(nil, nonce, message, additional)
 	return nil
 }
 
 // Decrypts the message with the nonce and key and optional additional buffer returning a copy
 // byte slice
 func DecryptAead(message []byte, additional, nonce, key []byte) ([]byte, error) {
-	aead, err := chacha20poly1305.New(key)
+	aead, err := NewChaChaInline(key)
 	if err != nil {
 		return nil, err
 	}

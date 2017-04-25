@@ -599,16 +599,17 @@ func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error)
 // Encrypts the packet data of the supplied buffer between encryptedStart and encrypedFinish.
 func encryptPacket(buffer *Buffer, encryptedStart, encryptedFinish int, prefixByte uint8, protocolId, sequence uint64, writePacketKey []byte) (int, error) {
 	// slice up the buffer for the bits we will encrypt
-	encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
+	//encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
 
 	additionalData, nonce := packetCryptData(prefixByte, protocolId, sequence)
-	if err := EncryptAead(&encryptedBuffer, additionalData, nonce, writePacketKey); err != nil {
+	if err := EncryptAead(buffer.Buf[encryptedStart:encryptedFinish], additionalData, nonce, writePacketKey); err != nil {
 		return -1, err
 	}
 
-	buffer.Pos = encryptedStart // reset position to start of where the encrypted data goes
-	buffer.WriteBytes(encryptedBuffer)
-	return buffer.Pos, nil // in c, we do Pos + MAC_BYTES but the WriteBytes will update buffer.Pos to include it
+	//buffer.Pos = encryptedStart // reset position to start of where the encrypted data goes
+	//buffer.WriteBytes(encryptedBuffer)
+	buffer.Pos += MAC_BYTES
+	return buffer.Pos, nil
 }
 
 // used for encrypting the per-packet packet written with the prefix byte, protocol id and version as the associated data. this must match to decrypt.
