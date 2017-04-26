@@ -76,13 +76,13 @@ Prior to encryption the private connect token data has the following binary form
 
 This data is variable size but for simplicity is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
-Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* using the following binary data as the _associated data_: 
+Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* using the following binary data as the _associated data_: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The nonce used for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. 
+The nonce used for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. The sequence number is extended by padding high bits with zero to create a 96 bit nonce.
 
 Encryption is performed on the first 1024 - 16 bytes in the buffer, leaving the last 16 bytes to store the HMAC:
 
@@ -143,7 +143,7 @@ Prior to encryption, challenge tokens have the following structure:
     [user data] (256 bytes)
     <zero pad to 300 bytes>
 
-Encryption of the challenge token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* with no associated data, a random key generated when the dedicated server starts, and a sequence number that starts at zero and increases with each challenge token generated.
+Encryption of the challenge token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with no associated data, a random key generated when the dedicated server starts, and a sequence number that starts at zero and increases with each challenge token generated. The sequence number is extended by padding high bits with zero to create a 96 bit nonce.
 
 Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
 
@@ -196,6 +196,8 @@ The sequence number bytes are _reversed_ when written to the packet like so:
         write_byte( sequence_number & 0xFF )
         sequence_number >>= 8
     }
+    
+The sequence number is 
 
 After the sequence number comes the per-packet type data:
 
@@ -226,11 +228,13 @@ _connection disconnect packet_:
     
     <no data>
 
-The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_encrypt* with the following binary data as the _associated data_: 
+The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with the following binary data as the _associated data_: 
 
     [version info] (13 bytes)       // "NETCODE 1.00" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
+
+The packet sequence number is extended by padding high bits with zero to create a 96 bit nonce.
 
 Packets sent from client to server are encrypted with the client to server key in the connect token.
 
