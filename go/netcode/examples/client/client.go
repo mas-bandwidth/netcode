@@ -6,11 +6,16 @@ import (
 	"flag"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
-	//"math/rand"
+	"math/rand"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+var totalPayloadCount uint64
+var totalSendCount uint64
+var totalTickCount uint64
 
 var tokenUrl string
 var numClients int
@@ -30,6 +35,7 @@ func main() {
 		go clientLoop(wg, id, token)
 	}
 	wg.Wait()
+	log.Printf("%d clients sent %d packets, recv'd %d payloads in %d ticks\n", numClients, totalSendCount, totalPayloadCount, totalTickCount)
 }
 
 func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToken) {
@@ -52,12 +58,20 @@ func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToke
 	}
 
 	count := 0
+	sendCount := 0
 	ticks := 0
+
+	// randomize start time so we don't flood ourselves/server
+	time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+
 	// fake game loop
 	for {
 
 		if clientTime > 6.0 {
 			log.Printf("client[%d] exiting recv'd %d payloads... from %d ticks", id, count, ticks)
+			atomic.AddUint64(&totalTickCount, uint64(ticks))
+			atomic.AddUint64(&totalPayloadCount, uint64(count))
+			atomic.AddUint64(&totalSendCount, uint64(sendCount))
 			wg.Done()
 			return
 		}
@@ -65,13 +79,13 @@ func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToke
 		c.Update(clientTime)
 		if c.GetState() == netcode.StateConnected {
 			c.SendData(packetData)
+			sendCount++
 		}
 
 		for {
 			if payload, _ := c.RecvData(); payload == nil {
 				break
 			} else {
-				//log.Printf("recv'd payload: of %d bytes with sequence: %d\n", len(payload), seq)
 				count++
 			}
 		}

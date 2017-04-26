@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +27,10 @@ var PRIVATE_KEY = []byte{0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea,
 
 var numClients int
 
+var totalPayloadCount uint64
+var totalSendCount uint64
+var totalTickCount uint64
+
 func init() {
 	flag.IntVar(&numClients, "num", 3, "number of clients to run concurrently")
 }
@@ -40,6 +45,7 @@ func main() {
 		go clientLoop(wg, token)
 	}
 	wg.Wait()
+	log.Printf("%d clients sent %d packets, recv'd %d payloads in %d ticks\n", numClients, totalSendCount, totalPayloadCount, totalTickCount)
 }
 
 func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
@@ -61,12 +67,18 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 	}
 
 	count := 0
-	time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
+	sendCount := 0
+	ticks := 0
+
+	time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
 	// fake game loop
 	for {
 
-		if clientTime > 20.0 {
+		if clientTime > 6.0 {
 			log.Printf("client exiting recv'd %d payloads...", count)
+			atomic.AddUint64(&totalTickCount, uint64(ticks))
+			atomic.AddUint64(&totalPayloadCount, uint64(count))
+			atomic.AddUint64(&totalSendCount, uint64(sendCount))
 			wg.Done()
 			return
 		}
@@ -74,6 +86,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 		c.Update(clientTime)
 		if c.GetState() == netcode.StateConnected {
 			c.SendData(packetData)
+			sendCount++
 		}
 
 		for {
@@ -86,6 +99,7 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 		}
 		time.Sleep(deltaTime)
 		clientTime += deltaTime.Seconds()
+		ticks++
 	}
 
 }

@@ -12,8 +12,8 @@ type NetcodeData struct {
 }
 
 const (
-	SOCKET_RCVBUF_SIZE = 1024 * 1024
-	SOCKET_SNDBUF_SIZE = 1024 * 1024
+	SOCKET_RCVBUF_SIZE = 2048 * 2048
+	SOCKET_SNDBUF_SIZE = 2048 * 2048
 )
 
 type NetcodeRecvHandler func(data *NetcodeData)

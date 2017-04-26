@@ -8,10 +8,8 @@ import (
 )
 
 const CLIENT_MAX_RECEIVE_PACKETS = 64
-const SERVER_MAX_RECEIVE_PACKETS = (64 * MAX_CLIENTS)
 const PACKET_SEND_RATE = 10.0
-const TIMEOUT_SECONDS = 5
-const NUM_DISCONNECT_PACKETS = 10
+const NUM_DISCONNECT_PACKETS = 10 // number of disconnect packets the client/server should send when disconnecting
 
 type Context struct {
 	WritePacketKey []byte
@@ -219,7 +217,7 @@ func (c *Client) Update(t float64) {
 
 	switch c.GetState() {
 	case StateSendingConnectionRequest:
-		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds*1000)
 		if timeout < c.time {
 			log.Printf("client[%d] connection request timed out.\n", c.id)
 			if c.connectNextServer() {
@@ -228,7 +226,7 @@ func (c *Client) Update(t float64) {
 			c.Disconnect(StateConnectionRequestTimedOut, false)
 		}
 	case StateSendingConnectionResponse:
-		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds*1000)
 		if timeout < c.time {
 			log.Printf("client[%d] connect failed. connection response timed out\n", c.id)
 			if c.connectNextServer() {
@@ -237,7 +235,7 @@ func (c *Client) Update(t float64) {
 			c.Disconnect(StateConnectionResponseTimedOut, false)
 		}
 	case StateConnected:
-		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds)
+		timeout := c.lastPacketRecvTime + float64(c.connectToken.TimeoutSeconds*1000)
 		if timeout < c.time {
 			log.Printf("client[%d] connection timed out\n", c.id)
 			c.Disconnect(StateConnectionTimedOut, false)

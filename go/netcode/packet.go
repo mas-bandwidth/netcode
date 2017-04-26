@@ -2,11 +2,9 @@ package netcode
 
 import (
 	"errors"
-	"log"
 	"strconv"
 )
 
-const MAX_CLIENTS = 60
 const CONNECT_TOKEN_PRIVATE_BYTES = 1024
 const CHALLENGE_TOKEN_BYTES = 300
 const VERSION_INFO_BYTES = 13
@@ -607,8 +605,6 @@ func encryptPacket(buffer *Buffer, encryptedStart, encryptedFinish int, prefixBy
 		return -1, err
 	}
 
-	//buffer.Pos = encryptedStart // reset position to start of where the encrypted data goes
-	//buffer.WriteBytes(encryptedBuffer)
 	buffer.Pos += MAC_BYTES
 	return buffer.Pos, nil
 }

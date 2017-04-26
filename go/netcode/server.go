@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+const TIMEOUT_SECONDS = 5 // default timeout for clients
+const MAX_SERVER_PACKETS = 64
+
 type Server struct {
 	serverConn       *NetcodeConn
 	serverAddr       *net.UDPAddr
@@ -45,7 +48,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
-	s.packetCh = make(chan *NetcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
+	s.packetCh = make(chan *NetcodeData, s.maxClients*MAX_SERVER_PACKETS*2)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -165,8 +168,6 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 		encryptionIndex = s.clientManager.FindEncryptionEntryIndex(addr, s.serverTime)
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
-
-	//log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
 
 	timestamp := uint64(time.Now().Unix())
 
