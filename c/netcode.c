@@ -809,10 +809,10 @@ int netcode_encrypt_aead( uint8_t * message, uint64_t message_length,
 
     #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
-        int result = crypto_aead_chacha20poly1305_encrypt( message, &encrypted_length,
-                                                           message, (unsigned long long) message_length,
-                                                           additional, (unsigned long long) additional_length,
-                                                           NULL, nonce, key );
+        int result = crypto_aead_chacha20poly1305_ietf_encrypt( message, &encrypted_length,
+                                                                message, (unsigned long long) message_length,
+                                                                additional, (unsigned long long) additional_length,
+                                                                NULL, nonce, key );
     
         if ( result != 0 )
             return 0;
@@ -821,10 +821,10 @@ int netcode_encrypt_aead( uint8_t * message, uint64_t message_length,
 
         uint8_t * temp = alloca( message_length + NETCODE_MAC_BYTES );
 
-        int result = crypto_aead_chacha20poly1305_encrypt( temp, &encrypted_length,
-                                                           message, (unsigned long long) message_length,
-                                                           additional, (unsigned long long) additional_length,
-                                                           NULL, nonce, key );
+        int result = crypto_aead_chacha20poly1305_ietf_encrypt( temp, &encrypted_length,
+                                                                message, (unsigned long long) message_length,
+                                                                additional, (unsigned long long) additional_length,
+                                                                NULL, nonce, key );
         
         if ( result != 0 )
             return 0;
@@ -850,11 +850,11 @@ int netcode_decrypt_aead( uint8_t * message, uint64_t message_length,
 
     #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
 
-        int result = crypto_aead_chacha20poly1305_decrypt( message, &decrypted_length,
-                                                           NULL,
-                                                           message, (unsigned long long) message_length,
-                                                           additional, (unsigned long long) additional_length,
-                                                           nonce, key );
+        int result = crypto_aead_chacha20poly1305_ietf_decrypt( message, &decrypted_length,
+                                                                NULL,
+                                                                message, (unsigned long long) message_length,
+                                                                additional, (unsigned long long) additional_length,
+                                                                nonce, key );
 
         if ( result != 0 )
             return 0;
@@ -863,11 +863,11 @@ int netcode_decrypt_aead( uint8_t * message, uint64_t message_length,
 
         uint8_t * temp = alloca( message_length );
 
-        int result = crypto_aead_chacha20poly1305_decrypt( temp, &decrypted_length,
-                                                           NULL,
-                                                           message, (unsigned long long) message_length,
-                                                           additional, (unsigned long long) additional_length,
-                                                           nonce, key );
+        int result = crypto_aead_chacha20poly1305_ietf_decrypt( temp, &decrypted_length,
+                                                                NULL,
+                                                                message, (unsigned long long) message_length,
+                                                                additional, (unsigned long long) additional_length,
+                                                                nonce, key );
         
         if ( result != 0 )
             return 0;
@@ -999,9 +999,10 @@ int netcode_encrypt_connect_token_private( uint8_t * buffer, int buffer_length, 
         netcode_write_uint64( &p, expire_timestamp );
     }
 
-    uint8_t nonce[8];
+    uint8_t nonce[12];
     {
         uint8_t * p = nonce;
+        netcode_write_uint32( &p, 0 );
         netcode_write_uint64( &p, sequence );
     }
 
@@ -1027,9 +1028,10 @@ int netcode_decrypt_connect_token_private( uint8_t * buffer, int buffer_length, 
         netcode_write_uint64( &p, expire_timestamp );
     }
 
-    uint8_t nonce[8];
+    uint8_t nonce[12];
     {
         uint8_t * p = nonce;
+        netcode_write_uint32( &p, 0 );
         netcode_write_uint64( &p, sequence );
     }
 
@@ -1131,9 +1133,10 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 
     (void) buffer_length;
 
-    uint8_t nonce[8];
+    uint8_t nonce[12];
     {
         uint8_t * p = nonce;
+        netcode_write_uint32( &p, 0 );
         netcode_write_uint64( &p, sequence );
     }
 
@@ -1151,9 +1154,10 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
 
     (void) buffer_length;
 
-    uint8_t nonce[8];
+    uint8_t nonce[12];
     {
         uint8_t * p = nonce;
+        netcode_write_uint32( &p, 0 );
         netcode_write_uint64( &p, sequence );
     }
 
@@ -1410,9 +1414,10 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
             netcode_write_uint8( &p, prefix_byte );
         }
 
-        uint8_t nonce[8];
+        uint8_t nonce[12];
         {
             uint8_t * p = nonce;
+            netcode_write_uint32( &p, 0 );
             netcode_write_uint64( &p, sequence );
         }
 
@@ -1644,9 +1649,10 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
             netcode_write_uint8( &p, prefix_byte );
         }
 
-        uint8_t nonce[8];
+        uint8_t nonce[12];
         {
             uint8_t * p = nonce;
+            netcode_write_uint32( &p, 0 );
             netcode_write_uint64( &p, *sequence );
         }
 
@@ -3044,9 +3050,9 @@ int netcode_encryption_manager_touch( struct netcode_encryption_manager_t * encr
 
 void netcode_encryption_manager_set_expire_time( struct netcode_encryption_manager_t * encryption_manager, int index, double expire_time )
 {
-	assert( index >= 0 );
-	assert( index < encryption_manager->num_encryption_mappings );
-	encryption_manager->expire_time[index] = expire_time;
+    assert( index >= 0 );
+    assert( index < encryption_manager->num_encryption_mappings );
+    encryption_manager->expire_time[index] = expire_time;
 }
 
 
@@ -3167,7 +3173,7 @@ struct netcode_server_t
     uint64_t client_sequence[NETCODE_MAX_CLIENTS];
     double client_last_packet_send_time[NETCODE_MAX_CLIENTS];
     double client_last_packet_receive_time[NETCODE_MAX_CLIENTS];
-	uint8_t client_user_data[NETCODE_MAX_CLIENTS][NETCODE_USER_DATA_BYTES];
+    uint8_t client_user_data[NETCODE_MAX_CLIENTS][NETCODE_USER_DATA_BYTES];
     struct netcode_replay_protection_t client_replay_protection[NETCODE_MAX_CLIENTS];
     struct netcode_packet_queue_t client_packet_queue[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
@@ -3252,7 +3258,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
-	memset( server->client_user_data, 0, NETCODE_USER_DATA_BYTES );
+    memset( server->client_user_data, 0, NETCODE_USER_DATA_BYTES );
 
     int i;
     for ( i = 0; i < NETCODE_MAX_CLIENTS; ++i )
@@ -3409,7 +3415,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->client_last_packet_receive_time[client_index] = 0.0;
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
-	memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
+    memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
 
     server->num_connected_clients--;
 
@@ -3635,9 +3641,9 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
 
     assert( server->client_connected[client_index] == 0 );
 
-	netcode_encryption_manager_set_expire_time( &server->encryption_manager, encryption_index, -1.0 );
+    netcode_encryption_manager_set_expire_time( &server->encryption_manager, encryption_index, -1.0 );
 
-	server->client_connected[client_index] = 1;
+    server->client_connected[client_index] = 1;
     server->client_encryption_index[client_index] = encryption_index;
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
@@ -5244,19 +5250,19 @@ void test_encryption_manager()
         check( !receive_key );
     }
 
-	// test the expire time for encryption mapping works as expected
+    // test the expire time for encryption mapping works as expected
 
     check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time, time + 1.0 ) );
 
     int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time );
 
-	check( encryption_index != -1 );
+    check( encryption_index != -1 );
 
     check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time + 1.1f ) == -1 );
 
     netcode_encryption_manager_set_expire_time( &encryption_manager, encryption_index, -1.0 );
 
-	check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == encryption_index );
+    check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == encryption_index );
 }
 
 void test_replay_protection()

@@ -31,4 +31,7 @@ TODO
     Should implement a client/server soak test, eg. repeated connect/disconnect, this is an important aspect to demonstrate stability of the server over time.
 
     Will also be good to check for memory leaks.
+
+    Val reports some memory trashing occuring in C reference implementation. Add some sentinel buffers and check for this.
+    
     
