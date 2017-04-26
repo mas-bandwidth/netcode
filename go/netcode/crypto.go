@@ -2,7 +2,7 @@ package netcode
 
 import (
 	"crypto/rand"
-	"github.com/codahale/chacha20poly1305"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // Generates random bytes
@@ -18,12 +18,12 @@ func GenerateKey() ([]byte, error) {
 }
 
 // Encrypts the message in place with the nonce and key and optional additional buffer
-func EncryptAead(message *[]byte, additional, nonce, key []byte) error {
+func EncryptAead(message []byte, additional, nonce, key []byte) error {
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
 		return err
 	}
-	*message = aead.Seal(nil, nonce, *message, additional)
+	aead.Seal(message[:0], nonce, message, additional)
 	return nil
 }
 
@@ -34,5 +34,6 @@ func DecryptAead(message []byte, additional, nonce, key []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	return aead.Open(nil, nonce, message, additional)
+	message, err = aead.Open(message[:0], nonce, message, additional)
+	return message, err
 }

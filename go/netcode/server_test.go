@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const testEnableServerCommsListen = true
+const testEnableServerCommsListen = false
 
 func TestServerListen(t *testing.T) {
 	if !testEnableServerCommsListen {

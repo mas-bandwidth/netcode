@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+const TIMEOUT_SECONDS = 5 // default timeout for clients
+const MAX_SERVER_PACKETS = 64
+
 type Server struct {
 	serverConn       *NetcodeConn
 	serverAddr       *net.UDPAddr
@@ -32,7 +35,7 @@ type Server struct {
 	challengeSequence uint64
 
 	recvBytes int
-	packetCh  chan *netcodeData
+	packetCh  chan *NetcodeData
 }
 
 func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64, maxClients int) *Server {
@@ -45,7 +48,7 @@ func NewServer(serverAddress *net.UDPAddr, privateKey []byte, protocolId uint64,
 	s.globalSequence = uint64(1) << 63
 	s.timeout = float64(TIMEOUT_SECONDS)
 	s.clientManager = NewClientManager(s.timeout, maxClients)
-	s.packetCh = make(chan *netcodeData, s.maxClients*SERVER_MAX_RECEIVE_PACKETS*2)
+	s.packetCh = make(chan *NetcodeData, s.maxClients*MAX_SERVER_PACKETS*2)
 	s.shutdownCh = make(chan struct{})
 
 	// set allowed packets for this server
@@ -94,6 +97,8 @@ func (s *Server) Init() error {
 		return err
 	}
 	s.serverConn = NewNetcodeConn()
+	s.serverConn.SetReadBuffer(SOCKET_RCVBUF_SIZE * s.maxClients)
+	s.serverConn.SetWriteBuffer(SOCKET_SNDBUF_SIZE * s.maxClients)
 	s.serverConn.SetRecvHandler(s.handleNetcodeData)
 	return nil
 }
@@ -131,18 +136,18 @@ func (s *Server) Update(time float64) error {
 		}
 	}
 DONE:
-	s.clientManager.SendPackets(s.serverTime)
+	s.clientManager.SendKeepAlives(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
 	return nil
 }
 
-// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// write the netcodeData to our buffered packet channel. The NetcodeConn verifies
 // that the recv'd data is > 0 < maxBytes and is of a valid packet type before
 // this is even called.
-// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
-// which is what we want since we want to synchronize access from the Update call.
-func (s *Server) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
-	s.packetCh <- &netcodeData{data: packetData, from: addr}
+// NOTE: we will block the netcodeConn from processing which is what we want since
+// we want to synchronize access from the Update call.
+func (s *Server) handleNetcodeData(packetData *NetcodeData) {
+	s.packetCh <- packetData
 }
 
 func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
@@ -164,19 +169,15 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	}
 	readPacketKey = s.clientManager.GetEncryptionEntryRecvKey(encryptionIndex)
 
-	//log.Printf("%s net client connected encIndex: %d clientIndex: %d", s.serverAddr.String(), encryptionIndex, clientIndex)
-
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
-	packetBuffer := NewBufferFromBytes(packetData)
-	//log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	if clientIndex != -1 {
 		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection
 	}
 
-	if err := packet.Read(packetBuffer, size, s.protocolId, timestamp, readPacketKey, s.privateKey, s.allowedPackets, replayProtection); err != nil {
+	if err := packet.Read(packetData, size, s.protocolId, timestamp, readPacketKey, s.privateKey, s.allowedPackets, replayProtection); err != nil {
 		log.Printf("error reading packet: %s from %s\n", err, addr)
 		return
 	}
@@ -292,7 +293,7 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 	challengeBuf := challenge.Write(requestPacket.Token.UserData)
 	challengeSequence := s.incChallengeSequence()
 
-	if err := EncryptChallengeToken(&challengeBuf, challengeSequence, s.challengeKey); err != nil {
+	if err := EncryptChallengeToken(challengeBuf, challengeSequence, s.challengeKey); err != nil {
 		log.Printf("server ignored connection request. failed to encrypt challenge token\n")
 		return
 	}
@@ -301,13 +302,13 @@ func (s *Server) sendChallengePacket(requestPacket *RequestPacket, addr *net.UDP
 	challengePacket.ChallengeTokenData = challengeBuf
 	challengePacket.ChallengeTokenSequence = challengeSequence
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 	if bytesWritten, err = challengePacket.Write(buffer, s.protocolId, s.incGlobalSequence(), requestPacket.Token.ServerKey); err != nil {
 		log.Printf("server error while writing challenge packet\n")
 		return
 	}
 
-	s.sendGlobalPacket(buffer.Buf[:bytesWritten], addr)
+	s.sendGlobalPacket(buffer[:bytesWritten], addr)
 }
 
 func (s *Server) sendGlobalPacket(packetBuffer []byte, addr *net.UDPAddr) {
@@ -370,13 +371,13 @@ func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
 	var err error
 
 	deniedPacket := &DeniedPacket{}
-	packetBuffer := NewBuffer(MAX_PACKET_BYTES)
+	packetBuffer := make([]byte, MAX_PACKET_BYTES)
 	if bytesWritten, err = deniedPacket.Write(packetBuffer, s.protocolId, s.incGlobalSequence(), sendKey); err != nil {
 		log.Printf("error creating denied packet: %s\n", err)
 		return
 	}
 
-	s.sendGlobalPacket(packetBuffer.Buf[:bytesWritten], addr)
+	s.sendGlobalPacket(packetBuffer[:bytesWritten], addr)
 }
 
 func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
@@ -407,7 +408,7 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	packet := &KeepAlivePacket{}
 	packet.ClientIndex = uint32(clientIndex)
 	packet.MaxClients = uint32(s.maxClients)
-	log.Printf("sendKeepAlive: %d %#v\n", client.clientId, client.address)
+
 	if !s.clientManager.TouchEncryptionEntry(client.encryptionIndex, client.address, s.serverTime) {
 		log.Printf("error: encryption mapping is out of date for client %d encIndex: %d addr: %s\n", clientIndex, client.encryptionIndex, client.address.String())
 		panic("bloop")

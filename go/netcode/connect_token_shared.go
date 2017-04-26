@@ -2,7 +2,6 @@ package netcode
 
 import (
 	"errors"
-	"log"
 	"net"
 	"strconv"
 )
@@ -38,7 +37,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("read %d servers\n", servers)
+
 	if servers <= 0 {
 		return errors.New("empty servers")
 	}

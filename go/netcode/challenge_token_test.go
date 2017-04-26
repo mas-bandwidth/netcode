@@ -23,7 +23,7 @@ func TestNewChallengeToken(t *testing.T) {
 		t.Fatalf("error generating key\n")
 	}
 
-	if err := EncryptChallengeToken(&tokenBuffer, sequence, key); err != nil {
+	if err := EncryptChallengeToken(tokenBuffer, sequence, key); err != nil {
 		t.Fatalf("error encrypting challenge token: %s\n", err)
 	}
 

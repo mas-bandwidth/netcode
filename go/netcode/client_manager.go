@@ -175,7 +175,7 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 		entry := m.cryptoEntries[i]
 
 		lastAccessTimeout := entry.lastAccess + m.timeout
-		if entry.address != nil && addressEqual(entry.address, addr) && (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) {
+		if entry.address != nil && addressEqual(entry.address, addr) && serverTimedout(lastAccessTimeout, serverTime) {
 			entry.expireTime = expireTime
 			entry.lastAccess = serverTime
 			copy(entry.sendKey, connectToken.ServerKey)
@@ -194,7 +194,6 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 			entry.lastAccess = serverTime
 			copy(entry.sendKey, connectToken.ServerKey)
 			copy(entry.recvKey, connectToken.ClientKey)
-			log.Printf("added new encryption mapping for %s encIdx: %d\n", addr.String(), i)
 			if i+1 > m.numCryptoEntries {
 				m.numCryptoEntries = i + 1
 			}
@@ -213,23 +212,20 @@ func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime f
 		}
 
 		lastAccessTimeout := entry.lastAccess + m.timeout
-		if addressEqual(entry.address, addr) && (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
+		if addressEqual(entry.address, addr) && serverTimedout(lastAccessTimeout, serverTime) && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
 			entry.lastAccess = serverTime
 			return i
 		}
 	}
-	log.Printf("unable to find encryption entry for %s\n", addr.String())
 	return -1
 }
 
 func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serverTime float64) bool {
-
 	if index < 0 || index > m.numCryptoEntries {
 		return false
 	}
 
 	if !addressEqual(m.cryptoEntries[index].address, addr) {
-		log.Printf("Touch: idx %d addr %s != %s\n", index, m.cryptoEntries[index].address.String(), addr.String())
 		return false
 	}
 
@@ -259,7 +255,7 @@ func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime floa
 			index := i - 1
 			for index >= 0 {
 				lastAccessTimeout := m.cryptoEntries[index].lastAccess + m.timeout
-				if (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime)) && (m.cryptoEntries[index].expireTime < 0 || m.cryptoEntries[index].expireTime > serverTime) {
+				if serverTimedout(lastAccessTimeout, serverTime) && (m.cryptoEntries[index].expireTime < 0 || m.cryptoEntries[index].expireTime > serverTime) {
 					break
 				}
 				index--
@@ -323,7 +319,7 @@ func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 	}
 }
 
-func (m *ClientManager) SendPackets(serverTime float64) {
+func (m *ClientManager) SendKeepAlives(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
 		if !instance.connected {
@@ -336,7 +332,7 @@ func (m *ClientManager) SendPackets(serverTime float64) {
 		}
 
 		shouldSendTime := instance.lastSendTime + float64(1.0/PACKET_SEND_RATE)
-		if instance.connected && (shouldSendTime < serverTime || floatEquals(shouldSendTime, serverTime)) {
+		if shouldSendTime < serverTime || floatEquals(shouldSendTime, serverTime) {
 			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
 				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
 				continue
@@ -410,4 +406,9 @@ func floatEquals(a, b float64) bool {
 		return true
 	}
 	return false
+}
+
+// checks if last access + timeout is > or = to serverTime.
+func serverTimedout(lastAccessTimeout, serverTime float64) bool {
+	return (lastAccessTimeout > serverTime || floatEquals(lastAccessTimeout, serverTime))
 }

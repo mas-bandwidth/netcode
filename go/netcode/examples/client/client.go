@@ -4,29 +4,25 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"flag"
-	"github.com/wirepair/netcode.io/go/netcode"
+	"github.com/networkprotocol/netcode.io/go/netcode"
 	"log"
 	"math/rand"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-const (
-	PROTOCOL_ID          = 0x1122334455667788
-	CONNECT_TOKEN_EXPIRY = 30
-	SERVER_PORT          = 40000
-	CLIENT_ID            = 0x1
-	SEQUENCE_START       = 1000
-	TIMEOUT_SECONDS      = 1
-)
+var totalPayloadCount uint64
+var totalSendCount uint64
+var totalTickCount uint64
 
 var tokenUrl string
 var numClients int
 
 func init() {
 	flag.StringVar(&tokenUrl, "url", "http://localhost:8880/token", "site that gives out free tokens")
-	flag.IntVar(&numClients, "num", 3, "number of clients to run concurrently")
+	flag.IntVar(&numClients, "num", 256, "number of clients to run concurrently")
 }
 
 func main() {
@@ -35,37 +31,47 @@ func main() {
 
 	for i := 0; i < numClients; i += 1 {
 		wg.Add(1)
-		token := getConnectToken()
-		go clientLoop(wg, token)
+		token, id := getConnectToken()
+		go clientLoop(wg, id, token)
 	}
 	wg.Wait()
+	log.Printf("%d clients sent %d packets, recv'd %d payloads in %d ticks\n", numClients, totalSendCount, totalPayloadCount, totalTickCount)
 }
 
-func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
+func clientLoop(wg *sync.WaitGroup, id uint64, connectToken *netcode.ConnectToken) {
 
 	clientTime := float64(0)
 	delta := float64(1.0 / 60.0)
 	deltaTime := time.Duration(delta * float64(time.Second))
 
 	c := netcode.NewClient(connectToken)
+	c.SetId(id)
 
 	if err := c.Connect(); err != nil {
 		log.Fatalf("error connecting: %s\n", err)
 	}
 
 	log.Printf("client connected, local address: %s\n", c.LocalAddr())
-	packetData := make([]byte, 64)
+	packetData := make([]byte, netcode.MAX_PAYLOAD_BYTES)
 	for i := 0; i < len(packetData); i += 1 {
 		packetData[i] = byte(i)
 	}
 
 	count := 0
-	time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
+	sendCount := 0
+	ticks := 0
+
+	// randomize start time so we don't flood ourselves/server
+	time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+
 	// fake game loop
 	for {
 
 		if clientTime > 6.0 {
-			log.Printf("client exiting recv'd %d payloads...", count)
+			log.Printf("client[%d] exiting recv'd %d payloads... from %d ticks", id, count, ticks)
+			atomic.AddUint64(&totalTickCount, uint64(ticks))
+			atomic.AddUint64(&totalPayloadCount, uint64(count))
+			atomic.AddUint64(&totalSendCount, uint64(sendCount))
 			wg.Done()
 			return
 		}
@@ -73,18 +79,19 @@ func clientLoop(wg *sync.WaitGroup, connectToken *netcode.ConnectToken) {
 		c.Update(clientTime)
 		if c.GetState() == netcode.StateConnected {
 			c.SendData(packetData)
+			sendCount++
 		}
 
 		for {
 			if payload, _ := c.RecvData(); payload == nil {
 				break
 			} else {
-				//log.Printf("recv'd payload: of %d bytes with sequence: %d\n", len(payload), seq)
 				count++
 			}
 		}
 		time.Sleep(deltaTime)
 		clientTime += deltaTime.Seconds()
+		ticks++
 	}
 
 }
@@ -95,7 +102,7 @@ type WebToken struct {
 	ConnectToken string `json:"connect_token"`
 }
 
-func getConnectToken() *netcode.ConnectToken {
+func getConnectToken() (*netcode.ConnectToken, uint64) {
 
 	resp, err := http.Get(tokenUrl)
 	if err != nil {
@@ -118,5 +125,5 @@ func getConnectToken() *netcode.ConnectToken {
 	if err != nil {
 		log.Fatalf("error reading connect token: %s\n", err)
 	}
-	return token
+	return token, webToken.ClientId
 }

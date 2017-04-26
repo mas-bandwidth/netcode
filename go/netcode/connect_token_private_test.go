@@ -34,7 +34,9 @@ func TestConnectTokenPrivate(t *testing.T) {
 		t.Fatalf("error encrypting token: %s\n", err)
 	}
 
-	token2 := NewConnectTokenPrivateEncrypted(token1.Buffer())
+	encryptedToken := make([]byte, len(token1.Buffer()))
+	copy(encryptedToken, token1.Buffer())
+	token2 := NewConnectTokenPrivateEncrypted(encryptedToken)
 
 	if _, err := token2.Decrypt(TEST_PROTOCOL_ID, expireTimestamp, TEST_SEQUENCE_START, TEST_PRIVATE_KEY); err != nil {
 		t.Fatalf("error decrypting token: %s", err)
@@ -47,6 +49,11 @@ func TestConnectTokenPrivate(t *testing.T) {
 	testComparePrivateTokens(token1, token2, t)
 
 	token2.TokenData.Reset()
+
+	// have to regrow the slice to contain space for MAC_BYTES
+	mac := make([]byte, MAC_BYTES)
+	token2.TokenData.Buf = append(token2.TokenData.Buf, mac...)
+
 	if _, err = token2.Write(); err != nil {
 		t.Fatalf("error writing token2 buffer")
 	}
