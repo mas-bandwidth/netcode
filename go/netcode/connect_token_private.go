@@ -84,7 +84,8 @@ func (p *ConnectTokenPrivate) Write() ([]byte, error) {
 // Encrypts, in place, the TokenData buffer, assumes Write() has already been called.
 func (token *ConnectTokenPrivate) Encrypt(protocolId, expireTimestamp, sequence uint64, privateKey []byte) error {
 	additionalData, nonce := buildTokenCryptData(protocolId, expireTimestamp, sequence)
-	if err := EncryptAead(token.TokenData.Buf[:CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES], additionalData, nonce, privateKey); err != nil {
+	encBuf := token.TokenData.Buf[:CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES]
+	if err := EncryptAead(encBuf, additionalData, nonce, privateKey); err != nil {
 		return err
 	}
 
@@ -121,7 +122,8 @@ func buildTokenCryptData(protocolId, expireTimestamp, sequence uint64) ([]byte, 
 	additionalData.WriteUint64(protocolId)
 	additionalData.WriteUint64(expireTimestamp)
 
-	nonce := NewBuffer(SizeUint64)
+	nonce := NewBuffer(SizeUint64 + SizeUint32)
+	nonce.WriteUint32(0)
 	nonce.WriteUint64(sequence)
 	return additionalData.Buf, nonce.Buf
 }

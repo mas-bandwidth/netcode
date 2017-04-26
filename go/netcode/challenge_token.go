@@ -27,15 +27,18 @@ func (t *ChallengeToken) Write(userData []byte) []byte {
 
 // Encrypts the TokenData buffer with the sequence nonce and provided key
 func EncryptChallengeToken(tokenBuffer []byte, sequence uint64, key []byte) error {
-	nonce := NewBuffer(SizeUint64)
+	nonce := NewBuffer(SizeUint64 + SizeUint32)
+	nonce.WriteUint32(0)
 	nonce.WriteUint64(sequence)
-	return EncryptAead(tokenBuffer[:CHALLENGE_TOKEN_BYTES-MAC_BYTES], nil, nonce.Bytes(), key)
+	err := EncryptAead(tokenBuffer[:CHALLENGE_TOKEN_BYTES-MAC_BYTES], nil, nonce.Bytes(), key)
+	return err
 }
 
 // Decrypts the TokenData buffer with the sequence nonce and provided key, updating the
 // internal TokenData buffer
 func DecryptChallengeToken(tokenBuffer []byte, sequence uint64, key []byte) ([]byte, error) {
-	nonce := NewBuffer(SizeUint64)
+	nonce := NewBuffer(SizeUint64 + SizeUint32)
+	nonce.WriteUint32(0)
 	nonce.WriteUint64(sequence)
 	return DecryptAead(tokenBuffer, nil, nonce.Bytes(), key)
 }

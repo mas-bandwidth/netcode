@@ -599,10 +599,11 @@ func writePacketPrefix(p Packet, buffer *Buffer, sequence uint64) (uint8, error)
 // Encrypts the packet data of the supplied buffer between encryptedStart and encrypedFinish.
 func encryptPacket(buffer *Buffer, encryptedStart, encryptedFinish int, prefixByte uint8, protocolId, sequence uint64, writePacketKey []byte) (int, error) {
 	// slice up the buffer for the bits we will encrypt
-	//encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
+	encryptedBuffer := buffer.Buf[encryptedStart:encryptedFinish]
 
 	additionalData, nonce := packetCryptData(prefixByte, protocolId, sequence)
-	if err := EncryptAead(buffer.Buf[encryptedStart:encryptedFinish], additionalData, nonce, writePacketKey); err != nil {
+
+	if err := EncryptAead(encryptedBuffer, additionalData, nonce, writePacketKey); err != nil {
 		return -1, err
 	}
 
@@ -619,7 +620,8 @@ func packetCryptData(prefixByte uint8, protocolId, sequence uint64) ([]byte, []b
 	additionalData.WriteUint64(protocolId)
 	additionalData.WriteUint8(prefixByte)
 
-	nonce := NewBuffer(SizeUint64)
+	nonce := NewBuffer(SizeUint64 + SizeUint32)
+	nonce.WriteUint32(0)
 	nonce.WriteUint64(sequence)
 	return additionalData.Buf, nonce.Buf
 }
