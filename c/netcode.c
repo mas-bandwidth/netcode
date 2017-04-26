@@ -4303,8 +4303,7 @@ static void test_queue()
 
         for ( i = 0; i < NUM_PACKETS; ++i )
         {
-            uint64_t sequence;
-
+            uint64_t sequence = 0;
             void * packet = netcode_packet_queue_pop( &queue, &sequence );
             check( sequence == (uint64_t) i ) ;
             check( packet == packets[i] );
@@ -4339,7 +4338,7 @@ static void test_queue()
 
     for ( i = 0; i < NETCODE_PACKET_QUEUE_SIZE; ++i )
     {
-        uint64_t sequence;
+        uint64_t sequence = 0;
         void * packet = netcode_packet_queue_pop( &queue, &sequence );
         check( sequence == (uint64_t) i );
         check( packet == packets[i] );

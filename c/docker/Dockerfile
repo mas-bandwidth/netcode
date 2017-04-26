@@ -32,6 +32,8 @@ ADD netcode.io /app/netcode.io
 
 RUN cd netcode.io && find . -exec touch {} \; && premake5 gmake && make -j32 test client server client_server config=release_x64 && cp ./bin/* /app && rm -rf netcode.io
 
+EXPOSE 40000/udp
+
 ENTRYPOINT ./server
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
