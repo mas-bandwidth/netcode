@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	//"github.com/pkg/profile"
+	"github.com/pkg/profile"
 	"github.com/wirepair/netcode.io/go/netcode"
 	"log"
 	"net"
@@ -63,8 +63,8 @@ func main() {
 		serverAddrs[i] = addr
 	}
 
-	//p := profile.Start(profile.TraceProfile, profile.ProfilePath("."), profile.NoShutdownHook)
-	//defer p.Stop()
+	p := profile.Start(profile.MemProfile, profile.ProfilePath("."), profile.NoShutdownHook)
+	defer p.Stop()
 
 	// start our netcode servers
 	for i := 0; i < numServers; i += 1 {

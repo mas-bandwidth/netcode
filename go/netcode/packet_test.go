@@ -63,7 +63,7 @@ func TestConnectionRequestPacket(t *testing.T) {
 	inputPacket, decryptedToken := testBuildRequestPacket(connectTokenKey, t)
 
 	// write the connection request packet to a buffer
-	buffer := NewBuffer(2048)
+	buffer := make([]byte, 2048)
 	packetKey, err := GenerateKey()
 	if err != nil {
 		t.Fatalf("error generating key")
@@ -85,7 +85,7 @@ func TestConnectionRequestPacket(t *testing.T) {
 
 	outputPacket := &RequestPacket{}
 
-	buffer.Reset()
+	//
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, connectTokenKey, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
@@ -115,7 +115,7 @@ func TestConnectionDeniedPacket(t *testing.T) {
 	// setup a connection denied packet
 	inputPacket := &DeniedPacket{}
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -138,7 +138,7 @@ func TestConnectionDeniedPacket(t *testing.T) {
 	}
 
 	outputPacket := &DeniedPacket{}
-	buffer.Reset()
+
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
@@ -159,7 +159,7 @@ func TestConnectionChallengePacket(t *testing.T) {
 		t.Fatalf("error generating random bytes")
 	}
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -182,7 +182,7 @@ func TestConnectionChallengePacket(t *testing.T) {
 	}
 
 	outputPacket := &ChallengePacket{}
-	buffer.Reset()
+
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
@@ -207,7 +207,7 @@ func TestConnectionResponsePacket(t *testing.T) {
 		t.Fatalf("error generating random bytes")
 	}
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -230,7 +230,7 @@ func TestConnectionResponsePacket(t *testing.T) {
 	}
 
 	outputPacket := &ResponsePacket{}
-	buffer.Reset()
+
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
@@ -252,7 +252,7 @@ func TestConnectionKeepAlivePacket(t *testing.T) {
 	inputPacket.ClientIndex = 10
 	inputPacket.MaxClients = 16
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -275,7 +275,7 @@ func TestConnectionKeepAlivePacket(t *testing.T) {
 	}
 
 	outputPacket := &KeepAlivePacket{}
-	buffer.Reset()
+
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
 	}
@@ -298,7 +298,7 @@ func TestConnectionPayloadPacket(t *testing.T) {
 
 	inputPacket := NewPayloadPacket(payloadData)
 
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -320,7 +320,6 @@ func TestConnectionPayloadPacket(t *testing.T) {
 		allowedPackets[i] = 1
 	}
 
-	buffer.Reset()
 	outputPacket := &PayloadPacket{}
 
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
@@ -338,7 +337,7 @@ func TestConnectionPayloadPacket(t *testing.T) {
 
 func TestDisconnectPacket(t *testing.T) {
 	inputPacket := &DisconnectPacket{}
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 
 	packetKey, err := GenerateKey()
 	if err != nil {
@@ -360,7 +359,6 @@ func TestDisconnectPacket(t *testing.T) {
 		allowedPackets[i] = 1
 	}
 
-	buffer.Reset()
 	outputPacket := &DisconnectPacket{}
 	if err := outputPacket.Read(buffer, bytesWritten, TEST_PROTOCOL_ID, uint64(time.Now().Unix()), packetKey, nil, allowedPackets, nil); err != nil {
 		t.Fatalf("error reading packet: %s\n", err)
@@ -380,11 +378,18 @@ func testBuildRequestPacket(connectTokenKey []byte, t *testing.T) (*RequestPacke
 		t.Fatalf("error writing private data: %s\n", err)
 	}
 
-	decryptedToken, err := connectToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
+	tokenData, err := connectToken.PrivateData.Decrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey)
 	if err != nil {
 		t.Fatalf("error decrypting connect token: %s", err)
 	}
+	decryptedToken := make([]byte, len(tokenData))
+	copy(decryptedToken, tokenData)
+
 	// need to re-encrypt the private data
+	connectToken.PrivateData.TokenData.Reset()
+	// have to regrow the slice to contain MAC_BYTES
+	mac := make([]byte, MAC_BYTES)
+	connectToken.PrivateData.TokenData.Buf = append(connectToken.PrivateData.TokenData.Buf, mac...)
 	if err := connectToken.PrivateData.Encrypt(TEST_PROTOCOL_ID, connectToken.ExpireTimestamp, TEST_SEQUENCE_START, connectTokenKey); err != nil {
 		t.Fatalf("error re-encrypting connect private token: %s\n", err)
 	}

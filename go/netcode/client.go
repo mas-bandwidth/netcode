@@ -316,13 +316,13 @@ func (c *Client) send() error {
 }
 
 func (c *Client) sendPacket(packet Packet) error {
-	buffer := NewBuffer(MAX_PACKET_BYTES)
+	buffer := make([]byte, MAX_PACKET_BYTES)
 	packet_bytes, err := packet.Write(buffer, c.connectToken.ProtocolId, c.sequence, c.context.WritePacketKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.conn.Write(buffer.Buf[:packet_bytes])
+	_, err = c.conn.Write(buffer[:packet_bytes])
 	if err != nil {
 		log.Printf("error writing packet %s to server: %s\n", packetTypeMap[packet.GetType()], err)
 	}
@@ -361,8 +361,7 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
-	packetBuffer := NewBufferFromBytes(packetData)
-	if err = packet.Read(packetBuffer, size, c.connectToken.ProtocolId, timestamp, c.context.ReadPacketKey, nil, c.allowedPackets, c.replayProtection); err != nil {
+	if err = packet.Read(packetData, size, c.connectToken.ProtocolId, timestamp, c.context.ReadPacketKey, nil, c.allowedPackets, c.replayProtection); err != nil {
 		log.Printf("error reading packet: %s\n", err)
 	}
 

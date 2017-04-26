@@ -14,7 +14,7 @@ func TestConnectToken(t *testing.T) {
 	server := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000}
 	servers := make([]net.UDPAddr, 1)
 	servers[0] = server
-	t.Logf("ip: %#v\n", server.IP)
+
 	if key, err = GenerateKey(); err != nil {
 		t.Fatalf("error generating key %s\n", key)
 	}

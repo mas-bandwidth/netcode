@@ -17,7 +17,7 @@ type ConnectTokenPrivate struct {
 // Create a new connect token private with an empty TokenData buffer
 func NewConnectTokenPrivate(clientId uint64, serverAddrs []net.UDPAddr, userData []byte) *ConnectTokenPrivate {
 	p := &ConnectTokenPrivate{}
-	p.TokenData = NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES - MAC_BYTES)
+	p.TokenData = NewBuffer(CONNECT_TOKEN_PRIVATE_BYTES)
 	p.ClientId = clientId
 	p.UserData = userData
 	p.ServerAddrs = serverAddrs
@@ -34,7 +34,7 @@ func (p *ConnectTokenPrivate) Generate() error {
 func NewConnectTokenPrivateEncrypted(buffer []byte) *ConnectTokenPrivate {
 	p := &ConnectTokenPrivate{}
 	p.mac = make([]byte, MAC_BYTES)
-	p.TokenData = NewBufferFromBytes(buffer)
+	p.TokenData = NewBufferFromRef(buffer)
 	return p
 }
 
@@ -84,12 +84,13 @@ func (p *ConnectTokenPrivate) Write() ([]byte, error) {
 // Encrypts, in place, the TokenData buffer, assumes Write() has already been called.
 func (token *ConnectTokenPrivate) Encrypt(protocolId, expireTimestamp, sequence uint64, privateKey []byte) error {
 	additionalData, nonce := buildTokenCryptData(protocolId, expireTimestamp, sequence)
-	if err := EncryptAead(&token.TokenData.Buf, additionalData, nonce, privateKey); err != nil {
+	encBuf := token.TokenData.Buf[:CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES]
+	if err := EncryptAead(encBuf, additionalData, nonce, privateKey); err != nil {
 		return err
 	}
 
 	if len(token.TokenData.Buf) != CONNECT_TOKEN_PRIVATE_BYTES {
-		return errors.New("invalid token private byte size")
+		return errors.New("error in encrypt invalid token private byte size")
 	}
 
 	copy(token.mac, token.TokenData.Buf[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:])
@@ -102,7 +103,7 @@ func (p *ConnectTokenPrivate) Decrypt(protocolId, expireTimestamp, sequence uint
 	var err error
 
 	if len(p.TokenData.Buf) != CONNECT_TOKEN_PRIVATE_BYTES {
-		return nil, errors.New("invalid token private byte size")
+		return nil, errors.New("error in decrypt invalid token private byte size")
 	}
 
 	copy(p.mac, p.TokenData.Buf[CONNECT_TOKEN_PRIVATE_BYTES-MAC_BYTES:])
@@ -121,7 +122,8 @@ func buildTokenCryptData(protocolId, expireTimestamp, sequence uint64) ([]byte, 
 	additionalData.WriteUint64(protocolId)
 	additionalData.WriteUint64(expireTimestamp)
 
-	nonce := NewBuffer(SizeUint64)
+	nonce := NewBuffer(SizeUint64 + SizeUint32)
+	nonce.WriteUint32(0)
 	nonce.WriteUint64(sequence)
 	return additionalData.Buf, nonce.Buf
 }
