@@ -369,7 +369,6 @@ func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 }
 
 func (c *Client) processPacket(packet Packet, sequence uint64) {
-	//log.Printf("processing packet of type: %s\n", packetTypeMap[packet.GetType()])
 
 	state := c.GetState()
 	switch packet.GetType() {

@@ -171,7 +171,6 @@ func (s *Server) OnPacketData(packetData []byte, addr *net.UDPAddr) {
 	timestamp := uint64(time.Now().Unix())
 
 	packet := NewPacket(packetData)
-	//log.Printf("processing %s packet\n", packetTypeMap[packet.GetType()])
 	if clientIndex != -1 {
 		client := s.clientManager.instances[clientIndex]
 		replayProtection = client.replayProtection

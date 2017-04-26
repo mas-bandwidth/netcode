@@ -257,9 +257,9 @@ func (p *ChallengePacket) Read(packetData []byte, packetLen int, protocolId, cur
 	if err != nil {
 		return err
 	}
+
 	p.sequence = sequence
 	if decryptedBuf.Len() != 8+CHALLENGE_TOKEN_BYTES {
-		log.Printf("len: %d expected: %d\n", decryptedBuf.Len(), 8+CHALLENGE_TOKEN_BYTES)
 		return errors.New("ignored connection challenge packet. decrypted packet data is wrong size")
 	}
 
