@@ -72,12 +72,14 @@ type Client struct {
 	conn             *NetcodeConn
 	packetQueue      *PacketQueue
 	allowedPackets   []byte
+	packetCh         chan *netcodeData
 }
 
 func NewClient(connectToken *ConnectToken) *Client {
 	c := &Client{connectToken: connectToken}
 	c.lastPacketRecvTime = -1
 	c.lastPacketSendTime = -1
+	c.packetCh = make(chan *netcodeData, PACKET_QUEUE_SIZE)
 	c.setState(StateDisconnected)
 	c.shouldDisconnect = false
 	c.challengeData = make([]byte, CHALLENGE_TOKEN_BYTES)
@@ -114,7 +116,7 @@ func (c *Client) Connect() error {
 	c.serverAddress = &c.connectToken.ServerAddrs[c.serverIndex]
 
 	c.conn = NewNetcodeConn()
-	c.conn.SetRecvHandler(c.onPacketData)
+	c.conn.SetRecvHandler(c.handleNetcodeData)
 	if err = c.conn.Dial(c.serverAddress); err != nil {
 		return err
 	}
@@ -152,10 +154,15 @@ func (c *Client) resetConnectionData(newState ClientState) {
 	c.setState(newState)
 	c.Reset()
 	c.packetQueue.Clear()
+	c.conn.Close()
 }
 
 func (c *Client) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
+}
+
+func (c *Client) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 func (c *Client) connectNextServer() bool {
@@ -168,14 +175,21 @@ func (c *Client) connectNextServer() bool {
 
 	log.Printf("client connecting to next server %s (%d/%d)\n", c.serverAddress.String(), c.serverIndex, len(c.connectToken.ServerAddrs))
 	c.setState(StateSendingConnectionRequest)
+
+	if err := c.Connect(); err != nil {
+		log.Printf("error connecting to next server: %s\n", err)
+		return false
+	}
 	return true
 }
 
 func (c *Client) Update(t float64) {
 	c.time = t
 
+	c.recv()
+
 	if err := c.send(); err != nil {
-		log.Fatalf("error sending packet: %s\n", err)
+		log.Printf("error sending packet: %s\n", err)
 	}
 
 	state := c.GetState()
@@ -222,6 +236,18 @@ func (c *Client) Update(t float64) {
 	}
 }
 
+func (c *Client) recv() {
+	// empty recv'd data from channel so we can have safe access to client manager data structures
+	for {
+		select {
+		case recv := <-c.packetCh:
+			c.OnPacketData(recv.data, recv.from)
+		default:
+			return
+		}
+	}
+}
+
 func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
 	log.Printf("disconnected: %s\n", clientStateMap[reason])
 	if c.GetState() <= StateDisconnected {
@@ -239,7 +265,6 @@ func (c *Client) Disconnect(reason ClientState, sendDisconnect bool) error {
 }
 
 func (c *Client) SendData(payloadData []byte) error {
-	log.Printf("sending data\n")
 	if c.GetState() != StateConnected {
 		return errors.New("client not connected, unable to send packet")
 	}
@@ -296,34 +321,36 @@ func (c *Client) sendPacket(packet Packet) error {
 	return err
 }
 
-func (c *Client) RecvData() []byte {
+func (c *Client) RecvData() ([]byte, uint64) {
 	packet := c.packetQueue.Pop()
 	p, ok := packet.(*PayloadPacket)
 	if !ok {
-		return nil
+		return nil, 0
 	}
-	return p.PayloadData
+	return p.PayloadData, p.sequence
 }
 
-// called asynchronously whenever a new packet of data arrives from the NetcodeConn.
-func (c *Client) onPacketData(packetData []byte, from *net.UDPAddr) {
+// write the netcodeData to our unbuffered packet channel. The NetcodeConn verifies
+// that the recv'd data is > 0 < maxBytes and is of a valid packet type before
+// this is even called.
+// NOTE: since packetCh is unbuffered, we will block the netcodeConn from processing
+// which is what we want since we want to synchronize access from the Update call.
+func (c *Client) handleNetcodeData(packetData []byte, addr *net.UDPAddr) {
+	c.packetCh <- &netcodeData{data: packetData, from: addr}
+}
+
+func (c *Client) OnPacketData(packetData []byte, from *net.UDPAddr) {
 	var err error
 	var size int
 	var sequence uint64
 
 	if !addressEqual(c.serverAddress, from) {
-		log.Printf("unknown address sent us data")
+		log.Printf("unknown address sent us data %s != %s\n", c.serverAddress.String(), from.String())
 		return
 	}
 
 	size = len(packetData)
-	if len(packetData) == 0 {
-		log.Printf("unable to read from socket, 0 bytes returned")
-		return
-	}
-
 	timestamp := uint64(time.Now().Unix())
-	log.Printf("read %d from socket\n", len(packetData))
 
 	packet := NewPacket(packetData)
 	packetBuffer := NewBufferFromBytes(packetData)
@@ -335,7 +362,8 @@ func (c *Client) onPacketData(packetData []byte, from *net.UDPAddr) {
 }
 
 func (c *Client) processPacket(packet Packet, sequence uint64) {
-	log.Printf("processing packet of type: %s\n", packetTypeMap[packet.GetType()])
+	//log.Printf("processing packet of type: %s\n", packetTypeMap[packet.GetType()])
+
 	state := c.GetState()
 	switch packet.GetType() {
 	case ConnectionDenied:

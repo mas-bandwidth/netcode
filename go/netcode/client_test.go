@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const testClientCommsEnabled = false
+const testClientCommsEnabled = true
 
 const (
 	TEST_PROTOCOL_ID          = 0x1122334455667788
@@ -53,7 +53,7 @@ func TestClientCommunications(t *testing.T) {
 
 	clientTime := float64(0)
 	delta := float64(1.0 / 60.0)
-	deltaTime := time.Duration(delta + float64(time.Second))
+	deltaTime := time.Duration(delta * float64(time.Second))
 
 	c := NewClient(connectToken)
 
@@ -61,27 +61,29 @@ func TestClientCommunications(t *testing.T) {
 		t.Fatalf("error connecting: %s\n", err)
 	}
 
-	packetData := make([]byte, 1200)
+	packetData := make([]byte, MAX_PAYLOAD_BYTES)
+	for i := 0; i < MAX_PAYLOAD_BYTES; i += 1 {
+		packetData[i] = byte(i)
+	}
 	count := 0
 
 	// fake game loop
 	for {
-		if count == 10 {
-			t.Fatalf("error communicating with server")
+		if count == 20 {
+			c.Close()
+			t.Fatalf("never recv'd a payload packet")
+			return
 		}
 		c.Update(clientTime)
-		fmt.Println("sending update")
 		if c.GetState() == StateConnected {
 			c.SendData(packetData)
-			fmt.Println("sent data")
 		}
 
 		for {
-			fmt.Println("recv'ing data")
-			if payload := c.RecvData(); payload == nil {
+			if payload, seq := c.RecvData(); payload == nil {
 				break
 			} else {
-				fmt.Printf("recv'd payload: of %d bytes\n", len(payload))
+				fmt.Printf("seq: %d recv'd payload: of %d bytes\n", seq, len(payload))
 				return
 			}
 		}

@@ -60,7 +60,7 @@ const NETCODE_ADDITIONAL_DATA_SIZE: usize = NETCODE_VERSION_LEN + 8 + 8;
 
 /// Token used by clients to connect and authenticate to a netcode `Server`
 pub struct ConnectToken {
-    /// Protocl ID for messages relayed by netcode.
+    /// Protocol ID for messages relayed by netcode.
     pub protocol: u64,
     /// Token creation time in ms from unix epoch.
     pub create_utc: u64,
@@ -78,6 +78,22 @@ pub struct ConnectToken {
     pub server_to_client_key: [u8; NETCODE_KEY_BYTES],
     /// Time in seconds connection should wait before disconnecting
     pub timeout_sec: u32
+}
+
+impl Clone for ConnectToken {
+    fn clone(&self) -> ConnectToken {
+        ConnectToken {
+            protocol: self.protocol,
+            create_utc: self.create_utc,
+            expire_utc: self.expire_utc,
+            sequence: self.sequence,
+            private_data: self.private_data,
+            hosts: self.hosts.clone(),
+            client_to_server_key: self.client_to_server_key,
+            server_to_client_key: self.server_to_client_key,
+            timeout_sec: self.timeout_sec
+        }
+    }
 }
 
 /// Private data encapsulated by Connect token.
@@ -129,6 +145,42 @@ pub fn get_time_now() -> u64 {
 impl ConnectToken {
     /// Generates a new connection token.
     /// # Arguments
+    /// `addrs`: List of allowed hosts to connect to in From<String> form.
+    ///
+    /// `private_key`: Server private key that will be used to authenticate requests.
+    ///
+    /// `expire_sec`: How long this token is valid for in seconds.
+    ///
+    /// `sequence`: Sequence nonce to use, this should always be unique per server, per token. Use a continously incrementing counter should be sufficient for most cases.
+    ///
+    /// `protocol`: Client specific protocol.
+    ///
+    /// `client_id`: Unique client identifier.
+    ///
+    /// `user_data`: Client specific userdata.
+    pub fn generate_with_string<H,I>(hosts: H,
+                       private_key: &[u8; NETCODE_KEY_BYTES],
+                       expire_sec: usize,
+                       sequence: u64,
+                       protocol: u64,
+                       client_id: u64,
+                       user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>)
+                       -> Result<ConnectToken, GenerateError>
+                          where H: ExactSizeIterator<Item=I>, I: Into<String> {
+        if hosts.len() > NETCODE_MAX_SERVERS_PER_CONNECT {
+            return Err(GenerateError::MaxHostCount)
+        }
+
+        let host_list = hosts.flat_map(|addr| {
+            use std::net::ToSocketAddrs;
+            addr.into().to_socket_addrs().unwrap_or(vec!().into_iter())
+        });
+
+        Self::generate_internal(host_list, private_key, expire_sec, sequence, protocol, client_id, user_data)
+    }
+
+    /// Generates a new connection token.
+    /// # Arguments
     /// `addrs`: List of allowed hosts to connect to.
     ///
     /// `private_key`: Server private key that will be used to authenticate requests.
@@ -148,14 +200,26 @@ impl ConnectToken {
                        sequence: u64,
                        protocol: u64,
                        client_id: u64,
-                       user_data: Option<&[u8; 256]>)
+                       user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>)
                        -> Result<ConnectToken, GenerateError>
                           where H: ExactSizeIterator<Item=SocketAddr> {
         if hosts.len() > NETCODE_MAX_SERVERS_PER_CONNECT {
             return Err(GenerateError::MaxHostCount)
         }
 
-        let now = get_time_now();
+        Self::generate_internal(hosts, private_key, expire_sec, sequence, protocol, client_id, user_data)
+    }
+
+    fn generate_internal<H>(hosts: H,
+                       private_key: &[u8; NETCODE_KEY_BYTES],
+                       expire_sec: usize,
+                       sequence: u64,
+                       protocol: u64,
+                       client_id: u64,
+                       user_data: Option<&[u8; NETCODE_USER_DATA_BYTES]>)
+                       -> Result<ConnectToken, GenerateError>
+                          where H: Iterator<Item=SocketAddr> {
+                let now = get_time_now();
         let expire = now + expire_sec as u64;
 
         let decoded_data = PrivateData::new(client_id, hosts, user_data);
@@ -449,9 +513,6 @@ impl<'a> ExactSizeIterator for HostIterator<'a> {
 }
 
 #[cfg(test)]
-use std::str::FromStr;
-
-#[cfg(test)]
 pub const NETCODE_CONNECT_TOKEN_BYTES: usize = 2048;
 
 #[test]
@@ -467,8 +528,8 @@ fn read_write() {
     let protocol = 0x112233445566;
     let client_id = 0x665544332211;
 
-    let token = ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+    let token = ConnectToken::generate_with_string(
+                        ["127.0.0.1:8080"].iter().cloned(),
                         &private_key,
                         expire,
                         sequence,
@@ -505,8 +566,8 @@ fn decode() {
     let protocol = 0x112233445566;
     let client_id = 0x665544332211;
 
-    let mut token = ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+    let mut token = ConnectToken::generate_with_string(
+                        ["127.0.0.1:8080"].iter().cloned(),
                         &private_key,
                         expire,
                         sequence,
@@ -618,8 +679,8 @@ fn interop_write() {
     let protocol = 0x112233445566;
     let client_id = 0x665544332211;
 
-    let token = ConnectToken::generate(
-                        [SocketAddr::from_str("127.0.0.1:8080").unwrap()].iter().cloned(),
+    let token = ConnectToken::generate_with_string(
+                        ["127.0.0.1:8080"].iter().cloned(),
                         &private_key,
                         expire,
                         sequence,

@@ -8,9 +8,9 @@ use std::time::{Duration};
 
 pub fn main() {
     gcc::Config::new()
-        .file("../c/netcode.c")
-        .include("../c")
-        .include("../c/windows")
+        .file("c/netcode.c")
+        .include("c")
+        .include("c/windows")
         .define("NETCODE_ENABLE_TESTS", Some("0"))
         .define("NDEBUG", Some("0"))
         .compile("libnetcode.a");
@@ -20,7 +20,7 @@ pub fn main() {
 
     //Do some basic dependecy management
     let targets = vec!(&private_path);
-    let source = vec!("build.rs", "../c/netcode.c", "../c/netcode.h").iter()
+    let source = vec!("rust/build.rs", "c/netcode.c", "c/netcode.h").iter()
         .map(|v| PathBuf::from(v))
         .collect::<Vec<_>>();
 
@@ -47,12 +47,12 @@ pub fn main() {
     if newest_source > oldest_target {
         let include = env::var("INCLUDE").unwrap_or("".to_string());
         let sodium_include = env::var("SODIUM_LIB_DIR")
-                                 .unwrap_or("../c/windows".to_string());
+                                 .unwrap_or("c/windows".to_string());
 
         let private_bindings = bindgen::Builder::default()
             .no_unstable_rust()
-            .header("../c/netcode.c")
-            .clang_arg("-I../c")
+            .header("c/netcode.c")
+            .clang_arg("-Ic")
             .clang_arg(format!("-I{}", sodium_include))
             .clang_arg(format!("-I{}", include))
             .whitelisted_function("netcode_log_level")

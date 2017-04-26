@@ -1,25 +1,35 @@
 [package]
 name = "netcode"
-version = "0.2.2"
+version = "0.3.1"
 authors = ["Val Vanderschaegen <valere.vanderschaegen@gmail.com>"]
-build = "build.rs"
+build = "rust/build.rs"
 links = "libnetcode"
 keywords = ["netcode"]
 license = "BSD-3-Clause"
 repository = "https://github.com/vvanders/netcode-rust"
 documentation = "https://docs.rs/netcode"
 description = "Wrapper for netcode.io library"
+exclude = [
+    "go/*"
+]
 
 [dependencies]
 libsodium-sys = "0.0.14"
 log = "0.3.6"
 byteorder = "1.0.0"
-net2 = "0.2.27"
+env_logger = "0.4.2"
+time = "0.1.36"
 
 [dev-dependencies]
-env_logger = "0.4.2"
 lazy_static = "0.2.6"
 
 [build-dependencies]
 gcc = "0.3.43"
 bindgen = "0.22.1"
+
+[[bin]]
+path = "rust/src/example.rs"
+name = "example"
+
+[lib]
+path = "rust/src/lib.rs"

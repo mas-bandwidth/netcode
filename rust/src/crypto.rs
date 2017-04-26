@@ -1,6 +1,9 @@
 use libsodium_sys;
 
 use common::*;
+use std::sync::atomic;
+
+static mut SODIUM_INIT: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 pub const NETCODE_ENCRYPT_EXTA_BYTES: usize = libsodium_sys::crypto_aead_chacha20poly1305_ABYTES;
 
@@ -9,6 +12,15 @@ pub enum EncryptError {
     InvalidPublicKeySize,
     BufferSizeMismatch,
     Failed
+}
+
+fn init_sodium() {
+    unsafe {
+        if SODIUM_INIT.load(atomic::Ordering::Relaxed) == 0 {
+            libsodium_sys::sodium_init();
+            SODIUM_INIT.store(1, atomic::Ordering::Relaxed);
+        }
+    }
 }
 
 /// Generates a new random private key.
@@ -22,6 +34,7 @@ pub fn generate_key() -> [u8; NETCODE_KEY_BYTES] {
 
 pub fn random_bytes(out: &mut [u8]) {
     unsafe {
+        init_sodium();
         libsodium_sys::randombytes_buf(out.as_mut_ptr(), out.len());
     }
 }
@@ -36,6 +49,7 @@ pub fn encode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
     }
 
     let (result, written) = unsafe {
+        init_sodium();
         let mut written: u64 = out.len() as u64;
 
         let result = libsodium_sys::crypto_aead_chacha20poly1305_encrypt(
@@ -68,6 +82,7 @@ pub fn decode(out: &mut [u8], data: &[u8], additional_data: Option<&[u8]>, nonce
     }
 
     let (result, read) = unsafe {
+        init_sodium();
         let mut read: u64 = out.len() as u64;
 
         let result = libsodium_sys::crypto_aead_chacha20poly1305_decrypt(
