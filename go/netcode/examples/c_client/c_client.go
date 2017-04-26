@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/wirepair/netcode.io/go/netcode"
+	"github.com/networkprotocol/netcode.io/go/netcode"
 	"log"
 	"math/rand"
 	"net"

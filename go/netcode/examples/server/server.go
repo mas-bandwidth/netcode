@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/pkg/profile"
-	"github.com/wirepair/netcode.io/go/netcode"
+	"github.com/networkprotocol/netcode.io/go/netcode"
+	//"github.com/pkg/profile"
 	"log"
 	"net"
 	"net/http"
@@ -21,7 +21,8 @@ var serverAddr string
 var numServers int
 var startingPort int
 var maxClients int
-var runProfiler bool
+
+//var runProfiler bool
 
 var clientId uint64
 var serverAddrs []net.UDPAddr
@@ -48,7 +49,7 @@ func init() {
 	flag.IntVar(&numServers, "numservers", 3, "number of servers to start on successive ports")
 	flag.IntVar(&startingPort, "port", 40000, "starting port number, increments by 1 for number of servers")
 	flag.IntVar(&maxClients, "maxclients", 256, "number of clients per server")
-	flag.BoolVar(&runProfiler, "prof", false, "should we profile")
+	//flag.BoolVar(&runProfiler, "prof", false, "should we profile")
 }
 
 func main() {
@@ -64,11 +65,12 @@ func main() {
 		addr := net.UDPAddr{IP: net.ParseIP("::1"), Port: startingPort + i}
 		serverAddrs[i] = addr
 	}
-
-	if runProfiler {
-		p := profile.Start(profile.TraceProfile, profile.ProfilePath("."), profile.NoShutdownHook)
-		defer p.Stop()
-	}
+	/*
+		if runProfiler {
+			p := profile.Start(profile.TraceProfile, profile.ProfilePath("."), profile.NoShutdownHook)
+			defer p.Stop()
+		}
+	*/
 
 	// start our netcode servers
 	for i := 0; i < numServers; i += 1 {
