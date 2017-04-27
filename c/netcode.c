@@ -5083,6 +5083,8 @@ void test_encryption_manager()
 {
     struct netcode_encryption_manager_t encryption_manager;
 
+    netcode_encryption_manager_reset( &encryption_manager );
+
     double time = 100.0;
 
     // generate some test encryption mappings
@@ -6539,7 +6541,7 @@ void netcode_test()
 {
     printf( "\n" );
 
-//    while ( 1 )
+    while ( 1 )
     {
         RUN_TEST( test_queue );
         RUN_TEST( test_endian );
