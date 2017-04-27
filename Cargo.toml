@@ -14,7 +14,7 @@ exclude = [
 ]
 
 [dependencies]
-libsodium-sys = "0.0.14"
+libsodium-sys = { git = "https://github.com/vvanders/sodiumoxide.git" }
 log = "0.3.6"
 byteorder = "1.0.0"
 env_logger = "0.4.2"
