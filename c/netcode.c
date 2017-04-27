@@ -76,6 +76,10 @@
 #define NETCODE_REPLAY_PROTECTION_BUFFER_SIZE 256
 #define NETCODE_CLIENT_MAX_RECEIVE_PACKETS 64
 #define NETCODE_SERVER_MAX_RECEIVE_PACKETS ( 64 * NETCODE_MAX_CLIENTS )
+#define NETCODE_CLIENT_SOCKET_SNDBUF_SIZE ( 256 * 1024 )
+#define NETCODE_CLIENT_SOCKET_RCVBUF_SIZE ( 256 * 1024 )
+#define NETCODE_SERVER_SOCKET_SNDBUF_SIZE ( 4 * 1024 * 1024 )
+#define NETCODE_SERVER_SOCKET_RCVBUF_SIZE ( 4 * 1024 * 1024 )
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -392,9 +396,6 @@ struct netcode_socket_t
     struct netcode_address_t address;
     netcode_socket_handle_t handle;
 };
-
-#define NETCODE_SOCKET_SNDBUF_SIZE     ( 1024 * 1024 )
-#define NETCODE_SOCKET_RCVBUF_SIZE     ( 1024 * 1024 )
 
 #define NETCODE_SOCKET_ERROR_NONE                               0
 #define NETCODE_SOCKET_ERROR_CREATE_FAILED                      1
@@ -2313,7 +2314,7 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
 
     if ( !network_simulator )
     {
-        if ( netcode_socket_create( &socket, &address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+        if ( netcode_socket_create( &socket, &address, NETCODE_CLIENT_SOCKET_SNDBUF_SIZE, NETCODE_CLIENT_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
         {
             return NULL;
         }
@@ -3214,8 +3215,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
 
     if ( !network_simulator )
     {
-        // todo: we are going to want different buffer sizes for client and server by default (function of # clients)
-        if ( netcode_socket_create( &socket, &bind_address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
+        if ( netcode_socket_create( &socket, &bind_address, NETCODE_SERVER_SOCKET_SNDBUF_SIZE, NETCODE_SERVER_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
         {
             return NULL;
         }
