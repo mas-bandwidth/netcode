@@ -2018,6 +2018,11 @@ void netcode_packet_queue_init( struct netcode_packet_queue_t * queue )
 
 void netcode_packet_queue_clear( struct netcode_packet_queue_t * queue )
 {
+    int i;
+    for ( i = 0; i < queue->num_packets; ++i )
+    {
+        free( queue->packet_data[i] );
+    }
     queue->num_packets = 0;
     queue->start_index = 0;
     memset( queue->packet_data, 0, sizeof( queue->packet_data ) );
@@ -2087,9 +2092,35 @@ struct netcode_network_simulator_t * netcode_network_simulator_create()
     return network_simulator;
 }
 
+void netcode_network_simulator_reset( struct netcode_network_simulator_t * network_simulator )
+{
+    assert( network_simulator );
+
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "network simulator reset\n" );
+
+    int i;
+    for ( i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
+    {
+        free( network_simulator->packet_entries[i].packet_data );
+
+        memset( &network_simulator->packet_entries[i], 0, sizeof( struct netcode_network_simulator_packet_entry_t ) );
+    }
+
+    for ( i = 0; i < network_simulator->num_pending_receive_packets; ++i )
+    {
+        free( network_simulator->pending_receive_packets[i].packet_data );
+
+        memset( &network_simulator->pending_receive_packets[i], 0, sizeof( struct netcode_network_simulator_packet_entry_t ) );
+    }
+
+    network_simulator->current_index = 0;
+    network_simulator->num_pending_receive_packets = 0;
+}
+
 void netcode_network_simulator_destroy( struct netcode_network_simulator_t * network_simulator )
 {
     assert( network_simulator );
+    netcode_network_simulator_reset( network_simulator );
     free( network_simulator );
 }
 
@@ -2221,31 +2252,6 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
             network_simulator->packet_entries[i].packet_data = NULL;
         }
     }
-}
-
-void netcode_network_simulator_discard_packets( struct netcode_network_simulator_t * network_simulator )
-{
-    assert( network_simulator );
-
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "network simulator discard packets\n" );
-
-    int i;
-    for ( i = 0; i < NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES; ++i )
-    {
-        free( network_simulator->packet_entries[i].packet_data );
-
-        memset( &network_simulator->packet_entries[i], 0, sizeof( struct netcode_network_simulator_packet_entry_t ) );
-    }
-
-    for ( i = 0; i < network_simulator->num_pending_receive_packets; ++i )
-    {
-        free( network_simulator->pending_receive_packets[i].packet_data );
-
-        memset( &network_simulator->pending_receive_packets[i], 0, sizeof( struct netcode_network_simulator_packet_entry_t ) );
-    }
-
-    network_simulator->current_index = 0;
-    network_simulator->num_pending_receive_packets = 0;
 }
 
 // ----------------------------------------------------------------
@@ -3259,7 +3265,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
     memset( server->client_address, 0, sizeof( server->client_address ) );
-    memset( server->client_user_data, 0, NETCODE_USER_DATA_BYTES );
+    memset( server->client_user_data, 0, sizeof( server->client_user_data ) );
 
     int i;
     for ( i = 0; i < NETCODE_MAX_CLIENTS; ++i )
@@ -3804,9 +3810,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received disconnect packet from client %d\n", client_index );
 
                 netcode_server_disconnect_client_internal( server, client_index, 0 );
-
-                return;
-            }
+           }
         }
         break;
 
@@ -5023,7 +5027,6 @@ void test_connect_token_public()
     // write it to a buffer
 
     uint8_t connect_token_private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
-
     netcode_write_connect_token_private( &connect_token_private, connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // encrypt the buffer
@@ -5033,13 +5036,12 @@ void test_connect_token_public()
     uint64_t expire_timestamp = create_timestamp + 30;
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
-
     check( netcode_encrypt_connect_token_private( connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
 
     // wrap a public connect token around the private connect token data
 
     struct netcode_connect_token_t input_connect_token;
-
+    memset( &input_connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     memcpy( input_connect_token.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
     input_connect_token.protocol_id = TEST_PROTOCOL_ID;
     input_connect_token.create_timestamp = create_timestamp;
@@ -5055,13 +5057,12 @@ void test_connect_token_public()
     // write the connect token to a buffer
 
     uint8_t buffer[NETCODE_CONNECT_TOKEN_BYTES];
-
     netcode_write_connect_token( &input_connect_token, buffer, NETCODE_CONNECT_TOKEN_BYTES );
 
     // read the buffer back in
 
     struct netcode_connect_token_t output_connect_token;
-
+    memset( &output_connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     check( netcode_read_connect_token( buffer, NETCODE_CONNECT_TOKEN_BYTES, &output_connect_token ) == 1 );
 
     // make sure the public connect token matches what was written
@@ -5099,7 +5100,7 @@ void test_encryption_manager()
     #define NUM_ENCRYPTION_MAPPINGS 5
 
     struct encryption_mapping_t encryption_mapping[NUM_ENCRYPTION_MAPPINGS];
-
+    memset( encryption_mapping, 0, sizeof( encryption_mapping ) );
     int i;
     for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
@@ -5736,7 +5737,7 @@ void test_client_server_multiple_clients()
         free( server_num_packets_received );
         free( client_num_packets_received );
         
-        netcode_network_simulator_discard_packets( network_simulator );
+        netcode_network_simulator_reset( network_simulator );
 
         for ( j = 0; j < max_clients[i]; ++j )
         {
@@ -5874,6 +5875,8 @@ void test_client_server_multiple_servers()
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_error_connect_token_expired()
@@ -6470,7 +6473,7 @@ void test_client_reconnect()
 
     // disconnect client on the server-side and wait until client sees the disconnect
 
-    netcode_network_simulator_discard_packets( network_simulator );
+    netcode_network_simulator_reset( network_simulator );
 
     netcode_server_disconnect_client( server, 0 );
 
@@ -6494,7 +6497,7 @@ void test_client_reconnect()
 
     // now reconnect the client and verify they connect
 
-    netcode_network_simulator_discard_packets( network_simulator );
+    netcode_network_simulator_reset( network_simulator );
 
     check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
@@ -6541,7 +6544,7 @@ void netcode_test()
 {
     printf( "\n" );
 
-    while ( 1 )
+    //while ( 1 )
     {
         RUN_TEST( test_queue );
         RUN_TEST( test_endian );

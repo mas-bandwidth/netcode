@@ -124,6 +124,15 @@ else
 
     newaction
     {
+        trigger     = "valgrind",
+        description = "Run valgrind over tests inside docker",
+        execute = function ()
+            os.execute "rm -rf valgrind/netcode.io && mkdir -p valgrind/netcode.io && cp *.h valgrind/netcode.io && cp *.c valgrind/netcode.io && cp premake5.lua valgrind/netcode.io && cd valgrind && docker build -t \"networkprotocol:netcode.io-valgrind\" . && rm -rf netcode.io && docker run -ti networkprotocol:netcode.io-valgrind"
+        end
+    }
+
+    newaction
+    {
         trigger     = "stress",
         description = "Launch 256 client instances to stress test the server",
         execute = function ()

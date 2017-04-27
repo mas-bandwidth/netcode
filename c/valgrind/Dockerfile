@@ -23,10 +23,8 @@ RUN wget https://github.com/premake/premake-core/releases/download/v5.0.0-alpha1
 
 ADD netcode.io /app/netcode.io
 
-RUN cd netcode.io && find . -exec touch {} \; && premake5 gmake && make -j32 test client server client_server config=release_x64 && cp ./bin/* /app
+RUN cd netcode.io && find . -exec touch {} \; && premake5 gmake && make -j32 test && cp ./bin/* /app
 
-EXPOSE 40000
-
-ENTRYPOINT ./server
+CMD [ "valgrind", "--tool=memcheck", "--leak-check=yes", "--show-reachable=yes", "--num-callers=20", "--track-fds=yes", "--track-origins=yes", "./test" ]
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
