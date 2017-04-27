@@ -503,7 +503,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     {
         struct sockaddr_in sock_address;
         sock_address.sin_family = AF_INET;
-        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) << 24 ) | ( ( (uint32_t) address->data.ipv4[1] ) << 16 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 8 ) | ( (uint32_t) address->data.ipv4[3] );
+        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) ) | ( ( (uint32_t) address->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 16 ) | ( (uint32_t) address->data.ipv4[3] << 24 );
         sock_address.sin_port = htons( address->port );
 
         if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
@@ -600,7 +600,7 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         struct sockaddr_in socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin_family = AF_INET;
-        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) << 24 ) | ( ( (uint32_t) to->data.ipv4[1] ) << 16 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 8 ) | ( (uint32_t) to->data.ipv4[3] );
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) ) | ( ( (uint32_t) to->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 16 ) | ( (uint32_t) to->data.ipv4[3] << 24 );
         socket_address.sin_port = htons( to->port );
         sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
     }
@@ -662,10 +662,10 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         struct sockaddr_in * addr_ipv4 = (struct sockaddr_in*) &sockaddr_from;
         from->type = NETCODE_ADDRESS_IPV4;
-        from->data.ipv4[0] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24 );
-        from->data.ipv4[1] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16 );
-        from->data.ipv4[2] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8  );
-        from->data.ipv4[3] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x000000FF )       );
+        from->data.ipv4[0] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x000000FF ) );
+        from->data.ipv4[1] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x0000FF00 ) >> 8 );
+        from->data.ipv4[2] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0x00FF0000 ) >> 16 );
+        from->data.ipv4[3] = (uint8_t) ( ( addr_ipv4->sin_addr.s_addr & 0xFF000000 ) >> 24 );
         from->port = ntohs( addr_ipv4->sin_port );
     }
     else
@@ -3193,7 +3193,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
 
     if ( !netcode_parse_address( bind_address_string, &bind_address ) )
     {
-        printf( "error: failed to parse server public address\n" );
+        printf( "error: failed to parse server bind address\n" );
         return NULL;
     }
 
@@ -3214,6 +3214,7 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
 
     if ( !network_simulator )
     {
+        // todo: we are going to want different buffer sizes for client and server by default (function of # clients)
         if ( netcode_socket_create( &socket, &bind_address, NETCODE_SOCKET_SNDBUF_SIZE, NETCODE_SOCKET_RCVBUF_SIZE ) != NETCODE_SOCKET_ERROR_NONE )
         {
             return NULL;

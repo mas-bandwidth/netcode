@@ -26,6 +26,8 @@ DONE
 
     Extended interface so client and server can get next packet sequence # to be sent, and on packet receive can get sequence # of packet. This lets users exploit the 64bit packet sequence for reliability. Without this, it's wasted and the user has to send their own sequence #.
 
+    Fixed endian confusion in IPv4 address.
+
 TODO
     
     Should implement a client/server soak test, eg. repeated connect/disconnect, this is an important aspect to demonstrate stability of the server over time.
@@ -33,5 +35,3 @@ TODO
     Will also be good to check for memory leaks.
 
     Val reports some memory trashing occuring in C reference implementation. Add some sentinel buffers and check for this.
-    
-    

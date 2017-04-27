@@ -61,7 +61,7 @@ int main( int argc, char ** argv )
 
     printf( "[client]\n" );
 
-    struct netcode_client_t * client = netcode_client_create( "::", time );
+    struct netcode_client_t * client = netcode_client_create( "0.0.0.0", time );
 
     if ( !client )
     {
@@ -72,7 +72,7 @@ int main( int argc, char ** argv )
     #define TEST_CONNECT_TOKEN_EXPIRY 30
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = "[::1]:40000";
+    char * server_address = "127.0.0.1:40000";
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
