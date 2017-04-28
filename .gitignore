@@ -31,7 +31,8 @@ Release
 Debug
 .vs
 cov-int
-Docker/netcode.io
+c/docker/netcode.io
+c/valgrind/netcode.io
 docs
 *.exe
 go/netcode/examples/client/client.exe
