@@ -30,6 +30,12 @@
 #include <signal.h>
 #include <inttypes.h>
 
+#define MAX_SERVERS 64
+#define MAX_CLIENTS 1024
+#define SERVER_BASE_PORT 40000
+#define CONNECT_TOKEN_EXPIRY 45
+#define PROTOCOL_ID 0x1122334455667788
+
 static volatile int quit = 0;
 
 void interrupt_handler( int signal )
@@ -56,12 +62,6 @@ float random_float( float a, float b )
     return a + r;
 }
 
-#define MAX_SERVERS 1
-#define MAX_CLIENTS 1 //1024
-#define SERVER_BASE_PORT 40000
-#define CONNECT_TOKEN_EXPIRY 45
-#define PROTOCOL_ID 0x1122334455667788
-
 struct netcode_server_t * server[MAX_SERVERS];
 struct netcode_client_t * client[MAX_CLIENTS];
 uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
@@ -73,7 +73,7 @@ void initialize()
 
     netcode_init();
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );//ERROR );
+    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
     memset( server, 0, sizeof( server ) );
     memset( client, 0, sizeof( client ) );
@@ -130,14 +130,12 @@ void run_iteration( double time )
             printf( "created server %p\n", server[i] );
         }
 
-        /*
         if ( server[i] != NULL && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && random_int( 0, 10000 ) == 0 )
         {
             printf( "destroy server %p\n", server[i] );
             netcode_server_destroy( server[i] );
             server[i] = NULL;
         }
-        */
     }
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
@@ -165,12 +163,10 @@ void run_iteration( double time )
                 netcode_server_start( server[i], random_int( 1, NETCODE_MAX_CLIENTS ) );
             }
 
-            /*        
-            if ( random_int( 0, 100 ) == 0 && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && netcode_server_running( server[i] ) )
+            if ( random_int( 0, 1000 ) == 0 && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && netcode_server_running( server[i] ) )
             {
                 netcode_server_stop( server[i] );
             }
-            */
 
             if ( netcode_server_running( server[i] ) )
             {
@@ -206,10 +202,13 @@ void run_iteration( double time )
                 int j;
                 for ( j = 0; j < MAX_SERVERS; ++j )
                 {
+                    if ( num_server_addresses == NETCODE_MAX_SERVERS_PER_CONNECT )
+                        break;
+
                     if ( server[j] && netcode_server_running( server[j] ) )
                     {
                         server_address[num_server_addresses] = (char*) malloc( 256 ); 
-                        sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + i );
+                        sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + j );
                         num_server_addresses++;
                     }
                 }
