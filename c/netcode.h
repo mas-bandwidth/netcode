@@ -70,9 +70,6 @@
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE        2
 #define NETCODE_CLIENT_STATE_CONNECTED                          3
 
-#define NETCODE_SOCKET_IPV6         1
-#define NETCODE_SOCKET_IPV4         2
-
 #define NETCODE_MAX_CLIENTS         256
 #define NETCODE_MAX_PACKET_SIZE     1200
 
@@ -119,7 +116,13 @@ struct netcode_server_t * netcode_server_create( char * bind_address, char * pub
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients );
 
-void netcode_server_update( struct netcode_server_t * client, double time );
+void netcode_server_stop( struct netcode_server_t * server );
+
+int netcode_server_running( struct netcode_server_t * server );
+
+int netcode_server_max_clients( struct netcode_server_t * server );
+
+void netcode_server_update( struct netcode_server_t * server, double time );
 
 int netcode_server_client_connected( struct netcode_server_t * server, int client_index );
 

@@ -65,6 +65,9 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
+#define NETCODE_SOCKET_IPV6         1
+#define NETCODE_SOCKET_IPV4         2
+
 #define NETCODE_CONNECT_TOKEN_PRIVATE_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 300
 #define NETCODE_VERSION_INFO_BYTES 13
@@ -2423,7 +2426,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     client->sequence = 0;
     client->client_index = 0;
     client->max_clients = 0;
-    client->connect_start_time = 0.0;
+    client->connect_start_time = client->time;
     client->server_address_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
@@ -2461,6 +2464,10 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
     client->server_address_index = 0;
     client->server_address = client->connect_token.server_addresses[0];
+
+    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
@@ -2721,7 +2728,10 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
     assert( client );
 
     if ( client->server_address_index + 1 >= client->connect_token.num_server_addresses )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client has no more servers to connect to\n" );
         return 0;
+    }
 
     client->server_address_index++;
     client->server_address = client->connect_token.server_addresses[client->server_address_index];
@@ -2730,7 +2740,7 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s (%d/%d)\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -4064,6 +4074,18 @@ void * netcode_server_client_user_data( struct netcode_server_t * server, int cl
     assert( client_index >= 0 );
     assert( client_index < server->max_clients );
     return server->client_user_data[client_index];
+}
+
+int netcode_server_running( struct netcode_server_t * server )
+{
+    assert( server );
+
+    return server->running;
+}
+
+int netcode_server_max_clients( struct netcode_server_t * server )
+{
+    return server->max_clients;
 }
 
 void netcode_server_update( struct netcode_server_t * server, double time )
