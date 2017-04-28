@@ -32,6 +32,10 @@ solution "netcode"
 project "test"
     files { "test.c", "netcode.c" }
 
+project "soak"
+    files { "soak.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
+
 project "client"
     files { "client.c", "netcode.c" }
     defines { "NETCODE_ENABLE_TESTS=0" }
@@ -72,6 +76,18 @@ else
             os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 test" == 0 then
                 os.execute "./bin/test"
+            end
+        end
+    }
+
+    newaction
+    {
+        trigger     = "soak",
+        description = "Build and run soak test",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 soak" == 0 then
+                os.execute "./bin/soak"
             end
         end
     }
