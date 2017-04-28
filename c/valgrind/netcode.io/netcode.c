@@ -1583,7 +1583,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         if ( !read_packet_key )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. no read packet key for this address\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. read packet key is NULL\n" );
             return NULL;
         }
 
@@ -2408,7 +2408,6 @@ void netcode_client_set_state( struct netcode_client_t * client, int client_stat
 
 void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
 {
-    client->connect_start_time = client->time;
     client->last_packet_send_time = client->time - 1.0f;
     client->last_packet_receive_time = client->time;
     client->should_disconnect = 0;
@@ -2427,7 +2426,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     client->sequence = 0;
     client->client_index = 0;
     client->max_clients = 0;
-    client->connect_start_time = 0.0;
+    client->connect_start_time = client->time;
     client->server_address_index = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
@@ -4062,7 +4061,7 @@ void netcode_server_free_packet( struct netcode_server_t * server, void * packet
     free( ( (uint8_t*) packet ) - offset );
 }
 
-int netcode_server_num_connected_clients( struct netcode_server_t * server )
+int netcode_server_num_clients_connected( struct netcode_server_t * server )
 {
     assert( server );
 
@@ -5400,7 +5399,7 @@ void test_client_server_connect()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     int server_num_packets_received = 0;
     int client_num_packets_received = 0;
@@ -5528,7 +5527,7 @@ void test_client_server_keep_alive()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // pump the client and server long enough that they would timeout without keep alive packets
 
@@ -5552,7 +5551,7 @@ void test_client_server_keep_alive()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     netcode_server_destroy( server );
 
@@ -5648,7 +5647,7 @@ void test_client_server_multiple_clients()
             time += delta_time;
         }
 
-        check( netcode_server_num_connected_clients( server ) == max_clients[i] );
+        check( netcode_server_num_clients_connected( server ) == max_clients[i] );
 
         for ( j = 0; j < max_clients[i]; ++j )
         {
@@ -5830,7 +5829,7 @@ void test_client_server_multiple_servers()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     int server_num_packets_received = 0;
     int client_num_packets_received = 0;
@@ -6022,7 +6021,7 @@ void test_client_error_connection_timed_out()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // now disable updating the server and verify that the client times out
 
@@ -6224,7 +6223,7 @@ void test_client_error_connection_denied()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // now attempt to connect a second client. the connection should be denied.
 
@@ -6263,7 +6262,7 @@ void test_client_error_connection_denied()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_state( client2 ) == NETCODE_CLIENT_STATE_CONNECTION_DENIED );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     netcode_server_destroy( server );
 
@@ -6324,7 +6323,7 @@ void test_client_side_disconnect()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // disconnect client side and verify that the server sees that client disconnect cleanly, rather than timing out.
 
@@ -6346,7 +6345,7 @@ void test_client_side_disconnect()
     }
 
     check( netcode_server_client_connected( server, 0 ) == 0 );
-    check( netcode_server_num_connected_clients( server ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
 
     netcode_server_destroy( server );
 
@@ -6405,7 +6404,7 @@ void test_server_side_disconnect()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // disconnect server side and verify that the client disconnects cleanly, rather than timing out.
 
@@ -6428,7 +6427,7 @@ void test_server_side_disconnect()
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
     check( netcode_server_client_connected( server, 0 ) == 0 );
-    check( netcode_server_num_connected_clients( server ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
 
     netcode_server_destroy( server );
 
@@ -6492,7 +6491,7 @@ void test_client_reconnect()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     // disconnect client on the server-side and wait until client sees the disconnect
 
@@ -6516,7 +6515,7 @@ void test_client_reconnect()
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
     check( netcode_server_client_connected( server, 0 ) == 0 );
-    check( netcode_server_num_connected_clients( server ) == 0 );
+    check( netcode_server_num_clients_connected( server ) == 0 );
 
     // now reconnect the client and verify they connect
 
@@ -6546,7 +6545,7 @@ void test_client_reconnect()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_client_index( client ) == 0 );
     check( netcode_server_client_connected( server, 0 ) == 1 );
-    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( netcode_server_num_clients_connected( server ) == 1 );
 
     netcode_server_destroy( server );
 

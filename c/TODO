@@ -32,6 +32,8 @@ DONE
 
     Fixed memory leaks and uninitialized memory found with valgrind.
 
+    Added soak test and fixed a massive bug where connect_start_time was being set to 0.0, instead of current client time @ connect.
+
 TODO
     
-    Should implement a client/server soak test, eg. repeated connect/disconnect, this is an important aspect to demonstrate stability of the server over time.
+    There seems to be another bug, where the server is not allowing clients to connect outside of slot #0

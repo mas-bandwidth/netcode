@@ -56,8 +56,8 @@ float random_float( float a, float b )
     return a + r;
 }
 
-#define MAX_SERVERS 1
-#define MAX_CLIENTS 1 //1024
+#define MAX_SERVERS 16
+#define MAX_CLIENTS 1024
 #define SERVER_BASE_PORT 40000
 #define CONNECT_TOKEN_EXPIRY 45
 #define PROTOCOL_ID 0x1122334455667788
@@ -73,7 +73,7 @@ void initialize()
 
     netcode_init();
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );//ERROR );
+    netcode_log_level( NETCODE_LOG_LEVEL_ERROR );
 
     memset( server, 0, sizeof( server ) );
     memset( client, 0, sizeof( client ) );
@@ -130,14 +130,12 @@ void run_iteration( double time )
             printf( "created server %p\n", server[i] );
         }
 
-        /*
-        if ( server[i] != NULL && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && random_int( 0, 10000 ) == 0 )
+        if ( server[i] != NULL && random_int( 0, 100 ) == 0 )
         {
             printf( "destroy server %p\n", server[i] );
             netcode_server_destroy( server[i] );
             server[i] = NULL;
         }
-        */
     }
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
@@ -164,13 +162,11 @@ void run_iteration( double time )
             {
                 netcode_server_start( server[i], random_int( 1, NETCODE_MAX_CLIENTS ) );
             }
-
-            /*        
-            if ( random_int( 0, 100 ) == 0 && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && netcode_server_running( server[i] ) )
+        
+            if ( random_int( 0, 100 ) == 0 && netcode_server_running( server[i] ) )
             {
                 netcode_server_stop( server[i] );
             }
-            */
 
             if ( netcode_server_running( server[i] ) )
             {

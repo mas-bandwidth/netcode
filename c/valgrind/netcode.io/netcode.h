@@ -140,7 +140,7 @@ void * netcode_server_receive_packet( struct netcode_server_t * server, int clie
 
 void netcode_server_free_packet( struct netcode_server_t * server, void * packet );
 
-int netcode_server_num_connected_clients( struct netcode_server_t * server );
+int netcode_server_num_clients_connected( struct netcode_server_t * server );
 
 void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index );
 
