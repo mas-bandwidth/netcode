@@ -30,8 +30,8 @@
 #include <signal.h>
 #include <inttypes.h>
 
-#define MAX_SERVERS 64
-#define MAX_CLIENTS 1024
+#define MAX_SERVERS NETCODE_MAX_SERVERS_PER_CONNECT
+#define MAX_CLIENTS MAX_SERVERS * NETCODE_MAX_CLIENTS
 #define SERVER_BASE_PORT 40000
 #define CONNECT_TOKEN_EXPIRY 45
 #define PROTOCOL_ID 0x1122334455667788
@@ -73,8 +73,6 @@ void initialize()
 
     netcode_init();
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
-
     memset( server, 0, sizeof( server ) );
     memset( client, 0, sizeof( client ) );
 
@@ -84,6 +82,18 @@ void initialize()
     for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
     {
         packet_data[i] = (uint8_t) i;
+    }
+
+    for ( i = 0; i < MAX_SERVERS; ++i )
+    {
+        char server_address[256];
+        sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+        server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, 0.0 );
+    }
+
+    for ( i = 0; i < MAX_CLIENTS; ++i )
+    {
+        client[i] = netcode_client_create( "0.0.0.0", 0.0 );
     }
 }
 
@@ -116,54 +126,18 @@ void shutdown()
 
 void run_iteration( double time )
 {
+    printf( "." );
+    fflush( stdout );
+
     int i;
-
-    for ( i = 0; i < MAX_SERVERS; ++i )
-    {
-        if ( server[i] == NULL && random_int( 0, 10 ) == 0 )
-        {
-            char server_address[256];
-            sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
-            server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, time );
-            printf( "created server %p\n", server[i] );
-        }
-
-        if ( server[i] != NULL && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && random_int( 0, 10000 ) == 0 )
-        {
-            printf( "destroy server %p\n", server[i] );
-            netcode_server_destroy( server[i] );
-            server[i] = NULL;
-        }
-    }
-
-    for ( i = 0; i < MAX_CLIENTS; ++i )
-    {
-        if ( client[i] == NULL && random_int( 0, 10 ) == 0 )
-        {
-            client[i] = netcode_client_create( "0.0.0.0", time );
-            printf( "created client %p\n", client[i] );
-        }
-
-        if ( client[i] != NULL && random_int( 0, 1000 ) == 0 )
-        {
-            printf( "destroy client %p\n", client[i] );
-            netcode_client_destroy( client[i] );
-            client[i] = NULL;
-        }
-    }
 
     for ( i = 0; i < MAX_SERVERS; ++i )
     {
         if ( server[i] != NULL )
         {
-            if ( random_int( 0, 10 ) == 0 && !netcode_server_running( server[i] ) )
+            if ( !netcode_server_running( server[i] ) )
             {
                 netcode_server_start( server[i], random_int( 1, NETCODE_MAX_CLIENTS ) );
-            }
-
-            if ( random_int( 0, 1000 ) == 0 && netcode_server_num_connected_clients( server[i] ) == netcode_server_max_clients( server[i] ) && netcode_server_running( server[i] ) )
-            {
-                netcode_server_stop( server[i] );
             }
 
             if ( netcode_server_running( server[i] ) )
@@ -174,7 +148,7 @@ void run_iteration( double time )
                 {
                     if ( netcode_server_client_connected( server[i], client_index ) )
                     {
-                        netcode_server_send_packet( server[i], 0, packet_data, random_int( 1, NETCODE_MAX_PACKET_SIZE ) );
+                        netcode_server_send_packet( server[i], 0, packet_data, NETCODE_MAX_PACKET_SIZE );
                     }
                 }
 
@@ -206,7 +180,7 @@ void run_iteration( double time )
     {
         if ( client[i] != NULL )
         {
-            if ( random_int( 0, 10 ) == 0 && netcode_client_state( client[i] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            if ( netcode_client_state( client[i] ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             {
                 uint64_t client_id = 0;
                 netcode_random_bytes( (uint8_t*) &client_id, 8 );
@@ -240,14 +214,9 @@ void run_iteration( double time )
                 }
             }
             
-            if ( random_int( 0, 100 ) == 0 && netcode_client_state( client[i] ) == NETCODE_CLIENT_STATE_CONNECTED )
-            {
-                netcode_client_disconnect( client[i] );
-            }
-
             if ( netcode_client_state( client[i] ) == NETCODE_CLIENT_STATE_CONNECTED ) 
             {
-                netcode_client_send_packet( client[i], packet_data, random_int( 1, NETCODE_MAX_PACKET_SIZE ) );
+                netcode_client_send_packet( client[i], packet_data, NETCODE_MAX_PACKET_SIZE );
 
                 while ( 1 )             
                 {
@@ -269,16 +238,14 @@ void run_iteration( double time )
 
 int main( int argc, char ** argv )
 {
-    int num_iterations = -1;
+    int num_iterations = 100;
 
     if ( argc == 2 )
         num_iterations = atoi( argv[1] );
 
-    printf( "[soak]\nnum_iterations = %d\n", num_iterations );
-
     initialize();
 
-    printf( "starting\n" );
+    printf( "profiling" );
 
     signal( SIGINT, interrupt_handler );
 

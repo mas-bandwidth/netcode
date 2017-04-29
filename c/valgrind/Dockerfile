@@ -25,6 +25,6 @@ ADD netcode.io /app/netcode.io
 
 RUN cd netcode.io && find . -exec touch {} \; && premake5 gmake && make -j32 test && make -j32 soak && cp ./bin/* /app
 
-CMD [ "valgrind", "--tool=memcheck", "--leak-check=yes", "--show-reachable=yes", "--num-callers=20", "--track-fds=yes", "--track-origins=yes", "./soak" ]
+CMD [ "valgrind", "--tool=memcheck", "--leak-check=yes", "--show-reachable=yes", "--num-callers=20", "--track-fds=yes", "--track-origins=yes", "./test" ]
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
