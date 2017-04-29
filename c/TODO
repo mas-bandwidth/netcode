@@ -34,6 +34,10 @@ DONE
 
     Added soak test and fixed a massive bug where connect_start_time was being set to 0.0, instead of current client time @ connect.
 
+    Setup a profiling suite.
+
+    No perf issues found. All time spent in packet encrypt/decrypt and sendto/recvfrom as expected.
+
 TODO
     
-    Setup a profiling suite.
+    Documentation?
