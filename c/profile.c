@@ -67,7 +67,7 @@ struct netcode_client_t * client[MAX_CLIENTS];
 uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
 uint8_t private_key[NETCODE_KEY_BYTES];
 
-void initialize()
+void profile_initialize()
 {
     printf( "initializing\n" );
 
@@ -87,7 +87,11 @@ void initialize()
     for ( i = 0; i < MAX_SERVERS; ++i )
     {
         char server_address[256];
+		#if _MSC_VER > 1600
+        sprintf_s( server_address, 256, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+		#else
         sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+		#endif
         server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, 0.0 );
     }
 
@@ -97,7 +101,7 @@ void initialize()
     }
 }
 
-void shutdown()
+void profile_shutdown()
 {
     printf( "shutdown\n" );
 
@@ -124,7 +128,7 @@ void shutdown()
     netcode_term();
 }
 
-void run_iteration( double time )
+void profile_iteration( double time )
 {
     printf( "." );
     fflush( stdout );
@@ -198,7 +202,11 @@ void run_iteration( double time )
                     if ( server[j] && netcode_server_running( server[j] ) )
                     {
                         server_address[num_server_addresses] = (char*) malloc( 256 ); 
+						#if _MSC_VER > 1600
+                        sprintf_s( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
+						#else
                         sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + j );
+						#endif
                         num_server_addresses++;
                     }
                 }
@@ -243,7 +251,7 @@ int main( int argc, char ** argv )
     if ( argc == 2 )
         num_iterations = atoi( argv[1] );
 
-    initialize();
+    profile_initialize();
 
     printf( "profiling" );
 
@@ -260,7 +268,7 @@ int main( int argc, char ** argv )
             if ( quit )
                 break;
 
-            run_iteration( time );
+            profile_iteration( time );
 
             time += delta_time;
         }
@@ -269,13 +277,13 @@ int main( int argc, char ** argv )
     {
         while ( !quit )
         {
-            run_iteration( time );
+            profile_iteration( time );
 
             time += delta_time;
         }
     }
 
-    shutdown();
+    profile_shutdown();
 	
     return 0;
 }

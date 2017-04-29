@@ -67,7 +67,7 @@ struct netcode_client_t * client[MAX_CLIENTS];
 uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
 uint8_t private_key[NETCODE_KEY_BYTES];
 
-void initialize()
+void soak_initialize()
 {
     printf( "initializing\n" );
 
@@ -87,7 +87,7 @@ void initialize()
     }
 }
 
-void shutdown()
+void soak_shutdown()
 {
     printf( "shutdown\n" );
 
@@ -114,7 +114,7 @@ void shutdown()
     netcode_term();
 }
 
-void run_iteration( double time )
+void soak_iteration( double time )
 {
     int i;
 
@@ -123,7 +123,11 @@ void run_iteration( double time )
         if ( server[i] == NULL && random_int( 0, 10 ) == 0 )
         {
             char server_address[256];
-            sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+			#if _MSC_VER > 1600
+			sprintf_s( server_address, 256, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+			#else
+			sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+			#endif
             server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, time );
             printf( "created server %p\n", server[i] );
         }
@@ -224,7 +228,11 @@ void run_iteration( double time )
                     if ( server[j] && netcode_server_running( server[j] ) )
                     {
                         server_address[num_server_addresses] = (char*) malloc( 256 ); 
+						#if _MSC_VER > 1600
+                        sprintf_s( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
+						#else
                         sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + j );
+						#endif
                         num_server_addresses++;
                     }
                 }
@@ -276,7 +284,7 @@ int main( int argc, char ** argv )
 
     printf( "[soak]\nnum_iterations = %d\n", num_iterations );
 
-    initialize();
+    soak_initialize();
 
     printf( "starting\n" );
 
@@ -293,7 +301,7 @@ int main( int argc, char ** argv )
             if ( quit )
                 break;
 
-            run_iteration( time );
+            soak_iteration( time );
 
             time += delta_time;
         }
@@ -302,13 +310,13 @@ int main( int argc, char ** argv )
     {
         while ( !quit )
         {
-            run_iteration( time );
+            soak_iteration( time );
 
             time += delta_time;
         }
     }
 
-    shutdown();
+    soak_shutdown();
 	
     return 0;
 }
