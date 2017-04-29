@@ -25,6 +25,7 @@ solution "netcode"
         symbols "On"
         links { debug_libs }
     configuration "Release"
+        symbols "Off"
         optimize "Speed"
         defines { "NDEBUG" }
         links { release_libs }
