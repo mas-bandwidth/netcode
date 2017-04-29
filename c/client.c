@@ -74,6 +74,9 @@ int main( int argc, char ** argv )
 
     char * server_address = "127.0.0.1:40000";
 
+    if ( argc == 2 )
+        server_address = argv[1];
+
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
     printf( "client id is %.16" PRIx64 "\n", client_id );

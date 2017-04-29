@@ -122,11 +122,9 @@ void run_iteration( double time )
     {
         if ( server[i] == NULL && random_int( 0, 10 ) == 0 )
         {
-            char bind_address[256];
-            char public_address[256];
-            sprintf( bind_address, "0.0.0.0:%d", SERVER_BASE_PORT + i );
-            sprintf( public_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
-            server[i] = netcode_server_create( bind_address, public_address, PROTOCOL_ID, private_key, time );
+            char server_address[256];
+            sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+            server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, time );
             printf( "created server %p\n", server[i] );
         }
 

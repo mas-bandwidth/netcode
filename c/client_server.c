@@ -71,7 +71,9 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    struct netcode_server_t * server = netcode_server_create( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time );
+    char * server_address = "[::1]:40000";
+
+    struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {
@@ -80,8 +82,6 @@ int main( int argc, char ** argv )
     }
 
     netcode_server_start( server, 1 );
-
-    char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 

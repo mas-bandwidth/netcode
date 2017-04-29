@@ -2468,7 +2468,7 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
@@ -2741,7 +2741,7 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client connecting to next server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to next server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index, client->connect_token.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -3171,8 +3171,7 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
 struct netcode_server_t
 {
     struct netcode_socket_t socket;
-    struct netcode_address_t bind_address;
-    struct netcode_address_t public_address;
+    struct netcode_address_t address;
     struct netcode_network_simulator_t * network_simulator;
     uint32_t flags;
     uint64_t protocol_id;
@@ -3202,30 +3201,22 @@ struct netcode_server_t
     struct netcode_address_t receive_from[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
 };
 
-struct netcode_server_t * netcode_server_create_internal( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator )
+struct netcode_server_t * netcode_server_create_internal( char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator )
 {
     assert( netcode.initialized );
 
     struct netcode_address_t bind_address;
-    struct netcode_address_t public_address;
+    struct netcode_address_t server_address;
 
-    if ( !netcode_parse_address( bind_address_string, &bind_address ) )
-    {
-        printf( "error: failed to parse server bind address\n" );
-        return NULL;
-    }
-
-    if ( bind_address.port == 0 )
-    {
-        printf( "error: server must bind to a specific port\n" );
-        return NULL;
-    }
-
-    if ( !netcode_parse_address( public_address_string, &public_address ) )
+    if ( !netcode_parse_address( server_address_string, &server_address ) )
     {
         printf( "error: failed to parse server public address\n" );
         return NULL;
     }
+
+    memset( &bind_address, 0, sizeof( bind_address ) );
+    bind_address.type = server_address.type;
+    bind_address.port = server_address.port;
 
     struct netcode_socket_t socket;
     memset( &socket, 0, sizeof( socket ) );
@@ -3245,20 +3236,17 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
         return NULL;
     }
 
-    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
-
     if ( !network_simulator )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s\n", netcode_address_to_string( &socket.address, server_address_string ) );
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s\n", server_address_string );
     }
     else
     {
-        netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s (network simulator)\n", netcode_address_to_string( &public_address, server_address_string ) );
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s (network simulator)\n", server_address_string );
     }
 
     server->socket = socket;
-    server->bind_address = bind_address;
-    server->public_address = public_address;
+    server->address = server_address;
     server->network_simulator = network_simulator;
     server->flags = 0;
     server->protocol_id = protocol_id;
@@ -3294,9 +3282,9 @@ struct netcode_server_t * netcode_server_create_internal( char * bind_address_st
     return server;
 }
 
-struct netcode_server_t * netcode_server_create( char * bind_address_string, char * public_address_string, uint64_t protocol_id, uint8_t * private_key, double time )
+struct netcode_server_t * netcode_server_create( char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time )
 {
-    return netcode_server_create_internal( bind_address_string, public_address_string, protocol_id, private_key, time, NULL );
+    return netcode_server_create_internal( server_address_string, protocol_id, private_key, time, NULL );
 }
 
 void netcode_server_stop( struct netcode_server_t * server );
@@ -3349,7 +3337,7 @@ void netcode_server_send_global_packet( struct netcode_server_t * server, void *
 
     if ( server->network_simulator )
     {
-        netcode_network_simulator_send_packet( server->network_simulator, &server->public_address, to, packet_data, packet_bytes );
+        netcode_network_simulator_send_packet( server->network_simulator, &server->address, to, packet_data, packet_bytes );
     }
     else
     {
@@ -3383,7 +3371,7 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
 
     if ( server->network_simulator )
     {
-        netcode_network_simulator_send_packet( server->network_simulator, &server->public_address, &server->client_address[client_index], packet_data, packet_bytes );
+        netcode_network_simulator_send_packet( server->network_simulator, &server->address, &server->client_address[client_index], packet_data, packet_bytes );
     }
     else
     {
@@ -3561,7 +3549,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     int i;
     for ( i = 0; i < connect_token_private.num_server_addresses; ++i )
     {
-        if ( netcode_address_equal( &server->public_address, &connect_token_private.server_addresses[i] ) )
+        if ( netcode_address_equal( &server->address, &connect_token_private.server_addresses[i] ) )
         {
             found_server_address = 1;
         }
@@ -3897,7 +3885,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     {
         // process packets received from network simulator
 
-        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->public_address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, server->receive_packet_data, server->receive_packet_bytes, server->receive_from );
+        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, server->receive_packet_data, server->receive_packet_bytes, server->receive_from );
 
         int i;
         for ( i = 0; i < num_packets_received; ++i )
@@ -5363,7 +5351,7 @@ void test_client_server_connect()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5491,7 +5479,7 @@ void test_client_server_keep_alive()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5577,7 +5565,7 @@ void test_client_server_multiple_clients()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5793,7 +5781,7 @@ void test_client_server_multiple_servers()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -5985,7 +5973,7 @@ void test_client_error_connection_timed_out()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6063,7 +6051,7 @@ void test_client_error_connection_response_timeout()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6124,7 +6112,7 @@ void test_client_error_connection_request_timeout()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6187,7 +6175,7 @@ void test_client_error_connection_denied()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6287,7 +6275,7 @@ void test_client_side_disconnect()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6368,7 +6356,7 @@ void test_server_side_disconnect()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
@@ -6455,7 +6443,7 @@ void test_client_reconnect()
 
     check( client );
 
-    struct netcode_server_t * server = netcode_server_create_internal( "[::]:40000", "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator );
 
     check( server );
 
