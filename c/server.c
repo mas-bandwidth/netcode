@@ -66,9 +66,6 @@ int main( int argc, char ** argv )
     if ( argc == 2 )
         server_address = argv[1];
 
-    if ( server_address.port == 0 )
-        server_address.port = 40000;
-
     struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
