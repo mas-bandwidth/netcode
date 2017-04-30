@@ -245,7 +245,7 @@ newaction
             "cov-int",
             "docs",
             "xml",
-            "docker/netcode.io"
+            "docker/netcode.io",
             "valgrind/netcode.io"
         }
 
