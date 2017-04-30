@@ -246,6 +246,7 @@ newaction
             "docs",
             "xml",
             "docker/netcode.io"
+            "valgrind/netcode.io"
         }
 
         for i,v in ipairs( directories_to_delete ) do
