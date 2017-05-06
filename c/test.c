@@ -26,8 +26,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#define SERVER_PORT 40000
-
 extern void netcode_test();
 
 int main( int argc, char ** argv )
