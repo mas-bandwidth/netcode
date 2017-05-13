@@ -22,7 +22,7 @@
     USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <netcode.h>
+#include "netcode.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -33,11 +33,15 @@ int main( int argc, char ** argv )
 	(void) argc;
 	(void) argv;
 
+    printf( "\n" );
+
 	netcode_init();
 
     netcode_test();
 
     netcode_term();
 	
+    printf( "\n*** ALL TESTS PASSED ***\n\n" );
+
     return 0;
 }

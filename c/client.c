@@ -23,7 +23,7 @@
     USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <netcode.h>
+#include "netcode.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

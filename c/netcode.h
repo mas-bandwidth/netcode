@@ -78,6 +78,10 @@
 #define NETCODE_LOG_LEVEL_ERROR     2
 #define NETCODE_LOG_LEVEL_DEBUG     3
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int netcode_init();
 
 void netcode_term();
@@ -149,5 +153,9 @@ void netcode_server_destroy( struct netcode_server_t * server );
 void netcode_sleep( double seconds );
 
 double netcode_time();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // #ifndef NETCODE_H
