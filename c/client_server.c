@@ -47,7 +47,7 @@ int main( int argc, char ** argv )
     (void) argc;
     (void) argv;
 
-    if ( !netcode_init() )
+    if ( netcode_init() != NETCODE_OK )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;
@@ -89,7 +89,7 @@ int main( int argc, char ** argv )
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
     printf( "client id is %.16" PRIx64 "\n", client_id );
 
-    if ( !netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) )
+    if ( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) != NETCODE_OK )
     {
         printf( "error: failed to generate connect token\n" );
         return 1;

@@ -47,7 +47,7 @@ int main( int argc, char ** argv )
     (void) argc;
     (void) argv;
 
-    if ( !netcode_init() )
+    if ( netcode_init() != NETCODE_OK )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;

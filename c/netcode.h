@@ -78,6 +78,9 @@
 #define NETCODE_LOG_LEVEL_ERROR     2
 #define NETCODE_LOG_LEVEL_DEBUG     3
 
+#define NETCODE_OK                  1
+#define NETCODE_ERROR               0
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -102,9 +105,9 @@ uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client )
 
 void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
+uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
 
-void netcode_client_free_packet( struct netcode_client_t * client, void * packet );
+void netcode_client_free_packet( struct netcode_client_t * client, uint8_t * packet );
 
 void netcode_client_disconnect( struct netcode_client_t * client );
 
@@ -140,7 +143,7 @@ uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, 
 
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
+uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
 
 void netcode_server_free_packet( struct netcode_server_t * server, void * packet );
 
