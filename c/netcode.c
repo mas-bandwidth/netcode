@@ -3428,8 +3428,6 @@ void netcode_server_stop( struct netcode_server_t * server )
     if ( !server->running )
         return;
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server stopped\n" );
-
     netcode_server_disconnect_all_clients( server );
 
     int i;
@@ -3459,6 +3457,8 @@ void netcode_server_stop( struct netcode_server_t * server )
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
     netcode_encryption_manager_reset( &server->encryption_manager );
+
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server stopped\n" );
 }
 
 int netcode_server_find_client_index_by_id( struct netcode_server_t * server, uint64_t client_id )
