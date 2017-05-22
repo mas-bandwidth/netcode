@@ -197,8 +197,6 @@ The sequence number bytes are _reversed_ when written to the packet like so:
         sequence_number >>= 8
     }
     
-The sequence number is 
-
 After the sequence number comes the per-packet type data:
 
 _connection denied packet_:
