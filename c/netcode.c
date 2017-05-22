@@ -3172,7 +3172,7 @@ struct netcode_server_t * netcode_server_create_internal( char * server_address_
 
     if ( netcode_parse_address( server_address_string, &server_address ) != NETCODE_OK )
     {
-        printf( "error: failed to parse server public address\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse server public address\n" );
         return NULL;
     }
 
