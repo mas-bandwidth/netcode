@@ -1,7 +1,7 @@
 //! Rust implementation of netcode.io protocol.
 //!
 //! This crate contains [Server](struct.Server.html), [Client](struct.Client.html) and [ConnectToken](struct.ConnectToken.html) used to establish a netcode.io session.
-//! 
+//!
 //! # Connect Token
 //! Each netcode.io session starts with a [ConnectToken](struct.ConnectToken.html). This token is handed out by a HTTPS webserver, authentication server or other *private* avenue
 //! to allow a client to establish a connection with a netcode.io based server. Rather than specifying an address the list of hosts are contained within
@@ -104,7 +104,7 @@
 //! let client_id = get_client_id(); //Unique u64 client id.
 //! let sequence = get_next_sequence(); //sequence passed to generate() must
 //!                                     //be a monotically increasing u64
-//!                                     //to prevent replay attacks.                                        
+//!                                     //to prevent replay attacks.
 //! let user_data = None;   //Any custom user data, can be up to 256 bytes.
 //!                         //Will be encrypted and returned to sever on connect.
 //!
