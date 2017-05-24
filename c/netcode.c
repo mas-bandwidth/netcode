@@ -2267,6 +2267,8 @@ struct netcode_client_t
     uint8_t * receive_packet_data[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     int receive_packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     struct netcode_address_t receive_from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
+    void (*state_change_callback_function)(void*,int,int);
+    void * state_change_callback_context;
 };
 
 struct netcode_client_t * netcode_client_create_internal( char * address_string, double time, struct netcode_network_simulator_t * network_simulator )
@@ -2331,6 +2333,8 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
     client->max_clients = 0;
     client->server_address_index = 0;
     client->challenge_token_sequence = 0;
+    client->state_change_callback_function = NULL;
+    client->state_change_callback_context = NULL;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     memset( &client->context, 0, sizeof( struct netcode_context_t ) );
@@ -2364,6 +2368,11 @@ void netcode_client_destroy( struct netcode_client_t * client )
 void netcode_client_set_state( struct netcode_client_t * client, int client_state )
 {
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client changed state from '%s' to '%s'\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+
+    if ( client->state_change_callback_function )
+    {
+        client->state_change_callback_function( client->state_change_callback_context, client->state, client_state );
+    }
 
     client->state = client_state;
 }
@@ -2884,22 +2893,26 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
 int netcode_client_state( struct netcode_client_t * client )
 {
     assert( client );
-
     return client->state;
 }
 
 int netcode_client_index( struct netcode_client_t * client )
 {
     assert( client );
-
     return client->client_index;
 }
 
 int netcode_client_max_clients( struct netcode_client_t * client )
 {   
     assert( client );
-
     return client->max_clients;
+}
+
+void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) )
+{
+    assert( client );
+    client->state_change_callback_context = context;
+    client->state_change_callback_function = callback_function;
 }
 
 // ----------------------------------------------------------------
@@ -3161,6 +3174,8 @@ struct netcode_server_t
     uint8_t * receive_packet_data[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
     int receive_packet_bytes[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
     struct netcode_address_t receive_from[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
+    void (*connect_disconnect_callback_function)(void*,int,int);
+    void * connect_disconnect_callback_context;
 };
 
 struct netcode_server_t * netcode_server_create_internal( char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator )
@@ -3240,6 +3255,9 @@ struct netcode_server_t * netcode_server_create_internal( char * server_address_
         netcode_replay_protection_reset( &server->client_replay_protection[i] );
 
     memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
+
+    server->connect_disconnect_callback_function = NULL;
+    server->connect_disconnect_callback_context = NULL;
 
     return server;
 }
@@ -3355,6 +3373,11 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected client %d\n", client_index );
 
+    if ( server->connect_disconnect_callback_function )
+    {
+        server->connect_disconnect_callback_function( server->connect_disconnect_callback_context, client_index, 0 );
+    }
+
     if ( send_disconnect_packets )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packets to client %d\n", client_index );
@@ -3370,6 +3393,16 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
             netcode_server_send_client_packet( server, &packet, client_index );
         }
     }
+
+    while ( 1 )
+    {
+        void * packet = netcode_packet_queue_pop( &server->client_packet_queue[client_index], NULL );
+        if ( !packet )
+            break;
+        free( packet );
+    }
+
+    netcode_packet_queue_clear( &server->client_packet_queue[client_index] );
 
     netcode_replay_protection_reset( &server->client_replay_protection[client_index] );
 
@@ -3429,22 +3462,6 @@ void netcode_server_stop( struct netcode_server_t * server )
         return;
 
     netcode_server_disconnect_all_clients( server );
-
-    int i;
-    for ( i = 0; i < server->max_clients; ++i )
-    {
-        while ( 1 )
-        {
-            void * packet = netcode_packet_queue_pop( &server->client_packet_queue[i], NULL );
-            if ( !packet )
-                break;
-            free( packet );
-        }
-
-        netcode_packet_queue_clear( &server->client_packet_queue[i] );
-
-        netcode_replay_protection_reset( &server->client_replay_protection[i] );
-    }
 
     server->running = 0;
     server->max_clients = 0;
@@ -3630,6 +3647,11 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     packet.max_clients = server->max_clients;
 
     netcode_server_send_client_packet( server, &packet, client_index );
+
+    if ( server->connect_disconnect_callback_function )
+    {
+        server->connect_disconnect_callback_function( server->connect_disconnect_callback_context, client_index, 1 );
+    }
 }
 
 void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet, int encryption_index )
@@ -3981,6 +4003,9 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
     if ( !server->running )
         return NULL;
 
+    if ( !server->client_connected[client_index] )
+        return NULL;
+
     assert( client_index >= 0 );
     assert( client_index < server->max_clients );
 
@@ -4050,6 +4075,13 @@ void netcode_server_update( struct netcode_server_t * server, double time )
     netcode_server_send_packets( server );
 
     netcode_server_check_for_timeouts( server );
+}
+
+void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) )
+{
+    assert( server );
+    server->connect_disconnect_callback_context = context;
+    server->connect_disconnect_callback_function = callback_function;
 }
 
 // ----------------------------------------------------------------

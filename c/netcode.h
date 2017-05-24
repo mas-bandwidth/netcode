@@ -116,9 +116,13 @@ int netcode_client_index( struct netcode_client_t * client );
 
 int netcode_client_max_clients( struct netcode_client_t * client );
 
+void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) );
+
 int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
 struct netcode_server_t * netcode_server_create( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
+
+void netcode_server_destroy( struct netcode_server_t * server );
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients );
 
@@ -150,7 +154,7 @@ int netcode_server_num_connected_clients( struct netcode_server_t * server );
 
 void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index );
 
-void netcode_server_destroy( struct netcode_server_t * server );
+void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) );
 
 void netcode_sleep( double seconds );
 
