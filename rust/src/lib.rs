@@ -160,7 +160,7 @@ mod token;
 mod packet;
 mod socket;
 
-pub use token::{ConnectToken};
+pub use token::{ConnectToken, DecodeError};
 pub use common::{NETCODE_MAX_PACKET_SIZE, NETCODE_MAX_PAYLOAD_SIZE, NETCODE_USER_DATA_BYTES};
 pub use server::{UdpServer, Server, ServerEvent};
 pub use client::{UdpClient, Client, ClientEvent, State as ClientState};
