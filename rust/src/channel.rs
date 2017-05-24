@@ -16,10 +16,10 @@ pub struct KeepAliveState {
 }
 
 impl KeepAliveState {
-    pub fn new() -> KeepAliveState {
+    pub fn new(current_time: f64) -> KeepAliveState {
         KeepAliveState {
-            last_sent: 0.0,
-            last_response: 0.0
+            last_sent: current_time,
+            last_response: current_time
         }
     }
 
@@ -65,9 +65,10 @@ impl Channel {
                addr: &SocketAddr,
                protocol_id: u64,
                client_idx: usize,
-               max_clients: usize) -> Channel {
+               max_clients: usize,
+               time: f64) -> Channel {
         Channel {
-            keep_alive: KeepAliveState::new(),
+            keep_alive: KeepAliveState::new(time),
             send_key: send_key.clone(),
             recv_key: recv_key.clone(),
             replay_protection: ReplayProtection::new(),

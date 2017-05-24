@@ -128,7 +128,7 @@ enum TickResult {
 
 impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     /// Constructs a new Server bound to `local_addr` with `max_clients` and supplied `private_key` for authentication.
-    pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES]) 
+    pub fn new<A>(local_addr: A, max_clients: usize, protocol_id: u64, private_key: &[u8; NETCODE_KEY_BYTES])
             -> Result<Server<I,S>, CreateError>
             where A: ToSocketAddrs {
         let bind_addr = local_addr.to_socket_addrs().unwrap().next().unwrap();
@@ -215,7 +215,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
     pub fn update(&mut self, elapsed: f64) {
         self.internal.update(elapsed);
     }
-    
+
     /// Checks for incoming packets, client connection and disconnections. Returns `None` when no more events
     /// are pending.
     pub fn next_event(&mut self, out_packet: &mut [u8; NETCODE_MAX_PAYLOAD_SIZE]) -> Result<Option<ServerEvent>, UpdateError> {
@@ -315,7 +315,7 @@ impl<I,S> Server<I,S> where I: SocketProvider<I,S> {
         //If we didn't have an existing client then handle a new client
         result.unwrap_or_else(|| self.internal.handle_new_client(addr, data, payload, &mut self.clients))
     }
-    
+
     fn find_client_by_id<'a>(clients: &'a mut ClientVec, id: ClientId) -> Option<&'a mut Connection> {
         clients.iter_mut().map(|c| c.as_mut()).find(|c| {
                 if let &Some(ref c) = c {
@@ -363,7 +363,7 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
                 Some(self.send_client_challenge(client, private_data).map(|_| None))
             } else {
                 None
-            }; 
+            };
 
             existing_client_result.unwrap_or_else(|| {
                 //Find open index
@@ -372,7 +372,7 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
                         let mut conn = Connection {
                             client_id: private_data.client_id,
                             state: ConnectionState::PendingResponse,
-                            channel: Channel::new(&private_data.server_to_client_key, &private_data.client_to_server_key, addr, self.protocol_id, idx, clients.len())
+                            channel: Channel::new(&private_data.server_to_client_key, &private_data.client_to_server_key, addr, self.protocol_id, idx, clients.len(), self.time)
                         };
 
                         self.send_client_challenge(&mut conn, private_data)?;
@@ -426,7 +426,7 @@ impl<I,S> ServerInternal<I,S> where I: SocketProvider<I,S> {
 
     fn validate_client_token(&mut self, req: &packet::ConnectionRequestPacket) -> Option<token::PrivateData> {
         if req.version != *NETCODE_VERSION_STRING {
-            trace!("Version mismatch expected {:?} but got {:?}", 
+            trace!("Version mismatch expected {:?} but got {:?}",
                 NETCODE_VERSION_STRING, req.version);
 
             return None;
@@ -686,7 +686,7 @@ mod test {
             let len = packet::encode(&mut data, PROTOCOL_ID, &packet, None, None).unwrap();
             self.socket.send_to(&data[..len], &self.server.get_local_addr().unwrap()).unwrap();
         }
-        
+
         fn validate_challenge(&mut self) {
             let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             self.server.update(0.0);
@@ -796,7 +796,7 @@ mod test {
                 Ok((_,p)) => assert!(false, "unexpected packet type {}", p.get_type_id()),
                 Err(o) => assert!(false, "unexpected {:?}", o)
             }
- 
+
         }
     }
 
