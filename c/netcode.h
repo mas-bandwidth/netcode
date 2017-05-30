@@ -156,6 +156,23 @@ void netcode_log_level( int level );
 
 void netcode_set_printf_function( int (*function)( const char *, ... ) );
 
+extern void (*netcode_assert_function)( const char *, const char *, const char * file, int line );
+
+#ifndef NDEBUG
+#define netcode_yojimbo_assert( condition )                                                 \
+do                                                                                          \
+{                                                                                           \
+    if ( !(condition) )                                                                     \
+    {                                                                                       \
+        netcode_assert_function( #condition, __FUNCTION__, __FILE__, __LINE__ );            \
+    }                                                                                       \
+} while(0)
+#else
+#define netcode_assert( ignore ) ((void)0)
+#endif
+
+void netcode_set_assert_function( void (*function)( const char * /*condition*/, const char * /*function*/, const char * /*file*/, int /*line*/ ) );
+
 void netcode_random_bytes( uint8_t * data, int bytes );
 
 void netcode_sleep( double seconds );
