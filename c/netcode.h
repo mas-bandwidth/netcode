@@ -88,10 +88,6 @@ int netcode_init();
 
 void netcode_term();
 
-void netcode_log_level( int level );
-
-void netcode_random_bytes( uint8_t * data, int bytes );
-
 struct netcode_client_t * netcode_client_create( char * address, double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
@@ -155,6 +151,12 @@ int netcode_server_num_connected_clients( struct netcode_server_t * server );
 void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index );
 
 void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) );
+
+void netcode_log_level( int level );
+
+void netcode_set_printf_function( int (*function)( const char *, ... ) );
+
+void netcode_random_bytes( uint8_t * data, int bytes );
 
 void netcode_sleep( double seconds );
 

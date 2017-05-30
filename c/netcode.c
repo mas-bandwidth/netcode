@@ -63,19 +63,28 @@
 #define NETCODE_TIMEOUT_SECONDS 5.0
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
 
-#define NETCODE_ENABLE_LOGGING 1
-
 #ifndef NETCODE_ENABLE_TESTS
 #define NETCODE_ENABLE_TESTS 1
 #endif // #ifndef NETCODE_ENABLE_TESTS
 
+#ifndef NETCODE_ENABLE_LOGGING
+#define NETCODE_ENABLE_LOGGING 1
+#endif // #ifndef NETCODE_ENABLE_LOGGING
+
 // ------------------------------------------------------------------
 
 static int log_level = 0;
+static int (*printf_function)( const char *, ... ) = printf;
 
 void netcode_log_level( int level )
 {
     log_level = level;
+}
+
+void netcode_set_printf_function( int (*function)( const char *, ... ) )
+{
+    assert( function );
+    printf_function = function;
 }
 
 #if NETCODE_ENABLE_LOGGING
@@ -86,7 +95,9 @@ void netcode_printf( int level, const char * format, ... )
         return;
     va_list args;
     va_start( args, format );
-    vprintf( format, args );
+    char buffer[4*1024];
+    vsprintf( buffer, format, args );
+    printf_function( "%s", buffer );
     va_end( args );
 }
 
