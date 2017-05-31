@@ -3667,7 +3667,7 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
 
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %.16" PRIx64 " %s in slot %d\n", client_id, netcode_address_to_string( address, address_string ), client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %s %.16" PRIx64 " in slot %d\n", netcode_address_to_string( address, address_string ), client_id, client_index );
 
     struct netcode_connection_keep_alive_packet_t packet;
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -5575,9 +5575,9 @@ void test_client_server_keep_alive()
 
 void test_client_server_multiple_clients()
 {
-    #define NUM_START_STOP_ITERATIONS 4
+    #define NUM_START_STOP_ITERATIONS 3
 
-    int max_clients[NUM_START_STOP_ITERATIONS] = { 2, 32, 5, 256 };
+    int max_clients[NUM_START_STOP_ITERATIONS] = { 2, 32, 5 };
 
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create();
 
