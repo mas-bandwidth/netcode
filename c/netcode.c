@@ -599,7 +599,8 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
             ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->data.ipv6[i] );
         }
         socket_address.sin6_port = htons( to->port );
-        sendto( socket->handle, (char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in6 ) );
+        int result = sendto( socket->handle, (char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in6 ) );
+        (void) result;
     }
     else if ( to->type == NETCODE_ADDRESS_IPV4 )
     {
@@ -608,7 +609,8 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         socket_address.sin_family = AF_INET;
         socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) ) | ( ( (uint32_t) to->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 16 ) | ( (uint32_t) to->data.ipv4[3] << 24 );
         socket_address.sin_port = htons( to->port );
-        sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
+        int result = sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
+        (void) result;
     }
 }
 
@@ -5085,8 +5087,8 @@ void test_connect_token_public()
     memcpy( input_connect_token.private_data, connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
     input_connect_token.num_server_addresses = 1;
     input_connect_token.server_addresses[0] = server_address;
-    memcpy( input_connect_token.client_to_server_key, input_connect_token.client_to_server_key, NETCODE_KEY_BYTES );
-    memcpy( input_connect_token.server_to_client_key, input_connect_token.server_to_client_key, NETCODE_KEY_BYTES );
+    memcpy( input_connect_token.client_to_server_key, connect_token_private.client_to_server_key, NETCODE_KEY_BYTES );
+    memcpy( input_connect_token.server_to_client_key, connect_token_private.server_to_client_key, NETCODE_KEY_BYTES );
     input_connect_token.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
 
     // write the connect token to a buffer
