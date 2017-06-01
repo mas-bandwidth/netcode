@@ -1527,7 +1527,7 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
         if ( packet_protocol_id != protocol_id )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. wrong protocol id\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. wrong protocol id. expected %.16" PRIx64 ", got %.16" PRIx64 "\n", protocol_id, packet_protocol_id );
             return NULL;
         }
 
