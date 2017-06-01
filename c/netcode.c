@@ -3857,7 +3857,7 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server, s
     
     uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
 
-    void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, &server->client_replay_protection[client_index] );
+    void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, ( client_index != -1 ) ? &server->client_replay_protection[client_index] : NULL );
 
     if ( !packet )
         return;
