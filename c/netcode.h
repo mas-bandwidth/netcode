@@ -90,6 +90,8 @@ void netcode_term();
 
 struct netcode_client_t * netcode_client_create( char * address, double time );
 
+struct netcode_client_t * netcode_client_create_with_allocator( char * address, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
+
 void netcode_client_destroy( struct netcode_client_t * client );
 
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token );
@@ -117,6 +119,8 @@ void netcode_client_state_change_callback( struct netcode_client_t * client, voi
 int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
 struct netcode_server_t * netcode_server_create( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
+
+struct netcode_server_t * netcode_server_create_with_allocator( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
 
 void netcode_server_destroy( struct netcode_server_t * server );
 

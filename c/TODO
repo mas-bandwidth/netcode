@@ -38,6 +38,12 @@ DONE
 
     No perf issues found. All time spent in packet encrypt/decrypt and sendto/recvfrom as expected.
 
+    Added support for custom log function.
+
+    Added support for custom assert handler.
+
+    Add support for custom allocators.
+
 TODO
-    
-    Documentation?
+
+    Create an advanced interface to provide a way to read and write packets without copying or allocations.
