@@ -488,17 +488,17 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     if ( address->type == NETCODE_ADDRESS_IPV6 )
     {
-        struct sockaddr_in6 sock_address;
-        memset( &sock_address, 0, sizeof( struct sockaddr_in6 ) );
-        sock_address.sin6_family = AF_INET6;
+        struct sockaddr_in6 socket_address;
+        memset( &socket_address, 0, sizeof( struct sockaddr_in6 ) );
+        socket_address.sin6_family = AF_INET6;
         int i;
         for ( i = 0; i < 8; ++i )
         {
-            ( (uint16_t*) &sock_address.sin6_addr ) [i] = htons( address->data.ipv6[i] );
+            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( address->data.ipv6[i] );
         }
-        sock_address.sin6_port = htons( address->port );
+        socket_address.sin6_port = htons( address->port );
 
-        if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
+        if ( bind( s->handle, (struct sockaddr*) &socket_address, sizeof( socket_address ) ) < 0 )
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to bind socket (ipv6)\n" );
             netcode_socket_destroy( s );
@@ -507,12 +507,13 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     }
     else
     {
-        struct sockaddr_in sock_address;
-        sock_address.sin_family = AF_INET;
-        sock_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) ) | ( ( (uint32_t) address->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 16 ) | ( (uint32_t) address->data.ipv4[3] << 24 );
-        sock_address.sin_port = htons( address->port );
+        struct sockaddr_in socket_address;
+        memset( &socket_address, 0, sizeof( socket_address ) );
+        socket_address.sin_family = AF_INET;
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) ) | ( ( (uint32_t) address->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 16 ) | ( (uint32_t) address->data.ipv4[3] << 24 );
+        socket_address.sin_port = htons( address->port );
 
-        if ( bind( s->handle, (struct sockaddr*) &sock_address, sizeof( sock_address ) ) < 0 )
+        if ( bind( s->handle, (struct sockaddr*) &socket_address, sizeof( socket_address ) ) < 0 )
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to bind socket (ipv4)\n" );
             netcode_socket_destroy( s );
