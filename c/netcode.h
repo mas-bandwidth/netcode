@@ -165,6 +165,7 @@ do                                                                              
     if ( !(condition) )                                                                     \
     {                                                                                       \
         netcode_assert_function( #condition, __FUNCTION__, __FILE__, __LINE__ );            \
+        exit(1);                                                                            \
     }                                                                                       \
 } while(0)
 #else
