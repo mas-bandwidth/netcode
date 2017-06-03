@@ -56,14 +56,6 @@ Here are some things that we think would be helpful:
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
 
-# Author
-
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
-
-Glenn is currently writing an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
-
-You can support Glenn's work writing articles and open source code via [Patreon](http://www.patreon.com/gafferongames).
-
 # Contributors
 
 These people are awesome:
@@ -72,6 +64,14 @@ These people are awesome:
 * [Isaac](https://github.com/wirepair) - Golang Implementation
 
 Thank you for your contributions to netcode.io!
+
+# Author
+
+The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
+
+Glenn is currently writing an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
+
+You can support Glenn's work writing articles and open source code via [Patreon](http://www.patreon.com/gafferongames).
 
 # Sponsors
 
