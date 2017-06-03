@@ -6,6 +6,13 @@ import (
 	"strconv"
 )
 
+// ip types used in serialization of server addresses
+const (
+	ADDRESS_NONE = iota
+	ADDRESS_IPV4
+	ADDRESS_IPV6
+)
+
 // This struct contains data that is shared in both public and private parts of the
 // connect token.
 type sharedTokenData struct {

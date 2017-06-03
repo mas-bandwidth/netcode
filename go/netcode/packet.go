@@ -21,9 +21,6 @@ const MAX_SERVERS_PER_CONNECT = 32
 
 const VERSION_INFO = "NETCODE 1.00\x00"
 
-// Used for determining the type of packet, part of the serialization protocol
-type PacketType uint8
-
 const (
 	ConnectionRequest PacketType = iota
 	ConnectionDenied
@@ -33,6 +30,9 @@ const (
 	ConnectionPayload
 	ConnectionDisconnect
 )
+
+// Used for determining the type of packet, part of the serialization protocol
+type PacketType uint8
 
 func (p PacketType) Peek(packetBuffer []byte) PacketType {
 	prefix := uint8(packetBuffer[0])
