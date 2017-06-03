@@ -59,9 +59,9 @@ Please let me know if you have any more ideas, and feel free to ask questions an
 # Contributors
 
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
-* [Isaac ?](https://github.com/wirepair) - Golang Implementation
+* [Isaac](https://github.com/wirepair) - Golang Implementation
 
-Thanks for your contributions to netcode.io!
+Thank you for your contributions to netcode.io!
 
 # Author
 
