@@ -56,6 +56,13 @@ Here are some things that we think would be helpful:
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
 
+# Contributors
+
+* [Val Vanders](https://github.com/vvanders) - Rust Implementation
+* [Isaac ?](https://github.com/wirepair) - Golang Implementation
+
+Thank you!
+
 # Author
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
