@@ -2,7 +2,7 @@ sudo: required
 
 dist: trusty
 
-language: cpp
+language: c
 
 compiler:
   - clang
