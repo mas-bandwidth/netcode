@@ -7,13 +7,6 @@ import (
 	"time"
 )
 
-// ip types used in serialization of server addresses
-const (
-	ADDRESS_NONE = iota
-	ADDRESS_IPV4
-	ADDRESS_IPV6
-)
-
 // number of bytes for connect tokens
 const CONNECT_TOKEN_BYTES = 2048
 
