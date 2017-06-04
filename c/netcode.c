@@ -955,8 +955,6 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
     assert( buffer );
     assert( buffer_length >= NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-    memset( buffer, 0, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
-
     uint8_t * start = buffer;
 
     (void) start;
