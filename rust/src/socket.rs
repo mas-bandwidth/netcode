@@ -101,7 +101,7 @@ pub mod capi_simulator {
                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Unable to parse address"))
         }
     }
-
+/*
     impl SocketProvider<SimulatedSocket, SimulatorRef> for SimulatedSocket {
         fn new_state() -> Rc<RefCell<Simulator>> {
             Rc::new(RefCell::new(Simulator {
@@ -178,4 +178,5 @@ pub mod capi_simulator {
 
         }
     }
+    */
 }
