@@ -902,7 +902,7 @@ mod test {
             harness.validate_send_payload(&data[..s]);
         }
     }
-
+/*
     #[test]
     fn test_capi_payload() {
         #[allow(unused_variables)]
@@ -1048,4 +1048,5 @@ mod test {
             netcode_term();
        }
    }
+   */
 }

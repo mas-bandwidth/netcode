@@ -482,7 +482,7 @@ fn test_encode_decode<V>(
             assert_eq!(in_payload[i], out_packet[i]);
         }
     }
-
+/*
     unsafe {
         #[allow(unused_variables)]
         let lock = ::common::test::FFI_LOCK.lock().unwrap();
@@ -515,6 +515,7 @@ fn test_encode_decode<V>(
 
         capi::free(result);
     }
+*/
 }
 
 #[test]
