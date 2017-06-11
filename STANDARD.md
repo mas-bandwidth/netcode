@@ -187,7 +187,7 @@ The high 4 bits contain the number of bytes for the sequence number in the range
 
 The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x000003E8 and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte are set to 3 and the sequence data written to the packet is:
 
-    0x8,0xE,0x3
+    0xE8,0x03
     
 The sequence number bytes are _reversed_ when written to the packet like so:
 
