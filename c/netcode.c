@@ -2897,7 +2897,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     }
 }
 
-uint64_t netcode_client_next_send_packet_sequence( struct netcode_client_t * client )
+uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client )
 {
     netcode_assert( client );
     return client->sequence;  
