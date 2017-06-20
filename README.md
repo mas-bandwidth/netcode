@@ -63,7 +63,7 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 
-Thank you for your contributions to netcode.io!
+Thanks for your contributions to netcode.io!
 
 # Author
 
