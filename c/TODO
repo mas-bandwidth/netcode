@@ -44,6 +44,8 @@ DONE
 
     Add support for custom allocators.
 
+    Improved support for C++ by adding NETCODE_CONST. Now compiles clean on C++11
+
 TODO
 
     Create an advanced interface to provide a way to read and write packets without copying or allocations.

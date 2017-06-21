@@ -63,7 +63,7 @@
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
 
 #ifndef NETCODE_ENABLE_TESTS
-#define NETCODE_ENABLE_TESTS 1
+#define NETCODE_ENABLE_TESTS 0
 #endif // #ifndef NETCODE_ENABLE_TESTS
 
 #ifndef NETCODE_ENABLE_LOGGING
@@ -2306,7 +2306,7 @@ void netcode_network_simulator_update( struct netcode_network_simulator_t * netw
 
 // ----------------------------------------------------------------
     
-char * netcode_client_state_name( int client_state )
+NETCODE_CONST char * netcode_client_state_name( int client_state )
 {
     switch ( client_state )
     {
@@ -2359,7 +2359,7 @@ struct netcode_client_t
     void (*free_function)(void*,void*);
 };
 
-struct netcode_client_t * netcode_client_create_internal( char * address_string, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_client_t * netcode_client_create_internal( NETCODE_CONST char * address_string, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
 {
     netcode_assert( netcode.initialized );
 
@@ -2449,12 +2449,12 @@ struct netcode_client_t * netcode_client_create_internal( char * address_string,
     return client;
 }
 
-struct netcode_client_t * netcode_client_create( char * address, double time )
+struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address, double time )
 {
     return netcode_client_create_internal( address, time, NULL, NULL, NULL, NULL );
 }
 
-struct netcode_client_t * netcode_client_create_with_allocator( char * address, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_client_t * netcode_client_create_with_allocator( NETCODE_CONST char * address, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
 {
     return netcode_client_create_internal( address, time, NULL, allocator_context, allocate_function, free_function );
 }
@@ -3284,7 +3284,7 @@ struct netcode_server_t
     void (*free_function)(void*,void*);
 };
 
-struct netcode_server_t * netcode_server_create_internal( char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
 {
     netcode_assert( netcode.initialized );
 
@@ -4213,7 +4213,7 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
 
 // ----------------------------------------------------------------
 
-int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
+int netcode_generate_connect_token( int num_server_addresses, NETCODE_CONST char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
 {
     netcode_assert( num_server_addresses > 0 );
     netcode_assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
@@ -4387,9 +4387,9 @@ double netcode_time()
 #include <memory.h>
 #include <time.h>
 
-static void check_handler( char * condition, 
-                           char * function,
-                           char * file,
+static void check_handler( NETCODE_CONST char * condition, 
+                           NETCODE_CONST char * function,
+                           NETCODE_CONST char * file,
                            int line )
 {
     printf( "check failed: ( %s ), function %s, file %s, line %d\n", condition, function, file, line );
@@ -4403,13 +4403,13 @@ static void check_handler( char * condition,
     exit( 1 );
 }
 
-#define check( condition )                                                                      \
-do                                                                                              \
-{                                                                                               \
-    if ( !(condition) )                                                                         \
-    {                                                                                           \
-        check_handler( #condition, (char*) __FUNCTION__, (char*) __FILE__, __LINE__ );          \
-    }                                                                                           \
+#define check( condition )                                                                                      \
+do                                                                                                              \
+{                                                                                                               \
+    if ( !(condition) )                                                                                         \
+    {                                                                                                           \
+        check_handler( #condition, (NETCODE_CONST char*) __FUNCTION__, (char*) __FILE__, __LINE__ );            \
+    }                                                                                                           \
 } while(0)
 
 static void test_queue()
@@ -5480,7 +5480,7 @@ void test_client_server_connect()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -5537,7 +5537,7 @@ void test_client_server_connect()
         {
             int packet_bytes;
             uint64_t packet_sequence;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
+            uint8_t * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
             (void) packet_sequence;
@@ -5608,7 +5608,7 @@ void test_client_server_keep_alive()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -5703,7 +5703,7 @@ void test_client_server_multiple_clients()
 
         // create # of client objects for this iteration and connect to server
 
-        struct netcode_client_t ** client = malloc( sizeof( struct netcode_client_t* ) * max_clients[i] );
+        struct netcode_client_t ** client = (struct netcode_client_t **) malloc( sizeof( struct netcode_client_t* ) * max_clients[i] );
 
         check( client );
 
@@ -5720,7 +5720,7 @@ void test_client_server_multiple_clients()
             uint64_t client_id = j;
             netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-            char * server_address = "[::1]:40000";
+            NETCODE_CONST char * server_address = "[::1]:40000";
 
             uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -5769,8 +5769,8 @@ void test_client_server_multiple_clients()
 
         // make sure all clients can exchange packets with the server
 
-        int * server_num_packets_received = malloc( sizeof(int) * max_clients[i] );
-        int * client_num_packets_received = malloc( sizeof(int) * max_clients[i] );
+        int * server_num_packets_received = (int*) malloc( sizeof(int) * max_clients[i] );
+        int * client_num_packets_received = (int*) malloc( sizeof(int) * max_clients[i] );
 
         memset( server_num_packets_received, 0, sizeof(int) * max_clients[i] );
         memset( client_num_packets_received, 0, sizeof(int) * max_clients[i] );
@@ -5806,7 +5806,7 @@ void test_client_server_multiple_clients()
                 {
                     int packet_bytes;
                     uint64_t packet_sequence;
-                    void * packet = netcode_client_receive_packet( client[j], &packet_bytes, &packet_sequence );
+                    uint8_t * packet = netcode_client_receive_packet( client[j], &packet_bytes, &packet_sequence );
                     if ( !packet )
                         break;
                     (void) packet_sequence;
@@ -5910,7 +5910,7 @@ void test_client_server_multiple_servers()
 
     netcode_server_start( server, 1 );
 
-    char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000", "[::1]:40000" };
+    NETCODE_CONST char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000", "[::1]:40000" };
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -5967,7 +5967,7 @@ void test_client_server_multiple_servers()
         {
             int packet_bytes;
             uint64_t packet_sequence;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
+            uint8_t * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
             (void) packet_sequence;
@@ -6028,7 +6028,7 @@ void test_client_error_connect_token_expired()
 
     check( client );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6102,7 +6102,7 @@ void test_client_error_connection_timed_out()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6182,7 +6182,7 @@ void test_client_error_connection_response_timeout()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6243,7 +6243,7 @@ void test_client_error_connection_request_timeout()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6304,7 +6304,7 @@ void test_client_error_connection_denied()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6404,7 +6404,7 @@ void test_client_side_disconnect()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6485,7 +6485,7 @@ void test_server_side_disconnect()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -6572,7 +6572,7 @@ void test_client_reconnect()
 
     netcode_server_start( server, 1 );
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
