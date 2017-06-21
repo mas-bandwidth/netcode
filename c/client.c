@@ -72,7 +72,7 @@ int main( int argc, char ** argv )
     #define TEST_CONNECT_TOKEN_EXPIRY 30
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = ( argc != 2 ) ? "127.0.0.1:40000" : argv[1];        
+    NETCODE_CONST char * server_address = ( argc != 2 ) ? "127.0.0.1:40000" : argv[1];        
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );

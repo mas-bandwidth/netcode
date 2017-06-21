@@ -80,11 +80,16 @@
 #define NETCODE_OK                  1
 #define NETCODE_ERROR               0
 
+
 #ifdef __cplusplus
 #define NETCODE_CONST const
 extern "C" {
 #else
+#if defined(__STDC__)
+#define NETCODE_CONST const
+#else
 #define NETCODE_CONST
+#endif
 #endif
 
 int netcode_init();
@@ -121,9 +126,9 @@ void netcode_client_state_change_callback( struct netcode_client_t * client, voi
 
 int netcode_generate_connect_token( int num_server_addresses, NETCODE_CONST char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
-struct netcode_server_t * netcode_server_create( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
+struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
 
-struct netcode_server_t * netcode_server_create_with_allocator( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
+struct netcode_server_t * netcode_server_create_with_allocator( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
 
 void netcode_server_destroy( struct netcode_server_t * server );
 
@@ -161,9 +166,9 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
 
 void netcode_log_level( int level );
 
-void netcode_set_printf_function( int (*function)( const char *, ... ) );
+void netcode_set_printf_function( int (*function)( NETCODE_CONST char *, ... ) );
 
-extern void (*netcode_assert_function)( const char *, const char *, const char * file, int line );
+extern void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line );
 
 #ifndef NDEBUG
 #define netcode_assert( condition )                                                         \
@@ -179,7 +184,7 @@ do                                                                              
 #define netcode_assert( ignore ) ((void)0)
 #endif
 
-void netcode_set_assert_function( void (*function)( const char * /*condition*/, const char * /*function*/, const char * /*file*/, int /*line*/ ) );
+void netcode_set_assert_function( void (*function)( NETCODE_CONST char * /*condition*/, NETCODE_CONST char * /*function*/, NETCODE_CONST char * /*file*/, int /*line*/ ) );
 
 void netcode_random_bytes( uint8_t * data, int bytes );
 

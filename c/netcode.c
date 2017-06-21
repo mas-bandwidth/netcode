@@ -72,7 +72,7 @@
 
 // ------------------------------------------------------------------
 
-static void netcode_default_assert_handler( const char * condition, const char * function, const char * file, int line )
+static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
 {
     printf( "assert failed: ( %s ), function %s, file %s, line %d\n", condition, function, file, line );
     #if defined( __GNUC__ )
@@ -84,28 +84,28 @@ static void netcode_default_assert_handler( const char * condition, const char *
 }
 
 static int log_level = 0;
-static int (*printf_function)( const char *, ... ) = printf;
-void (*netcode_assert_function)( const char *, const char *, const char * file, int line ) = netcode_default_assert_handler;
+static int (*printf_function)( NETCODE_CONST char *, ... ) = printf;
+void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) = netcode_default_assert_handler;
 
 void netcode_log_level( int level )
 {
     log_level = level;
 }
 
-void netcode_set_printf_function( int (*function)( const char *, ... ) )
+void netcode_set_printf_function( int (*function)( NETCODE_CONST char *, ... ) )
 {
     netcode_assert( function );
     printf_function = function;
 }
 
-void netcode_set_assert_function( void (*function)( const char *, const char *, const char * file, int line ) )
+void netcode_set_assert_function( void (*function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) )
 {
     netcode_assert_function = function;
 }
 
 #if NETCODE_ENABLE_LOGGING
 
-void netcode_printf( int level, const char * format, ... ) 
+void netcode_printf( int level, NETCODE_CONST char * format, ... ) 
 {
     if ( level > log_level )
         return;
@@ -119,7 +119,7 @@ void netcode_printf( int level, const char * format, ... )
 
 #else // #if NETCODE_ENABLE_LOGGING
 
-void netcode_printf( int level, const char * format, ... ) 
+void netcode_printf( int level, NETCODE_CONST char * format, ... ) 
 {
     (void) level;
     (void) format;
@@ -196,7 +196,7 @@ struct netcode_address_t
     uint16_t port;
 };
 
-int netcode_parse_address( const char * address_string_in, struct netcode_address_t * address )
+int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcode_address_t * address )
 {
     netcode_assert( address_string_in );
     netcode_assert( address );
@@ -219,12 +219,12 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
 
     if ( address_string[0] == '[' )
     {
-        const int base_index = address_string_length - 1;
+        int base_index = address_string_length - 1;
         
         int i;
         for ( i = 0; i < 6; ++i )         // note: no need to search past 6 characters as ":65535" is longest possible port value
         {
-            const int index = base_index - i;
+            int index = base_index - i;
             if ( index < 3 )
                 return NETCODE_ERROR;
             if ( address_string[index] == ':' )
@@ -253,11 +253,11 @@ int netcode_parse_address( const char * address_string_in, struct netcode_addres
     // 2. parse remaining ipv4 address via inet_pton
 
     address_string_length = (int) strlen( address_string );
-    const int base_index = address_string_length - 1;
+    int base_index = address_string_length - 1;
     int i;
     for ( i = 0; i < 6; ++i )
     {
-        const int index = base_index - i;
+        int index = base_index - i;
         if ( index < 0 )
             break;
         if ( address_string[index] == ':' )
@@ -621,7 +621,7 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         socket_address.sin_family = AF_INET;
         socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) ) | ( ( (uint32_t) to->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 16 ) | ( (uint32_t) to->data.ipv4[3] << 24 );
         socket_address.sin_port = htons( to->port );
-        int result = sendto( socket->handle, (const char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
+        int result = sendto( socket->handle, (NETCODE_CONST char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
         (void) result;
     }
 }
@@ -1469,7 +1469,7 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
     if ( sequence > replay_protection->most_recent_sequence )
         replay_protection->most_recent_sequence = sequence;
 
-    const int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
+    int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
 
     if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
     {
@@ -3382,12 +3382,12 @@ struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * s
     return server;
 }
 
-struct netcode_server_t * netcode_server_create( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time )
+struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time )
 {
     return netcode_server_create_internal( server_address, protocol_id, private_key, time, NULL, NULL, NULL, NULL );
 }
 
-struct netcode_server_t * netcode_server_create_with_allocator( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_server_t * netcode_server_create_with_allocator( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
 {
     return netcode_server_create_internal( server_address, protocol_id, private_key, time, NULL, allocator_context, allocate_function, free_function );
 }
@@ -4351,7 +4351,7 @@ double netcode_time()
 
 void netcode_sleep( double time )
 {
-    const int milliseconds = (int) ( time * 1000 );
+    int milliseconds = (int) ( time * 1000 );
     Sleep( milliseconds );
 }
 
