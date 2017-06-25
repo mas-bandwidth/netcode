@@ -201,7 +201,10 @@ do                                                                              
 #define netcode_assert( ignore ) ((void)0)
 #endif
 
-void netcode_set_assert_function( void (*function)( NETCODE_CONST char * /*condition*/, NETCODE_CONST char * /*function*/, NETCODE_CONST char * /*file*/, int /*line*/ ) );
+void netcode_set_assert_function( void (*function)( NETCODE_CONST char * /*condition*/, 
+                                  NETCODE_CONST char * /*function*/, 
+                                  NETCODE_CONST char * /*file*/, 
+                                  int /*line*/ ) );
 
 void netcode_random_bytes( uint8_t * data, int bytes );
 
