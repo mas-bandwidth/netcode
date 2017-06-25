@@ -312,9 +312,22 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
     else if ( address->type == NETCODE_ADDRESS_IPV4 )
     {
         if ( address->port != 0 )
-            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d:%d", address->data.ipv4[0], address->data.ipv4[1], address->data.ipv4[2], address->data.ipv4[3], address->port );
+        {
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d:%d", 
+                address->data.ipv4[0], 
+                address->data.ipv4[1], 
+                address->data.ipv4[2], 
+                address->data.ipv4[3], 
+                address->port );
+        }
         else
-            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d", address->data.ipv4[0], address->data.ipv4[1], address->data.ipv4[2], address->data.ipv4[3] );
+        {
+            snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%d.%d.%d.%d", 
+                address->data.ipv4[0], 
+                address->data.ipv4[1], 
+                address->data.ipv4[2], 
+                address->data.ipv4[3] );
+        }
         return buffer;
     }
     else
@@ -521,7 +534,10 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         struct sockaddr_in socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin_family = AF_INET;
-        socket_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) ) | ( ( (uint32_t) address->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) address->data.ipv4[2] ) << 16 ) | ( (uint32_t) address->data.ipv4[3] << 24 );
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) address->data.ipv4[0] ) )       | 
+                                         ( ( (uint32_t) address->data.ipv4[1] ) << 8 )  | 
+                                         ( ( (uint32_t) address->data.ipv4[2] ) << 16 ) | 
+                                         ( ( (uint32_t) address->data.ipv4[3] ) << 24 );
         socket_address.sin_port = htons( address->port );
 
         if ( bind( s->handle, (struct sockaddr*) &socket_address, sizeof( socket_address ) ) < 0 )
@@ -619,7 +635,10 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
         struct sockaddr_in socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin_family = AF_INET;
-        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) ) | ( ( (uint32_t) to->data.ipv4[1] ) << 8 ) | ( ( (uint32_t) to->data.ipv4[2] ) << 16 ) | ( (uint32_t) to->data.ipv4[3] << 24 );
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) )        | 
+                                         ( ( (uint32_t) to->data.ipv4[1] ) << 8 )   | 
+                                         ( ( (uint32_t) to->data.ipv4[2] ) << 16 )  | 
+                                         ( ( (uint32_t) to->data.ipv4[3] ) << 24 );
         socket_address.sin_port = htons( to->port );
         int result = sendto( socket->handle, (NETCODE_CONST char*) packet_data, packet_bytes, 0, (struct sockaddr*) &socket_address, sizeof( struct sockaddr_in ) );
         (void) result;
@@ -913,7 +932,11 @@ struct netcode_connect_token_private_t
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
 };
 
-void netcode_generate_connect_token_private( struct netcode_connect_token_private_t * connect_token, uint64_t client_id, int num_server_addresses, struct netcode_address_t * server_addresses, uint8_t * user_data )
+void netcode_generate_connect_token_private( struct netcode_connect_token_private_t * connect_token, 
+                                             uint64_t client_id, 
+                                             int num_server_addresses, 
+                                             struct netcode_address_t * server_addresses, 
+                                             uint8_t * user_data )
 {
     netcode_assert( connect_token );
     netcode_assert( num_server_addresses > 0 );
@@ -1001,7 +1024,13 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
     memset( buffer, 0, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - ( buffer - start ) );
 }
 
-int netcode_encrypt_connect_token_private( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
+int netcode_encrypt_connect_token_private( uint8_t * buffer, 
+                                           int buffer_length, 
+                                           uint8_t * version_info, 
+                                           uint64_t protocol_id, 
+                                           uint64_t expire_timestamp, 
+                                           uint64_t sequence, 
+                                           uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length == NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
@@ -1027,7 +1056,13 @@ int netcode_encrypt_connect_token_private( uint8_t * buffer, int buffer_length, 
     return netcode_encrypt_aead( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, additional_data, sizeof( additional_data ), nonce, key );
 }
 
-int netcode_decrypt_connect_token_private( uint8_t * buffer, int buffer_length, uint8_t * version_info, uint64_t protocol_id, uint64_t expire_timestamp, uint64_t sequence, uint8_t * key )
+int netcode_decrypt_connect_token_private( uint8_t * buffer, 
+                                           int buffer_length, 
+                                           uint8_t * version_info, 
+                                           uint64_t protocol_id, 
+                                           uint64_t expire_timestamp, 
+                                           uint64_t sequence, 
+                                           uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length == NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
@@ -1264,7 +1299,8 @@ struct netcode_connection_payload_packet_t * netcode_create_payload_packet( int 
         allocate_function = netcode_default_allocate_function;
     }
 
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_payload_packet_t ) + payload_bytes );
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) 
+        allocate_function( allocator_context, sizeof( struct netcode_connection_payload_packet_t ) + payload_bytes );
 
     if ( !packet )
         return NULL;
@@ -1432,8 +1468,13 @@ int netcode_write_packet( void * packet, uint8_t * buffer, int buffer_length, ui
             netcode_write_uint64( &p, sequence );
         }
 
-        if ( netcode_encrypt_aead( encrypted_start, encrypted_finish - encrypted_start, additional_data, sizeof( additional_data ), nonce, write_packet_key ) != NETCODE_OK )
+        if ( netcode_encrypt_aead( encrypted_start, 
+                                   encrypted_finish - encrypted_start, 
+                                   additional_data, sizeof( additional_data ), 
+                                   nonce, write_packet_key ) != NETCODE_OK )
+        {
             return NETCODE_ERROR;
+        }
 
         buffer += NETCODE_MAC_BYTES;
 
@@ -1485,7 +1526,17 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
     return 0;
 }
 
-void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequence, uint8_t * read_packet_key, uint64_t protocol_id, uint64_t current_timestamp, uint8_t * private_key, uint8_t * allowed_packets, struct netcode_replay_protection_t * replay_protection, void * allocator_context, void* (*allocate_function)(void*,uint64_t) )
+void * netcode_read_packet( uint8_t * buffer, 
+                            int buffer_length, 
+                            uint64_t * sequence, 
+                            uint8_t * read_packet_key, 
+                            uint64_t protocol_id, 
+                            uint64_t current_timestamp, 
+                            uint8_t * private_key, 
+                            uint8_t * allowed_packets, 
+                            struct netcode_replay_protection_t * replay_protection, 
+                            void * allocator_context, 
+                            void* (*allocate_function)(void*,uint64_t) )
 {
     netcode_assert( sequence );
     netcode_assert( allowed_packets );
@@ -1549,7 +1600,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
         uint64_t packet_protocol_id = netcode_read_uint64( &buffer );
         if ( packet_protocol_id != protocol_id )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. wrong protocol id. expected %.16" PRIx64 ", got %.16" PRIx64 "\n", protocol_id, packet_protocol_id );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. wrong protocol id. expected %.16" PRIx64 ", got %.16" PRIx64 "\n", 
+                protocol_id, packet_protocol_id );
             return NULL;
         }
 
@@ -1564,13 +1616,20 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
 
         netcode_assert( buffer - start == 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 );
 
-        if ( netcode_decrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, version_info, protocol_id, packet_connect_token_expire_timestamp, packet_connect_token_sequence, private_key ) != NETCODE_OK )
+        if ( netcode_decrypt_connect_token_private( buffer, 
+                                                    NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, 
+                                                    version_info, 
+                                                    protocol_id, 
+                                                    packet_connect_token_expire_timestamp, 
+                                                    packet_connect_token_sequence, 
+                                                    private_key ) != NETCODE_OK )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token failed to decrypt\n" );
             return NULL;
         }
 
-        struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_request_packet_t ) );
+        struct netcode_connection_request_packet_t * packet = (struct netcode_connection_request_packet_t*) 
+            allocate_function( allocator_context, sizeof( struct netcode_connection_request_packet_t ) );
 
         if ( !packet )
         {
@@ -1700,7 +1759,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                     return NULL;
                 }
 
-                struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_denied_packet_t ) );
+                struct netcode_connection_denied_packet_t * packet = (struct netcode_connection_denied_packet_t*) 
+                    allocate_function( allocator_context, sizeof( struct netcode_connection_denied_packet_t ) );
 
                 if ( !packet )
                 {
@@ -1722,7 +1782,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                     return NULL;
                 }
 
-                struct netcode_connection_challenge_packet_t * packet = (struct netcode_connection_challenge_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_challenge_packet_t ) );
+                struct netcode_connection_challenge_packet_t * packet = (struct netcode_connection_challenge_packet_t*) 
+                    allocate_function( allocator_context, sizeof( struct netcode_connection_challenge_packet_t ) );
 
                 if ( !packet )
                 {
@@ -1746,7 +1807,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                     return NULL;
                 }
 
-                struct netcode_connection_response_packet_t * packet = (struct netcode_connection_response_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_response_packet_t ) );
+                struct netcode_connection_response_packet_t * packet = (struct netcode_connection_response_packet_t*) 
+                    allocate_function( allocator_context, sizeof( struct netcode_connection_response_packet_t ) );
 
                 if ( !packet )
                 {
@@ -1770,7 +1832,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                     return NULL;
                 }
 
-                struct netcode_connection_keep_alive_packet_t * packet = (struct netcode_connection_keep_alive_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_keep_alive_packet_t ) );
+                struct netcode_connection_keep_alive_packet_t * packet = (struct netcode_connection_keep_alive_packet_t*) 
+                    allocate_function( allocator_context, sizeof( struct netcode_connection_keep_alive_packet_t ) );
 
                 if ( !packet )
                 {
@@ -1822,7 +1885,8 @@ void * netcode_read_packet( uint8_t * buffer, int buffer_length, uint64_t * sequ
                     return NULL;
                 }
 
-                struct netcode_connection_disconnect_packet_t * packet = (struct netcode_connection_disconnect_packet_t*) allocate_function( allocator_context, sizeof( struct netcode_connection_disconnect_packet_t ) );
+                struct netcode_connection_disconnect_packet_t * packet = (struct netcode_connection_disconnect_packet_t*) 
+                    allocate_function( allocator_context, sizeof( struct netcode_connection_disconnect_packet_t ) );
 
                 if ( !packet )
                 {
@@ -2025,7 +2089,10 @@ struct netcode_packet_queue_t
     uint64_t packet_sequence[NETCODE_PACKET_QUEUE_SIZE];
 };
 
-void netcode_packet_queue_init( struct netcode_packet_queue_t * queue, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+void netcode_packet_queue_init( struct netcode_packet_queue_t * queue, 
+                                void * allocator_context, 
+                                void * (*allocate_function)(void*,uint64_t), 
+                                void (*free_function)(void*,void*) )
 {
     if ( allocate_function == NULL )
     {
@@ -2119,7 +2186,9 @@ struct netcode_network_simulator_t
     struct netcode_network_simulator_packet_entry_t pending_receive_packets[NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS];
 };
 
-struct netcode_network_simulator_t * netcode_network_simulator_create( void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_network_simulator_t * netcode_network_simulator_create( void * allocator_context, 
+                                                                       void * (*allocate_function)(void*,uint64_t), 
+                                                                       void (*free_function)(void*,void*) )
 {
     if ( allocate_function == NULL )
     {
@@ -2131,7 +2200,8 @@ struct netcode_network_simulator_t * netcode_network_simulator_create( void * al
         free_function = netcode_default_free_function;
     }
 
-    struct netcode_network_simulator_t * network_simulator = (struct netcode_network_simulator_t*) allocate_function( allocator_context, sizeof( struct netcode_network_simulator_t ) );
+    struct netcode_network_simulator_t * network_simulator = (struct netcode_network_simulator_t*) 
+        allocate_function( allocator_context, sizeof( struct netcode_network_simulator_t ) );
 
     netcode_assert( network_simulator );
 
@@ -2183,11 +2253,17 @@ float netcode_random_float( float a, float b )
     return a + r;
 }
 
-void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * from, struct netcode_address_t * to, uint8_t * packet_data, int packet_bytes, float delay )
+void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t * network_simulator, 
+                                             struct netcode_address_t * from, 
+                                             struct netcode_address_t * to, 
+                                             uint8_t * packet_data, 
+                                             int packet_bytes, 
+                                             float delay )
 {
     network_simulator->packet_entries[network_simulator->current_index].from = *from;
     network_simulator->packet_entries[network_simulator->current_index].to = *to;
-    network_simulator->packet_entries[network_simulator->current_index].packet_data = (uint8_t*) network_simulator->allocate_function( network_simulator->allocator_context, packet_bytes );
+    network_simulator->packet_entries[network_simulator->current_index].packet_data = 
+        (uint8_t*) network_simulator->allocate_function( network_simulator->allocator_context, packet_bytes );
     memcpy( network_simulator->packet_entries[network_simulator->current_index].packet_data, packet_data, packet_bytes );
     network_simulator->packet_entries[network_simulator->current_index].packet_bytes = packet_bytes;
     network_simulator->packet_entries[network_simulator->current_index].delivery_time = network_simulator->time + delay;
@@ -2195,7 +2271,11 @@ void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t 
     network_simulator->current_index %= NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES;
 }
 
-void netcode_network_simulator_send_packet( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * from, struct netcode_address_t * to, uint8_t * packet_data, int packet_bytes )
+void netcode_network_simulator_send_packet( struct netcode_network_simulator_t * network_simulator, 
+                                            struct netcode_address_t * from, 
+                                            struct netcode_address_t * to, 
+                                            uint8_t * packet_data, 
+                                            int packet_bytes )
 {
     netcode_assert( network_simulator );
     netcode_assert( from );
@@ -2228,7 +2308,12 @@ void netcode_network_simulator_send_packet( struct netcode_network_simulator_t *
     }
 }
 
-int netcode_network_simulator_receive_packets( struct netcode_network_simulator_t * network_simulator, struct netcode_address_t * to, int max_packets, uint8_t ** packet_data, int * packet_bytes, struct netcode_address_t * from )
+int netcode_network_simulator_receive_packets( struct netcode_network_simulator_t * network_simulator, 
+                                               struct netcode_address_t * to, 
+                                               int max_packets, 
+                                               uint8_t ** packet_data, 
+                                               int * packet_bytes, 
+                                               struct netcode_address_t * from )
 {
     netcode_assert( network_simulator );
     netcode_assert( max_packets >= 0 );
@@ -2359,7 +2444,12 @@ struct netcode_client_t
     void (*free_function)(void*,void*);
 };
 
-struct netcode_client_t * netcode_client_create_internal( NETCODE_CONST char * address_string, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_client_t * netcode_client_create_internal( NETCODE_CONST char * address_string, 
+                                                          double time, 
+                                                          struct netcode_network_simulator_t * network_simulator, 
+                                                          void * allocator_context, 
+                                                          void * (*allocate_function)(void*,uint64_t), 
+                                                          void (*free_function)(void*,void*) )
 {
     netcode_assert( netcode.initialized );
 
@@ -2454,7 +2544,11 @@ struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address, d
     return netcode_client_create_internal( address, time, NULL, NULL, NULL, NULL );
 }
 
-struct netcode_client_t * netcode_client_create_with_allocator( NETCODE_CONST char * address, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_client_t * netcode_client_create_with_allocator( NETCODE_CONST char * address, 
+                                                                double time, 
+                                                                void * allocator_context, 
+                                                                void * (*allocate_function)(void*,uint64_t), 
+                                                                void (*free_function)(void*,void*) )
 {
     return netcode_client_create_internal( address, time, NULL, allocator_context, allocate_function, free_function );
 }
@@ -2470,7 +2564,8 @@ void netcode_client_destroy( struct netcode_client_t * client )
 
 void netcode_client_set_state( struct netcode_client_t * client, int client_state )
 {
-    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client changed state from '%s' to '%s'\n", netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client changed state from '%s' to '%s'\n", 
+        netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
 
     if ( client->state_change_callback_function )
     {
@@ -2542,7 +2637,8 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s [%d/%d]\n", 
+        netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
@@ -2563,7 +2659,10 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     {
         case NETCODE_CONNECTION_DENIED_PACKET:
         {
-            if ( ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST || client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE ) && netcode_address_equal( from, &client->server_address ) )
+            if ( ( client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST || 
+                   client->state == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE ) 
+                                                && 
+                      netcode_address_equal( from, &client->server_address ) )
             {
                 client->should_disconnect = 1;
                 client->should_disconnect_state = NETCODE_CLIENT_STATE_CONNECTION_DENIED;
@@ -2681,7 +2780,17 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
             uint64_t sequence;
 
-            void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, client->context.read_packet_key, client->connect_token.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection, client->allocator_context, client->allocate_function );
+            void * packet = netcode_read_packet( packet_data, 
+                                                 packet_bytes, 
+                                                 &sequence, 
+                                                 client->context.read_packet_key, 
+                                                 client->connect_token.protocol_id, 
+                                                 current_timestamp, 
+                                                 NULL, 
+                                                 allowed_packets, 
+                                                 &client->replay_protection, 
+                                                 client->allocator_context, 
+                                                 client->allocate_function );
 
             if ( !packet )
                 continue;
@@ -2693,14 +2802,29 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
     {
         // process packets received from network simulator
 
-        int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, &client->address, NETCODE_CLIENT_MAX_RECEIVE_PACKETS, client->receive_packet_data, client->receive_packet_bytes, client->receive_from );
+        int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, 
+                                                                              &client->address, 
+                                                                              NETCODE_CLIENT_MAX_RECEIVE_PACKETS, 
+                                                                              client->receive_packet_data, 
+                                                                              client->receive_packet_bytes, 
+                                                                              client->receive_from );
 
         int i;
         for ( i = 0; i < num_packets_received; ++i )
         {
             uint64_t sequence;
 
-            void * packet = netcode_read_packet( client->receive_packet_data[i], client->receive_packet_bytes[i], &sequence, client->context.read_packet_key, client->connect_token.protocol_id, current_timestamp, NULL, allowed_packets, &client->replay_protection, client->allocator_context, client->allocate_function );
+            void * packet = netcode_read_packet( client->receive_packet_data[i], 
+                                                 client->receive_packet_bytes[i], 
+                                                 &sequence, 
+                                                 client->context.read_packet_key, 
+                                                 client->connect_token.protocol_id, 
+                                                 current_timestamp, 
+                                                 NULL, 
+                                                 allowed_packets, 
+                                                 &client->replay_protection, 
+                                                 client->allocator_context, 
+                                                 client->allocate_function );
 
             client->free_function( client->allocator_context, client->receive_packet_data[i] );
 
@@ -2718,7 +2842,12 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-    int packet_bytes = netcode_write_packet( packet, packet_data, NETCODE_MAX_PACKET_BYTES, client->sequence, client->context.write_packet_key, client->connect_token.protocol_id );
+    int packet_bytes = netcode_write_packet( packet, 
+                                             packet_data, 
+                                             NETCODE_MAX_PACKET_BYTES, 
+                                             client->sequence, 
+                                             client->context.write_packet_key, 
+                                             client->connect_token.protocol_id );
 
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
@@ -2815,7 +2944,10 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to next server %s [%d/%d]\n", netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to next server %s [%d/%d]\n", 
+        netcode_address_to_string( &client->server_address, server_address_string ), 
+        client->server_address_index + 1, 
+        client->connect_token.num_server_addresses );
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
@@ -2930,7 +3062,8 @@ uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int *
     netcode_assert( client );
     netcode_assert( packet_bytes );
 
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &client->packet_receive_queue, packet_sequence );
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) 
+        netcode_packet_queue_pop( &client->packet_receive_queue, packet_sequence );
     
     if ( packet )
     {
@@ -3052,7 +3185,12 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
     memset( encryption_manager->receive_key, 0, sizeof( encryption_manager->receive_key ) );
 }
 
-int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, struct netcode_address_t * address, uint8_t * send_key, uint8_t * receive_key, double time, double expire_time )
+int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, 
+                                                       struct netcode_address_t * address, 
+                                                       uint8_t * send_key, 
+                                                       uint8_t * receive_key, 
+                                                       double time, 
+                                                       double expire_time )
 {
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
@@ -3069,7 +3207,8 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
-        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time || ( encryption_manager->expire_time[i] >= 0.0 && encryption_manager->expire_time[i] < time ) )
+        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time || 
+             ( encryption_manager->expire_time[i] >= 0.0 && encryption_manager->expire_time[i] < time ) )
         {
             encryption_manager->address[i] = *address;
             encryption_manager->expire_time[i] = expire_time;
@@ -3106,8 +3245,11 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                 int index = i - 1;
                 while ( index >= 0 )
                 {
-                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time && ( encryption_manager->expire_time[index] < 0 || encryption_manager->expire_time[index] > time ) )
+                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time && 
+                        ( encryption_manager->expire_time[index] < 0 || encryption_manager->expire_time[index] > time ) )
+                    {
                         break;
+                    }
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
@@ -3125,7 +3267,9 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time && ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
+             encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time && 
+             ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
         {
             encryption_manager->last_access_time[i] = time;
             return i;
@@ -3194,7 +3338,10 @@ void netcode_connect_token_entries_reset( struct netcode_connect_token_entry_t *
     }
 }
 
-int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entry_t * connect_token_entries, struct netcode_address_t * address, uint8_t * mac, double time )
+int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entry_t * connect_token_entries, 
+                                               struct netcode_address_t * address, 
+                                               uint8_t * mac, 
+                                               double time )
 {
     netcode_assert( connect_token_entries );
     netcode_assert( address );
@@ -3284,7 +3431,14 @@ struct netcode_server_t
     void (*free_function)(void*,void*);
 };
 
-struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * server_address_string, uint64_t protocol_id, uint8_t * private_key, double time, struct netcode_network_simulator_t * network_simulator, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * server_address_string, 
+                                                          uint64_t protocol_id, 
+                                                          uint8_t * private_key, 
+                                                          double time, 
+                                                          struct netcode_network_simulator_t * network_simulator, 
+                                                          void * allocator_context, 
+                                                          void * (*allocate_function)(void*,uint64_t), 
+                                                          void (*free_function)(void*,void*) )
 {
     netcode_assert( netcode.initialized );
 
@@ -3387,7 +3541,13 @@ struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_add
     return netcode_server_create_internal( server_address, protocol_id, private_key, time, NULL, NULL, NULL, NULL );
 }
 
-struct netcode_server_t * netcode_server_create_with_allocator( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) )
+struct netcode_server_t * netcode_server_create_with_allocator( NETCODE_CONST char * server_address, 
+                                                                uint64_t protocol_id, 
+                                                                uint8_t * private_key, 
+                                                                double time, 
+                                                                void * allocator_context, 
+                                                                void * (*allocate_function)(void*,uint64_t), 
+                                                                void (*free_function)(void*,void*) )
 {
     return netcode_server_create_internal( server_address, protocol_id, private_key, time, NULL, allocator_context, allocate_function, free_function );
 }
@@ -3464,7 +3624,10 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
-    if ( !netcode_encryption_manager_touch( &server->encryption_manager, server->client_encryption_index[client_index], &server->client_address[client_index], server->time ) )
+    if ( !netcode_encryption_manager_touch( &server->encryption_manager, 
+                                            server->client_encryption_index[client_index], 
+                                            &server->client_address[client_index], 
+                                            server->time ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: encryption mapping is out of date for client %d\n", client_index );
         return;
@@ -3637,7 +3800,9 @@ int netcode_server_find_client_index_by_address( struct netcode_server_t * serve
     return -1;
 }
 
-void netcode_server_process_connection_request_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_request_packet_t * packet )
+void netcode_server_process_connection_request_packet( struct netcode_server_t * server, 
+                                                       struct netcode_address_t * from, 
+                                                       struct netcode_connection_request_packet_t * packet )
 {
     netcode_assert( server );
 
@@ -3678,7 +3843,10 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, from, packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, server->time ) )
+    if ( !netcode_connect_token_entries_find_or_add( server->connect_token_entries, 
+                                                     from, 
+                                                     packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, 
+                                                     server->time ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. connect token has already been used\n" );
         return;
@@ -3696,7 +3864,12 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, from, connect_token_private.server_to_client_key, connect_token_private.client_to_server_key, server->time, server->time + NETCODE_TIMEOUT_SECONDS ) )
+    if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, 
+                                                             from, 
+                                                             connect_token_private.server_to_client_key, 
+                                                             connect_token_private.client_to_server_key, 
+                                                             server->time, 
+                                                             server->time + NETCODE_TIMEOUT_SECONDS ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
@@ -3710,7 +3883,10 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
     challenge_packet.challenge_token_sequence = server->challenge_sequence;
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
-    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, server->challenge_sequence, server->challenge_key ) != NETCODE_OK )
+    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, 
+                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
+                                          server->challenge_sequence, 
+                                          server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to encrypt challenge token\n" );
         return;
@@ -3737,7 +3913,12 @@ int netcode_server_find_free_client_index( struct netcode_server_t * server )
     return -1;
 }
 
-void netcode_server_connect_client( struct netcode_server_t * server, int client_index, struct netcode_address_t * address, uint64_t client_id, int encryption_index, void * user_data )
+void netcode_server_connect_client( struct netcode_server_t * server, 
+                                    int client_index, 
+                                    struct netcode_address_t * address, 
+                                    uint64_t client_id, 
+                                    int encryption_index, 
+                                    void * user_data )
 {
     netcode_assert( server );
     netcode_assert( server->running );
@@ -3766,7 +3947,8 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
 
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %s %.16" PRIx64 " in slot %d\n", netcode_address_to_string( address, address_string ), client_id, client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %s %.16" PRIx64 " in slot %d\n", 
+        netcode_address_to_string( address, address_string ), client_id, client_index );
 
     struct netcode_connection_keep_alive_packet_t packet;
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3781,11 +3963,17 @@ void netcode_server_connect_client( struct netcode_server_t * server, int client
     }
 }
 
-void netcode_server_process_connection_response_packet( struct netcode_server_t * server, struct netcode_address_t * from, struct netcode_connection_response_packet_t * packet, int encryption_index )
+void netcode_server_process_connection_response_packet( struct netcode_server_t * server, 
+                                                        struct netcode_address_t * from, 
+                                                        struct netcode_connection_response_packet_t * packet, 
+                                                        int encryption_index )
 {
     netcode_assert( server );
 
-    if ( netcode_decrypt_challenge_token( packet->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES, packet->challenge_token_sequence, server->challenge_key ) != NETCODE_OK )
+    if ( netcode_decrypt_challenge_token( packet->challenge_token_data, 
+                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
+                                          packet->challenge_token_sequence, 
+                                          server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. failed to decrypt challenge token\n" );
         return;
@@ -3837,7 +4025,12 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index, challenge_token.user_data );
 }
 
-void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, void * packet, uint64_t sequence, int encryption_index, int client_index )
+void netcode_server_process_packet( struct netcode_server_t * server, 
+                                    struct netcode_address_t * from, 
+                                    void * packet, 
+                                    uint64_t sequence, 
+                                    int encryption_index, 
+                                    int client_index )
 {
     netcode_assert( server );
     netcode_assert( packet );
@@ -3931,7 +4124,12 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
     server->free_function( server->allocator_context, packet );
 }
 
-void netcode_server_read_and_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes, uint64_t current_timestamp, uint8_t * allowed_packets )
+void netcode_server_read_and_process_packet( struct netcode_server_t * server, 
+                                             struct netcode_address_t * from, 
+                                             uint8_t * packet_data, 
+                                             int packet_bytes, 
+                                             uint64_t current_timestamp, 
+                                             uint8_t * allowed_packets )
 {
     if ( !server->running )
         return;
@@ -3953,7 +4151,17 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server, s
     
     uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
 
-    void * packet = netcode_read_packet( packet_data, packet_bytes, &sequence, read_packet_key, server->protocol_id, current_timestamp, server->private_key, allowed_packets, ( client_index != -1 ) ? &server->client_replay_protection[client_index] : NULL, server->allocator_context, server->allocate_function );
+    void * packet = netcode_read_packet( packet_data, 
+                                         packet_bytes, 
+                                         &sequence, 
+                                         read_packet_key, 
+                                         server->protocol_id, 
+                                         current_timestamp, 
+                                         server->private_key, 
+                                         allowed_packets, 
+                                         ( client_index != -1 ) ? &server->client_replay_protection[client_index] : NULL, 
+                                         server->allocator_context, 
+                                         server->allocate_function );
 
     if ( !packet )
         return;
@@ -3996,12 +4204,22 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     {
         // process packets received from network simulator
 
-        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, &server->address, NETCODE_SERVER_MAX_RECEIVE_PACKETS, server->receive_packet_data, server->receive_packet_bytes, server->receive_from );
+        int num_packets_received = netcode_network_simulator_receive_packets( server->network_simulator, 
+                                                                              &server->address, 
+                                                                              NETCODE_SERVER_MAX_RECEIVE_PACKETS, 
+                                                                              server->receive_packet_data, 
+                                                                              server->receive_packet_bytes, 
+                                                                              server->receive_from );
 
         int i;
         for ( i = 0; i < num_packets_received; ++i )
         {
-            netcode_server_read_and_process_packet( server, &server->receive_from[i], server->receive_packet_data[i], server->receive_packet_bytes[i], current_timestamp, allowed_packets );
+            netcode_server_read_and_process_packet( server, 
+                                                    &server->receive_from[i], 
+                                                    server->receive_packet_data[i], 
+                                                    server->receive_packet_bytes[i], 
+                                                    current_timestamp, 
+                                                    allowed_packets );
 
             server->free_function( server->allocator_context, server->receive_packet_data[i] );
         }
@@ -4136,7 +4354,8 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
 
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) netcode_packet_queue_pop( &server->client_packet_queue[client_index], packet_sequence );
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) 
+        netcode_packet_queue_pop( &server->client_packet_queue[client_index], packet_sequence );
     
     if ( packet )
     {
@@ -4213,7 +4432,14 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
 
 // ----------------------------------------------------------------
 
-int netcode_generate_connect_token( int num_server_addresses, NETCODE_CONST char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * output_buffer )
+int netcode_generate_connect_token( int num_server_addresses, 
+                                    NETCODE_CONST char ** server_addresses, 
+                                    int expire_seconds, 
+                                    uint64_t client_id, 
+                                    uint64_t protocol_id, 
+                                    uint64_t sequence, 
+                                    uint8_t * private_key, 
+                                    uint8_t * output_buffer )
 {
     netcode_assert( num_server_addresses > 0 );
     netcode_assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
@@ -4738,11 +4964,23 @@ static void test_connect_token()
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == NETCODE_OK );
+    check( netcode_encrypt_connect_token_private( buffer, 
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, 
+                                                  NETCODE_VERSION_INFO, 
+                                                  TEST_PROTOCOL_ID, 
+                                                  expire_timestamp, 
+                                                  sequence, 
+                                                  key ) == NETCODE_OK );
 
     // decrypt the buffer
 
-    check( netcode_decrypt_connect_token_private( buffer, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == NETCODE_OK );
+    check( netcode_decrypt_connect_token_private( buffer, 
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, 
+                                                  NETCODE_VERSION_INFO, 
+                                                  TEST_PROTOCOL_ID, 
+                                                  expire_timestamp, 
+                                                  sequence, 
+                                                  key ) == NETCODE_OK );
 
     // read the connect token back in
 
@@ -4840,7 +5078,13 @@ static void test_connection_request_packet()
     uint8_t connect_token_key[NETCODE_KEY_BYTES];
     netcode_generate_key( connect_token_key );
 
-    check( netcode_encrypt_connect_token_private( encrypted_connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, connect_token_expire_timestamp, connect_token_sequence, connect_token_key ) == NETCODE_OK );
+    check( netcode_encrypt_connect_token_private( encrypted_connect_token_data, 
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, 
+                                                  NETCODE_VERSION_INFO, 
+                                                  TEST_PROTOCOL_ID, 
+                                                  connect_token_expire_timestamp, 
+                                                  connect_token_sequence, 
+                                                  connect_token_key ) == NETCODE_OK );
 
     // setup a connection request packet wrapping the encrypted connect token
 
@@ -4872,7 +5116,8 @@ static void test_connection_request_packet()
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 1, sizeof( allowed_packets ) );
 
-    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), connect_token_key, allowed_packets, NULL, NULL, NULL );
+    struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), connect_token_key, allowed_packets, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -4915,7 +5160,8 @@ void test_connection_denied_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -4955,7 +5201,8 @@ void test_connection_challenge_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -4997,7 +5244,8 @@ void test_connection_response_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -5039,7 +5287,8 @@ void test_connection_keep_alive_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
-    struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -5082,7 +5331,8 @@ void test_connection_payload_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -5123,7 +5373,8 @@ void test_connection_disconnect_packet()
     uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
-    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
+    struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) 
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -5170,7 +5421,13 @@ void test_connect_token_public()
     uint64_t expire_timestamp = create_timestamp + 30;
     uint8_t key[NETCODE_KEY_BYTES];
     netcode_generate_key( key );    
-    check( netcode_encrypt_connect_token_private( connect_token_private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, TEST_PROTOCOL_ID, expire_timestamp, sequence, key ) == 1 );
+    check( netcode_encrypt_connect_token_private( connect_token_private_data, 
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, 
+                                                  NETCODE_VERSION_INFO, 
+                                                  TEST_PROTOCOL_ID, 
+                                                  expire_timestamp, 
+                                                  sequence, 
+                                                  key ) == 1 );
 
     // wrap a public connect token around the private connect token data
 
@@ -5256,7 +5513,12 @@ void test_encryption_manager()
         check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
         check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
 
-        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time, -1.0 ) );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
+                                                                  &encryption_mapping[i].address, 
+                                                                  encryption_mapping[i].send_key, 
+                                                                  encryption_mapping[i].receive_key, 
+                                                                  time, 
+                                                                  -1.0 ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5312,9 +5574,19 @@ void test_encryption_manager()
 
     // add the encryption mappings back in
     
-    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time, -1.0 ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
+                                                              &encryption_mapping[0].address, 
+                                                              encryption_mapping[0].send_key, 
+                                                              encryption_mapping[0].receive_key, 
+                                                              time, 
+                                                              -1.0 ) );
     
-    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, time, -1.0 ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
+                                                              &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, 
+                                                              encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, 
+                                                              encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, 
+                                                              time, 
+                                                              -1.0 ) );
 
     // all encryption mappings should be able to be looked up by address again
 
@@ -5358,7 +5630,12 @@ void test_encryption_manager()
         check( netcode_encryption_manager_get_send_key( &encryption_manager, encryption_index ) == NULL );
         check( netcode_encryption_manager_get_receive_key( &encryption_manager, encryption_index ) == NULL );
 
-        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, encryption_mapping[i].send_key, encryption_mapping[i].receive_key, time, -1.0 ) );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
+                                                                  &encryption_mapping[i].address, 
+                                                                  encryption_mapping[i].send_key, 
+                                                                  encryption_mapping[i].receive_key, 
+                                                                  time, 
+                                                                  -1.0 ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5389,7 +5666,12 @@ void test_encryption_manager()
 
     // test the expire time for encryption mapping works as expected
 
-    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, encryption_mapping[0].send_key, encryption_mapping[0].receive_key, time, time + 1.0 ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
+                                                              &encryption_mapping[0].address, 
+                                                              encryption_mapping[0].send_key, 
+                                                              encryption_mapping[0].receive_key, 
+                                                              time, 
+                                                              time + 1.0 ) );
 
     int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time );
 
@@ -5724,7 +6006,14 @@ void test_client_server_multiple_clients()
 
             uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
-            check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, token_sequence++, private_key, connect_token ) );
+            check( netcode_generate_connect_token( 1, 
+                                                   &server_address, 
+                                                   TEST_CONNECT_TOKEN_EXPIRY, 
+                                                   client_id, 
+                                                   TEST_PROTOCOL_ID, 
+                                                   token_sequence++, 
+                                                   private_key, 
+                                                   connect_token ) );
 
             netcode_client_connect( client[j], connect_token );
         }

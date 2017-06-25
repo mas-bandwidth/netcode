@@ -198,7 +198,7 @@ else
         trigger     = "loc",
         description = "Count lines of code",
         execute = function ()
-            os.execute "wc -l *.h *.c"
+            os.execute "wc -l *.h *.c *.cpp"
         end
     }
 
