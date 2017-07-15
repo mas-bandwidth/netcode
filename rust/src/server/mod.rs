@@ -603,8 +603,6 @@ mod test {
     use token;
     use super::*;
 
-    use socket::capi_simulator::*;
-
     use std::net::UdpSocket;
 
     const PROTOCOL_ID: u64 = 0xFFCC;
