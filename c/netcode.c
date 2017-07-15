@@ -84,7 +84,7 @@ static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETC
 }
 
 static int log_level = 0;
-static int (*printf_function)( NETCODE_CONST char *, ... ) = printf;
+static int (*printf_function)( NETCODE_CONST char *, ... ) = ( int (*)( NETCODE_CONST char *, ... ) ) printf;
 void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) = netcode_default_assert_handler;
 
 void netcode_log_level( int level )
@@ -667,7 +667,7 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         int error = WSAGetLastError();
 
-        if ( error == WSAEWOULDBLOCK )
+        if ( error == WSAEWOULDBLOCK || error == WSAECONNRESET )
             return 0;
 
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
@@ -841,9 +841,6 @@ int netcode_encrypt_aead( uint8_t * message, uint64_t message_length,
                           uint8_t * nonce,
                           uint8_t * key )
 {
-    netcode_assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
-    netcode_assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
-
     unsigned long long encrypted_length;
 
     #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
@@ -882,9 +879,6 @@ int netcode_decrypt_aead( uint8_t * message, uint64_t message_length,
                           uint8_t * nonce,
                           uint8_t * key )
 {
-    netcode_assert( NETCODE_KEY_BYTES == crypto_aead_chacha20poly1305_KEYBYTES );
-    netcode_assert( NETCODE_MAC_BYTES == crypto_aead_chacha20poly1305_ABYTES );
-
     unsigned long long decrypted_length;
 
     #if SODIUM_SUPPORTS_OVERLAPPING_BUFFERS
@@ -3039,7 +3033,6 @@ void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * pac
 {
     netcode_assert( client );
     netcode_assert( packet_data );
-    netcode_assert( NETCODE_MAX_PACKET_SIZE == NETCODE_MAX_PAYLOAD_BYTES );
     netcode_assert( packet_bytes >= 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
 
@@ -4308,7 +4301,6 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 {
     netcode_assert( server );
     netcode_assert( packet_data );
-    netcode_assert( NETCODE_MAX_PACKET_SIZE == NETCODE_MAX_PAYLOAD_BYTES );
     netcode_assert( packet_bytes >= 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
 
