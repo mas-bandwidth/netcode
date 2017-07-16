@@ -46,8 +46,6 @@ func (c *ClientInstance) Clear() {
 	c.clientIndex = -1
 	c.encryptionIndex = -1
 	c.packetQueue.Clear()
-
-	// todo probably don't need to re-make these.
 	c.userData = make([]byte, USER_DATA_BYTES)
 	c.packetData = make([]byte, MAX_PACKET_BYTES)
 }
