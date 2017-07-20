@@ -185,7 +185,7 @@ The low 4 bits of the prefix byte contain the packet type.
 
 The high 4 bits contain the number of bytes for the sequence number in the range [1,8]. 
 
-The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x000003E8 and requires only three bytes to send its value. Therefore, the high 4 bits of the prefix byte are set to 3 and the sequence data written to the packet is:
+The sequence number is encoded by omitting high zero bytes. For example, a sequence number of 1000 is 0x000003E8 and requires only two bytes to send its value. Therefore, the high 4 bits of the prefix byte are set to 2 and the sequence data written to the packet is:
 
     0xE8,0x03
     
