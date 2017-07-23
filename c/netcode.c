@@ -4344,7 +4344,7 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
                                                         packet_data, 
                                                         packet_bytes, 
                                                         server->client_sequence[client_index]++ );
-        
+
         server->client_last_packet_send_time[client_index] = server->time;
     }
 }
@@ -4443,6 +4443,7 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
 
     netcode_assert( server->num_connected_clients <= server->max_clients );
 
+    server->client_loopback[client_index] = 1;
     server->client_connected[client_index] = 1;
     server->client_confirmed[client_index] = 1;
     server->client_encryption_index[client_index] = -1;
@@ -4451,7 +4452,15 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
-    memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
+
+    if ( user_data )
+    {
+        memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
+    }
+    else
+    {
+        memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
+    }
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server connected loopback client %.16" PRIx64 " in slot %d\n", client_id, client_index );
 
@@ -7068,6 +7077,106 @@ void test_client_reconnect()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+void test_loopback()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
+
+    double time = 0.0;
+//    double delta_time = 1.0 / 10.0;
+
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator, NULL, NULL, NULL );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+//    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+    netcode_server_connect_loopback_client( server, 0, client_id, NULL );
+
+    /*
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_connected_clients( server ) == 1 );
+
+    int server_num_packets_received = 0;
+    int client_num_packets_received = 0;
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+        packet_data[i] = (uint8_t) i;
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+        netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            uint8_t * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            (void) packet_sequence;
+            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            client_num_packets_received++;
+            netcode_client_free_packet( client, packet );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            (void) packet_sequence;
+            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            server_num_packets_received++;
+            netcode_server_free_packet( server, packet );
+        }
+
+        if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
+        {
+            if ( netcode_server_client_connected( server, 0 ) )
+            {
+                netcode_server_disconnect_client( server, 0 );
+            }
+        }
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( client_num_packets_received >= 10 && server_num_packets_received >= 10 );
+    */
+
+    netcode_server_destroy( server );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -7108,6 +7217,7 @@ void netcode_test()
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_client_reconnect );
+        RUN_TEST( test_loopback );
     }
 }
 
