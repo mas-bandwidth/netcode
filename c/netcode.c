@@ -4418,31 +4418,39 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
     server->connect_disconnect_callback_function = callback_function;
 }
 
-void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index )   // todo: client_id
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id )
 {
     netcode_assert( server );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
     netcode_assert( !server->client_connected[client_index] );
+    // todo
+    (void) server;
+    (void) client_index;
+    (void) client_id;
+}
+
+void netcode_server_disconnect_loopback_client( struct netcode_server_t * server, int client_index )
+{
+    netcode_assert( server );
+    netcode_assert( client_index >= 0 );
+    netcode_assert( client_index < server->max_clients );
+    netcode_assert( server->running );
+    netcode_assert( server->client_connected[client_index] );
+    netcode_assert( server->client_loopback[client_index] );
     // todo
     (void) server;
     (void) client_index;
 }
 
-// todo: disconnect_loopback_client
-
 int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index )
 {
     netcode_assert( server );
+    netcode_assert( server->running );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
-    netcode_assert( server->running );
-    netcode_assert( !server->client_connected[client_index] );
-    // todo
-    (void) server;
-    (void) client_index;
-    return 0;
+    return server->client_loopback[client_index];
 }
 
 void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )

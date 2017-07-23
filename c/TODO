@@ -60,11 +60,11 @@ DONE
 
     Added a special section for loopback clients to send their payload packets directly via callback.
 
+    Added special loopback client disconnect function.
+
+    Extended loopback client connect to take client id.
+
 TODO
-
-    Extend to add a loopback client disconnect function.
-
-    Extend loopback client connect to take client id.
 
     ------------
 
