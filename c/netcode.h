@@ -181,6 +181,14 @@ void * netcode_server_client_user_data( struct netcode_server_t * server, int cl
 
 void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) );
 
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index );
+
+int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index );
+
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
+
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) );
+
 void netcode_log_level( int level );
 
 void netcode_set_printf_function( int (*function)( NETCODE_CONST char *, ... ) );

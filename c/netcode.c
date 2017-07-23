@@ -4393,7 +4393,6 @@ void * netcode_server_client_user_data( struct netcode_server_t * server, int cl
 int netcode_server_running( struct netcode_server_t * server )
 {
     netcode_assert( server );
-
     return server->running;
 }
 
@@ -4405,13 +4404,9 @@ int netcode_server_max_clients( struct netcode_server_t * server )
 void netcode_server_update( struct netcode_server_t * server, double time )
 {
     netcode_assert( server );
-
     server->time = time;
-
     netcode_server_receive_packets( server );
-
     netcode_server_send_packets( server );
-
     netcode_server_check_for_timeouts( server );
 }
 
@@ -4420,6 +4415,56 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
     netcode_assert( server );
     server->connect_disconnect_callback_context = context;
     server->connect_disconnect_callback_function = callback_function;
+}
+
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index )
+{
+    netcode_assert( server );
+    netcode_assert( client_index >= 0 );
+    netcode_assert( client_index < server->max_clients );
+    netcode_assert( server->running );
+    netcode_assert( !server->client_connected[client_index] );
+    // todo
+    (void) server;
+    (void) client_index;
+}
+
+int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index )
+{
+    netcode_assert( server );
+    netcode_assert( client_index >= 0 );
+    netcode_assert( client_index < server->max_clients );
+    netcode_assert( server->running );
+    netcode_assert( !server->client_connected[client_index] );
+    // todo
+    (void) server;
+    (void) client_index;
+    return 0;
+}
+
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
+{
+    netcode_assert( server );
+    netcode_assert( packet_data );
+    netcode_assert( packet_bytes );
+    netcode_assert( client_index >= 0 );
+    netcode_assert( client_index < server->max_clients );
+    netcode_assert( server->running );
+    netcode_assert( !server->client_connected[client_index] );
+    // todo
+    (void) server;
+    (void) client_index;
+    (void) packet_data;
+    (void) packet_bytes;
+}
+
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) )
+{
+    netcode_assert( server );
+    // todo
+    (void) server;
+    (void) context;
+    (void) callback_function;
 }
 
 // ----------------------------------------------------------------
@@ -4456,15 +4501,12 @@ int netcode_generate_connect_token( int num_server_addresses,
 
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
-
     struct netcode_connect_token_private_t connect_token_private;
-
     netcode_generate_connect_token_private( &connect_token_private, client_id, num_server_addresses, parsed_server_addresses, user_data );
 
     // write it to a buffer
 
     uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
-
     netcode_write_connect_token_private( &connect_token_private, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     // encrypt the buffer
