@@ -7087,7 +7087,7 @@ void test_loopback()
     network_simulator->duplicate_packet_percent = 10;
 
     double time = 0.0;
-//    double delta_time = 1.0 / 10.0;
+    double delta_time = 1.0 / 10.0;
 
     // start the server
 
@@ -7096,8 +7096,6 @@ void test_loopback()
     check( server );
 
     netcode_server_start( server, 2 );
-
-//    NETCODE_CONST char * server_address = "[::1]:40000";
 
     // connect a loopback client in slot 0
 
@@ -7109,75 +7107,47 @@ void test_loopback()
     check( netcode_server_client_connected( server, 0 ) == 1 );
     check( netcode_server_num_connected_clients( server ) == 1 );
 
-    // connect a regular client in the next slot
+    // connect a regular client in the other slot
 
-    // todo
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
 
-    // wait until the regular client connects
+    check( client );
 
-    // todo
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
-    // verify that we can exchange packets for both the regular client, and the loopback client
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
-    // todo
+    netcode_client_connect( client, connect_token );
 
-    /*
-    for ( int i = 0; i < 100; ++i )
+    while ( 1 )
     {
         netcode_network_simulator_update( network_simulator, time );
 
-//        netcode_client_update( client, time );
+        netcode_client_update( client, time );
 
         netcode_server_update( server, time );
-
-        netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
-
-        netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
-
-        while ( 1 )             
-        {
-            int packet_bytes;
-            uint64_t packet_sequence;
-            uint8_t * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
-            if ( !packet )
-                break;
-            (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
-            client_num_packets_received++;
-            netcode_client_free_packet( client, packet );
-        }
-
-        while ( 1 )             
-        {
-            int packet_bytes;
-            uint64_t packet_sequence;
-            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
-            if ( !packet )
-                break;
-            (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
-            server_num_packets_received++;
-            netcode_server_free_packet( server, packet );
-        }
-
-        if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
-        {
-            if ( netcode_server_client_connected( server, 0 ) )
-            {
-                netcode_server_disconnect_client( server, 0 );
-            }
-        }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
             break;
 
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
         time += delta_time;
     }
-    */
 
-    /*
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 1 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_client_connected( server, 1 ) == 1 );
+    check( netcode_server_client_loopback( server, 0 ) == 1 );
+    check( netcode_server_client_loopback( server, 1 ) == 0 );
+    check( netcode_server_num_connected_clients( server ) == 2 );
+
+    // test that we can exchange packets for the regular client and the loopback client
+
     int server_num_packets_received = 0;
     int client_num_packets_received = 0;
 
@@ -7196,7 +7166,7 @@ void test_loopback()
 
         netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
 
-        netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+        netcode_server_send_packet( server, 1, packet_data, NETCODE_MAX_PACKET_SIZE );
 
         while ( 1 )             
         {
@@ -7216,7 +7186,7 @@ void test_loopback()
         {
             int packet_bytes;
             uint64_t packet_sequence;
-            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+            void * packet = netcode_server_receive_packet( server, 1, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
             (void) packet_sequence;
@@ -7228,10 +7198,7 @@ void test_loopback()
 
         if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
         {
-            if ( netcode_server_client_connected( server, 0 ) )
-            {
-                netcode_server_disconnect_client( server, 0 );
-            }
+            break;
         }
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
@@ -7241,7 +7208,20 @@ void test_loopback()
     }
 
     check( client_num_packets_received >= 10 && server_num_packets_received >= 10 );
-    */
+
+    // verify that we can disconnect the loopback client
+
+    // ...
+
+    // verify that we can reconnect the loopback client
+
+    // ...
+
+    // verify that we can exchange packets for both regular and loopback client post reconnect
+
+    // ...
+
+    // verify the loopback client doesn't time out
 
     netcode_server_destroy( server );
 
