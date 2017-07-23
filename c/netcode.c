@@ -4423,17 +4423,33 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
     server->connect_disconnect_callback_function = callback_function;
 }
 
-void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id )
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data )
 {
     netcode_assert( server );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
     netcode_assert( !server->client_connected[client_index] );
-    // todo: connect the loopback client
-    (void) server;
-    (void) client_index;
-    (void) client_id;
+
+    server->num_connected_clients++;
+
+    netcode_assert( server->num_connected_clients <= server->max_clients );
+
+    server->client_connected[client_index] = 1;
+    server->client_encryption_index[client_index] = -1;
+    server->client_id[client_index] = client_id;
+    server->client_sequence[client_index] = 0;
+    memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
+    server->client_last_packet_send_time[client_index] = server->time;
+    server->client_last_packet_receive_time[client_index] = server->time;
+    memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
+
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server connected loopback client %.16" PRIx64 " in slot %d\n", client_id, client_index );
+
+    if ( server->connect_disconnect_callback_function )
+    {
+        server->connect_disconnect_callback_function( server->connect_disconnect_callback_context, client_index, 1 );
+    }
 }
 
 void netcode_server_disconnect_loopback_client( struct netcode_server_t * server, int client_index )
@@ -4444,9 +4460,28 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     netcode_assert( server->running );
     netcode_assert( server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
-    // todo: disconnect this loopback client
-    (void) server;
-    (void) client_index;
+
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected loopback client %d\n", client_index );
+
+    if ( server->connect_disconnect_callback_function )
+    {
+        server->connect_disconnect_callback_function( server->connect_disconnect_callback_context, client_index, 0 );
+    }
+
+    server->client_connected[client_index] = 0;
+    server->client_loopback[client_index] = 0;
+    server->client_confirmed[client_index] = 0;
+    server->client_id[client_index] = 0;
+    server->client_sequence[client_index] = 0;
+    server->client_last_packet_send_time[client_index] = 0.0;
+    server->client_last_packet_receive_time[client_index] = 0.0;
+    memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
+    server->client_encryption_index[client_index] = -1;
+    memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
+
+    server->num_connected_clients--;
+
+    netcode_assert( server->num_connected_clients >= 0 );
 }
 
 int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index )

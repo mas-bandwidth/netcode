@@ -181,7 +181,7 @@ void * netcode_server_client_user_data( struct netcode_server_t * server, int cl
 
 void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) );
 
-void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id );
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data );
 
 void netcode_server_disconnect_loopback_client( struct netcode_server_t * server, int client_index );
 

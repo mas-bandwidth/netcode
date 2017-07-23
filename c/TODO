@@ -66,13 +66,15 @@ DONE
 
     Added function pointer and context for callback when sending loopback packets to client.
 
+    Added support to user data for loopback client connect.
+
+    Added code to connect a loopback client.
+
+    Added code to disconnect a loopback client.
+
 TODO
 
-    Implement code to connect a loopback client.
-
-    Implement code to disconnect a loopback client.
-
-    Implement code to process packets directly.
+    Implement code to process packets for loopback client directly.
 
     Implement code to call into send packet callback when sending packets to loopback client.
 
