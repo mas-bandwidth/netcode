@@ -64,40 +64,19 @@ DONE
 
     Extended loopback client connect to take client id.
 
+    Added function pointer and context for callback when sending loopback packets to client.
+
 TODO
 
-    ------------
+    Implement code to connect a loopback client.
 
-    Now I need to determine the server data structure required for loopback clients.
+    Implement code to disconnect a loopback client.
 
-    I need at minimum:
+    Implement code to process packets directly.
 
-        - the context for callback
-        - the function ptr for callback
-        - array of "is loopback" per-client
+    Implement code to call into send packet callback when sending packets to loopback client.
 
-    ------------
-
-    Once this is done, I can work out how to implement the code to connect a loopback client.
-
-    Then, I can update the remaining code so that it works properly wrt. loopback clients.
-
-    At minimum this means:
-
-        - considering a loopback client slot as connected, so it's not 
-        - in code that iterates across clients and does things (eg. timeouts, sending internal packets), this needs to be made loopback client aware, eg. skip loopback clients.
-        - loopback clients don't need any fancy encryption mappings etc. this should make it impossible for packets coming in over regular channel to be fed to loopback client.
-        - code to disconnect a client needs to be made loopback client aware, eg. don't send disconnect packets, clear the loopback client flag.
-        - should regular disconnect client codepath work for loopback clients? there are arguments for and against...
-        - probably not, because you would expect "disconnect all clients" does not kill any loopbacks I think, by default.
-        - so disconnect all clients should skip loopbacks, and disconnect should assert if the client is loopback.
-        - add a specific disconnect loopback client method to server.
-
-    ------------
-
-    I'll need to implement a unit test to ensure that the loopback client is properly created, and can process packets and send packets through the callback properly.
-
-    eg. test_loopback
+    Implement a unit test to ensure that the loopback client is properly created, reserves the slot, and can process packets and send packets through the callback properly.
 
     ------------
 

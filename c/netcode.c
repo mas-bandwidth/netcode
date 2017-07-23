@@ -3423,6 +3423,8 @@ struct netcode_server_t
     void * allocator_context;
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
+    void * send_loopback_packet_callback_context;
+    void (*send_loopback_packet_callback_function)(void*,int,uint8_t*,int);
 
 };
 
@@ -3528,6 +3530,9 @@ struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * s
     server->allocator_context = allocator_context;
     server->allocate_function = allocate_function;
     server->free_function = free_function;
+
+    server->send_loopback_packet_callback_context = NULL;
+    server->send_loopback_packet_callback_function = NULL;
 
     return server;
 }
@@ -4425,7 +4430,7 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
     netcode_assert( !server->client_connected[client_index] );
-    // todo
+    // todo: connect the loopback client
     (void) server;
     (void) client_index;
     (void) client_id;
@@ -4439,7 +4444,7 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     netcode_assert( server->running );
     netcode_assert( server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
-    // todo
+    // todo: disconnect this loopback client
     (void) server;
     (void) client_index;
 }
@@ -4462,7 +4467,8 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
     netcode_assert( !server->client_connected[client_index] );
-    // todo
+    netcode_assert( server->client_loopback[client_index] );
+    // todo: directly process this packet (unencrypted)
     (void) server;
     (void) client_index;
     (void) packet_data;
@@ -4472,10 +4478,8 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
 void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) )
 {
     netcode_assert( server );
-    // todo
-    (void) server;
-    (void) context;
-    (void) callback_function;
+    server->send_loopback_packet_callback_context = context;
+    server->send_loopback_packet_callback_function = callback_function;
 }
 
 // ----------------------------------------------------------------
