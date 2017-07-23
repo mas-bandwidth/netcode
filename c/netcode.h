@@ -185,7 +185,7 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
 
 void netcode_server_disconnect_loopback_client( struct netcode_server_t * server, int client_index );
 
-int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index );
+int netcode_server_client_loopback( struct netcode_server_t * server, int client_index );
 
 void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
 
