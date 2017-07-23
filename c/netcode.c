@@ -3424,7 +3424,7 @@ struct netcode_server_t
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
     void * send_loopback_packet_callback_context;
-    void (*send_loopback_packet_callback_function)(void*,int,uint8_t*,int);
+    void (*send_loopback_packet_callback_function)(void*,int,uint8_t*,int,uint64_t);
 
 };
 
@@ -4337,7 +4337,15 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
     }
     else
     {
-        // todo: special codepath for sending loopback packets to client via callback
+        netcode_assert( server->send_loopback_packet_callback_function );
+
+        server->send_loopback_packet_callback_function( server->send_loopback_packet_callback_context, 
+                                                        client_index, 
+                                                        packet_data, 
+                                                        packet_bytes, 
+                                                        server->client_sequence[client_index]++ );
+        
+        server->client_last_packet_send_time[client_index] = server->time;
     }
 }
 
@@ -4504,29 +4512,34 @@ int netcode_server_is_loopback_client( struct netcode_server_t * server, int cli
     return server->client_loopback[client_index];
 }
 
-void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
 {
     netcode_assert( server );
-    netcode_assert( packet_data );
-    netcode_assert( packet_bytes );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
-    netcode_assert( server->running );
+    netcode_assert( packet_data );
+    netcode_assert( packet_bytes >= 0 );
+    netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
     netcode_assert( !server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
+    netcode_assert( server->running );
 
-    // todo: we have to make a copy of the packet here, because we have a special allocation step required for the packet to be cleaned up properly
+    struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, server->allocator_context, server->allocate_function );
+    if ( !packet )
+        return;
 
-    /*
+    memcpy( packet->payload_data, packet_data, packet_bytes );
+
+    packet->payload_bytes = packet_bytes;
+
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server processing loopback packet from client %d\n", client_index );
 
     server->client_last_packet_receive_time[client_index] = server->time;
 
-    netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
-    */
+    netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, packet_sequence );
 }
 
-void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) )
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int,uint64_t) )
 {
     netcode_assert( server );
     server->send_loopback_packet_callback_context = context;

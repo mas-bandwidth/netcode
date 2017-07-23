@@ -187,9 +187,9 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
 
 int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index );
 
-void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
 
-void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) );
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int,uint64_t) );
 
 void netcode_log_level( int level );
 

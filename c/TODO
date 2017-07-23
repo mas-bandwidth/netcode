@@ -74,16 +74,18 @@ DONE
 
     Sketched out code to process packets for loopback client directly.
 
-TODO
-
     Implement code to call into send packet callback when sending packets to loopback client.
 
-    Extend code for processing loopback packets from client to perform a copy and wrap a "packet" structure around it before adding to queue.
+    Added packet sequence to loopback packet send and process.
 
-    ------------
+    Extended code for processing loopback packets from client to perform a copy and wrap a "packet" structure around it before adding to queue.
+
+    In theory, should all work now. AHAHAHAH. Yeah right...
+
+TODO
 
     Implement a unit test to ensure that the loopback client is properly created, reserves the slot, and can process packets and send packets through the callback properly.
 
     ------------
 
-    Create an advanced interface to provide a way to read and write packets without copying or allocations.
+    Add an interface for reading and writing packets without copying or allocations.
