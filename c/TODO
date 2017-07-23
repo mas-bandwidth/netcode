@@ -46,6 +46,59 @@ DONE
 
     Improved support for C++ by adding NETCODE_CONST. Now compiles clean on C++11
 
+    Sketched out interface for server-side loopback clients.
+
+    Added client_loopback per-client to netcode server.
+
+    Updated disconnect function to assert if it's used to disconnect a loopback client.
+
+    Updated disconnect all clients to skip over loopback clients.
+
+    Disabled timeouts for loopback clients.
+
+    Added safety check in regular receive and packet send codepath to avoid doing so for loopback clients.
+
+    Added a special section for loopback clients to send their payload packets directly via callback.
+
 TODO
+
+    Extend to add a loopback client disconnect function.
+
+    Extend loopback client connect to take client id.
+
+    ------------
+
+    Now I need to determine the server data structure required for loopback clients.
+
+    I need at minimum:
+
+        - the context for callback
+        - the function ptr for callback
+        - array of "is loopback" per-client
+
+    ------------
+
+    Once this is done, I can work out how to implement the code to connect a loopback client.
+
+    Then, I can update the remaining code so that it works properly wrt. loopback clients.
+
+    At minimum this means:
+
+        - considering a loopback client slot as connected, so it's not 
+        - in code that iterates across clients and does things (eg. timeouts, sending internal packets), this needs to be made loopback client aware, eg. skip loopback clients.
+        - loopback clients don't need any fancy encryption mappings etc. this should make it impossible for packets coming in over regular channel to be fed to loopback client.
+        - code to disconnect a client needs to be made loopback client aware, eg. don't send disconnect packets, clear the loopback client flag.
+        - should regular disconnect client codepath work for loopback clients? there are arguments for and against...
+        - probably not, because you would expect "disconnect all clients" does not kill any loopbacks I think, by default.
+        - so disconnect all clients should skip loopbacks, and disconnect should assert if the client is loopback.
+        - add a specific disconnect loopback client method to server.
+
+    ------------
+
+    I'll need to implement a unit test to ensure that the loopback client is properly created, and can process packets and send packets through the callback properly.
+
+    eg. test_loopback
+
+    ------------
 
     Create an advanced interface to provide a way to read and write packets without copying or allocations.

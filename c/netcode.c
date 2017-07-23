@@ -3402,6 +3402,7 @@ struct netcode_server_t
     uint64_t challenge_sequence;
     uint8_t challenge_key[NETCODE_KEY_BYTES];
     int client_connected[NETCODE_MAX_CLIENTS];
+    int client_loopback[NETCODE_MAX_CLIENTS];
     int client_confirmed[NETCODE_MAX_CLIENTS];
     int client_encryption_index[NETCODE_MAX_CLIENTS];
     uint64_t client_id[NETCODE_MAX_CLIENTS];
@@ -3422,6 +3423,7 @@ struct netcode_server_t
     void * allocator_context;
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
+
 };
 
 struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * server_address_string, 
@@ -3498,6 +3500,7 @@ struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * s
 
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
     memset( server->client_connected, 0, sizeof( server->client_connected ) );
+    memset( server->client_loopback, 0, sizeof( server->client_loopback ) );
     memset( server->client_confirmed, 0, sizeof( server->client_confirmed ) );
     memset( server->client_id, 0, sizeof( server->client_id ) );
     memset( server->client_sequence, 0, sizeof( server->client_sequence ) );
@@ -3614,6 +3617,7 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->client_connected[client_index] );
+    netcode_assert( !server->client_loopback[client_index] );
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
@@ -3653,6 +3657,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->client_connected[client_index] );
+    netcode_assert( !server->client_loopback[client_index] );
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected client %d\n", client_index );
 
@@ -3715,8 +3720,12 @@ void netcode_server_disconnect_client( struct netcode_server_t * server, int cli
 
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+    netcode_assert( server->client_loopback[client_index] == 0 );
 
     if ( !server->client_connected[client_index] )
+        return;
+
+    if ( server->client_loopback[client_index] )
         return;
 
     netcode_server_disconnect_client_internal( server, client_index, 1 );
@@ -3732,8 +3741,10 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; ++i )
     {
-        if ( server->client_connected[i] )
+        if ( server->client_connected[i] && !server->client_loopback[i] )
+        {
             netcode_server_disconnect_client_internal( server, i, 1 );
+        }
     }
 }
 
@@ -4040,9 +4051,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
             if ( ( server->flags & NETCODE_SERVER_FLAG_IGNORE_CONNECTION_REQUEST_PACKETS ) == 0 )
             {
                 char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
-
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection request from %s\n", netcode_address_to_string( from, from_address_string ) );
-
                 netcode_server_process_connection_request_packet( server, from, (struct netcode_connection_request_packet_t*) packet );
             }
         }
@@ -4053,9 +4062,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
             if ( ( server->flags & NETCODE_SERVER_FLAG_IGNORE_CONNECTION_RESPONSE_PACKETS ) == 0 )
             {
                 char from_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
-
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection response from %s\n", netcode_address_to_string( from, from_address_string ) );
-
                 netcode_server_process_connection_response_packet( server, from, (struct netcode_connection_response_packet_t*) packet, encryption_index );
             }
         }
@@ -4066,9 +4073,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
             if ( client_index != -1 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection keep alive packet from client %d\n", client_index );
-
                 server->client_last_packet_receive_time[client_index] = server->time;
-
                 if ( !server->client_confirmed[client_index] )
                 {
                     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
@@ -4083,17 +4088,13 @@ void netcode_server_process_packet( struct netcode_server_t * server,
             if ( client_index != -1 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received connection payload packet from client %d\n", client_index );
-
                 server->client_last_packet_receive_time[client_index] = server->time;
-
                 if ( !server->client_confirmed[client_index] )
                 {
                     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
-
                 netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
-
                 return;
             }
         }
@@ -4104,7 +4105,6 @@ void netcode_server_process_packet( struct netcode_server_t * server,
             if ( client_index != -1 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server received disconnect packet from client %d\n", client_index );
-
                 netcode_server_disconnect_client_internal( server, client_index, 0 );
            }
         }
@@ -4183,13 +4183,10 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         while ( 1 )
         {
             struct netcode_address_t from;
-
             uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
-
             int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             if ( packet_bytes == 0 )
                 break;
-
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
     }
@@ -4229,15 +4226,14 @@ void netcode_server_send_packets( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; ++i )
     {
-        if ( server->client_connected[i] && server->client_last_packet_send_time[i] + ( 1.0 / NETCODE_PACKET_SEND_RATE ) <= server->time )
+        if ( server->client_connected[i] && !server->client_loopback[i] &&
+             ( server->client_last_packet_send_time[i] + ( 1.0 / NETCODE_PACKET_SEND_RATE ) <= server->time ) )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent connection keep alive packet to client %d\n", i );
-
             struct netcode_connection_keep_alive_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
             packet.client_index = i;
             packet.max_clients = server->max_clients;
-
             netcode_server_send_client_packet( server, &packet, i );
         }
     }
@@ -4253,7 +4249,8 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; ++i )
     {
-        if ( server->client_connected[i] && ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
+        if ( server->client_connected[i] && !server->client_loopback[i] &&
+             ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "server timed out client %d\n", i );
             netcode_server_disconnect_client_internal( server, i, 0 );
@@ -4312,24 +4309,31 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
     if ( !server->client_connected[client_index] )
         return;
 
-    uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
-
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
-
-    packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
-    packet->payload_bytes = packet_bytes;
-    memcpy( packet->payload_data, packet_data, packet_bytes );
-
-    if ( !server->client_confirmed[client_index] )
+    if ( !server->client_loopback[client_index] )
     {
-        struct netcode_connection_keep_alive_packet_t keep_alive_packet;
-        keep_alive_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
-        keep_alive_packet.client_index = client_index;
-        keep_alive_packet.max_clients = server->max_clients;
-        netcode_server_send_client_packet( server, &keep_alive_packet, client_index );
-    }
+        uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
 
-    netcode_server_send_client_packet( server, packet, client_index );
+        struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+
+        packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
+        packet->payload_bytes = packet_bytes;
+        memcpy( packet->payload_data, packet_data, packet_bytes );
+
+        if ( !server->client_confirmed[client_index] )
+        {
+            struct netcode_connection_keep_alive_packet_t keep_alive_packet;
+            keep_alive_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+            keep_alive_packet.client_index = client_index;
+            keep_alive_packet.max_clients = server->max_clients;
+            netcode_server_send_client_packet( server, &keep_alive_packet, client_index );
+        }
+
+        netcode_server_send_client_packet( server, packet, client_index );
+    }
+    else
+    {
+        // todo: special codepath for sending loopback packets to client via callback
+    }
 }
 
 uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence )
@@ -4345,6 +4349,7 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
 
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+    netcode_assert( !server->client_loopback[client_index] );
 
     struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) 
         netcode_packet_queue_pop( &server->client_packet_queue[client_index], packet_sequence );
@@ -4367,18 +4372,14 @@ void netcode_server_free_packet( struct netcode_server_t * server, void * packet
 {
     netcode_assert( server );
     netcode_assert( packet );
-
     (void) server;
-
     int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
-
     server->free_function( server->allocator_context, ( (uint8_t*) packet ) - offset );
 }
 
 int netcode_server_num_connected_clients( struct netcode_server_t * server )
 {
     netcode_assert( server );
-
     return server->num_connected_clients;
 }
 
@@ -4417,7 +4418,7 @@ void netcode_server_connect_disconnect_callback( struct netcode_server_t * serve
     server->connect_disconnect_callback_function = callback_function;
 }
 
-void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index )
+void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index )   // todo: client_id
 {
     netcode_assert( server );
     netcode_assert( client_index >= 0 );
@@ -4428,6 +4429,8 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     (void) server;
     (void) client_index;
 }
+
+// todo: disconnect_loopback_client
 
 int netcode_server_is_loopback_client( struct netcode_server_t * server, int client_index )
 {
