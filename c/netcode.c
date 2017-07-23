@@ -4436,6 +4436,7 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     netcode_assert( server->num_connected_clients <= server->max_clients );
 
     server->client_connected[client_index] = 1;
+    server->client_confirmed[client_index] = 1;
     server->client_encryption_index[client_index] = -1;
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
@@ -4467,6 +4468,16 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     {
         server->connect_disconnect_callback_function( server->connect_disconnect_callback_context, client_index, 0 );
     }
+
+    while ( 1 )
+    {
+        void * packet = netcode_packet_queue_pop( &server->client_packet_queue[client_index], NULL );
+        if ( !packet )
+            break;
+        server->free_function( server->allocator_context, packet );
+    }
+
+    netcode_packet_queue_clear( &server->client_packet_queue[client_index] );
 
     server->client_connected[client_index] = 0;
     server->client_loopback[client_index] = 0;
@@ -4503,11 +4514,16 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
     netcode_assert( server->running );
     netcode_assert( !server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
-    // todo: directly process this packet (unencrypted)
-    (void) server;
-    (void) client_index;
-    (void) packet_data;
-    (void) packet_bytes;
+
+    // todo: we have to make a copy of the packet here, because we have a special allocation step required for the packet to be cleaned up properly
+
+    /*
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server processing loopback packet from client %d\n", client_index );
+
+    server->client_last_packet_receive_time[client_index] = server->time;
+
+    netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
+    */
 }
 
 void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int) )
