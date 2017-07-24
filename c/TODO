@@ -88,4 +88,8 @@ DONE
 
 TODO
 
+    Extend client to support loopback operations as well as server, for consistency of integration with yojimbo.
+
+    --------------------
+
     Add an interface for reading and writing packets without copying or allocations.
