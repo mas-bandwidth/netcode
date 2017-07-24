@@ -82,10 +82,10 @@ DONE
 
     In theory, should all work now. AHAHAHAH. Yeah right...
 
-TODO
-
     Implement a unit test to ensure that the loopback client is properly created, reserves the slot, and can process packets and send packets through the callback properly.
 
-    ------------
+    Test on windows and linux, then we're ready for 1.0 release!
+
+TODO
 
     Add an interface for reading and writing packets without copying or allocations.
