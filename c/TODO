@@ -88,10 +88,10 @@ DONE
 
     Extend client to support loopback operations as well as server, for consistency of integration with yojimbo.
 
+    Extend loopback test to include client-side loopback support in addition to server-side.
+
 TODO
 
-    Extend loopback test to include client-side loopback support in addition to server-side.
-    
     --------------------
 
     Add an interface for reading and writing packets without copying or allocations.
