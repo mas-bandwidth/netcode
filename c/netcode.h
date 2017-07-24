@@ -112,7 +112,7 @@ void netcode_client_update( struct netcode_client_t * client, double time );
 
 uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client );
 
-void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes );
+void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes );
 
 uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
 
@@ -134,7 +134,7 @@ int netcode_generate_connect_token( int num_server_addresses,
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
                                     uint64_t sequence, 
-                                    uint8_t * private_key, 
+                                    NETCODE_CONST uint8_t * private_key, 
                                     uint8_t * connect_token );
 
 struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
@@ -169,7 +169,7 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server );
 
 uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, int client_index );
 
-void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
+void netcode_server_send_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes );
 
 uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
 
@@ -187,9 +187,9 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
 
 int netcode_server_client_loopback( struct netcode_server_t * server, int client_index );
 
-void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
 
-void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int,uint64_t) );
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
 
 void netcode_log_level( int level );
 

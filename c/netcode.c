@@ -839,7 +839,7 @@ void netcode_random_bytes( uint8_t * data, int bytes )
 int netcode_encrypt_aead( uint8_t * message, uint64_t message_length, 
                           uint8_t * additional, uint64_t additional_length,
                           uint8_t * nonce,
-                          uint8_t * key )
+                          NETCODE_CONST uint8_t * key )
 {
     unsigned long long encrypted_length;
 
@@ -1024,7 +1024,7 @@ int netcode_encrypt_connect_token_private( uint8_t * buffer,
                                            uint64_t protocol_id, 
                                            uint64_t expire_timestamp, 
                                            uint64_t sequence, 
-                                           uint8_t * key )
+                                           NETCODE_CONST uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length == NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
@@ -3029,7 +3029,7 @@ uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client )
     return client->sequence;  
 }
 
-void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes )
+void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
 {
     netcode_assert( client );
     netcode_assert( packet_data );
@@ -3424,7 +3424,7 @@ struct netcode_server_t
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
     void * send_loopback_packet_callback_context;
-    void (*send_loopback_packet_callback_function)(void*,int,uint8_t*,int,uint64_t);
+    void (*send_loopback_packet_callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t);
 
 };
 
@@ -4299,7 +4299,7 @@ uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, 
     return server->client_sequence[client_index];    
 }
 
-void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes )
+void netcode_server_send_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
 {
     netcode_assert( server );
     netcode_assert( packet_data );
@@ -4520,7 +4520,7 @@ int netcode_server_client_loopback( struct netcode_server_t * server, int client
     return server->client_loopback[client_index];
 }
 
-void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
 {
     netcode_assert( server );
     netcode_assert( client_index >= 0 );
@@ -4547,7 +4547,7 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
     netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, packet_sequence );
 }
 
-void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,uint8_t*,int,uint64_t) )
+void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) )
 {
     netcode_assert( server );
     server->send_loopback_packet_callback_context = context;
@@ -4562,7 +4562,7 @@ int netcode_generate_connect_token( int num_server_addresses,
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
                                     uint64_t sequence, 
-                                    uint8_t * private_key, 
+                                    NETCODE_CONST uint8_t * private_key, 
                                     uint8_t * output_buffer )
 {
     netcode_assert( num_server_addresses > 0 );
@@ -7078,7 +7078,7 @@ void test_client_reconnect()
 
 static int num_loopback_packets_sent_to_client = 0;
 
-void send_loopback_packet_callback( void * context, int client_index, uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+void send_loopback_packet_callback( void * context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
 {
     (void) context;
     (void) client_index;
