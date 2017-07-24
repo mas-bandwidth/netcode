@@ -3144,6 +3144,35 @@ void netcode_client_state_change_callback( struct netcode_client_t * client, voi
     client->state_change_callback_function = callback_function;
 }
 
+void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data )
+{
+    netcode_assert( client );
+    (void) client;
+    (void) client_index;
+    (void) client_id;
+    (void) user_data;
+    // todo
+}
+
+void netcode_client_disconnect_loopback( struct netcode_client_t * client )
+{
+    netcode_assert( client );
+    (void) client;
+    // todo
+}
+
+int netcode_client_loopback( struct netcode_client_t * client )
+{
+    netcode_assert( client );
+    (void) client;
+    // todo
+    return 0;
+}
+
+void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
+
+void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
+
 // ----------------------------------------------------------------
 
 #define NETCODE_MAX_ENCRYPTION_MAPPINGS ( NETCODE_MAX_CLIENTS * 4 )
