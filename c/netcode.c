@@ -7139,6 +7139,23 @@ struct test_loopback_context_t
     int num_loopback_packets_sent_to_server;
 };
 
+void client_send_loopback_packet_callback( void * _context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+{
+    (void) packet_sequence;
+    check( _context );
+    check( client_index == 0 );
+    check( packet_data );
+    check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+    int i;
+    for ( i = 0; i < packet_bytes; ++i )
+    {
+        check( packet_data[i] == (uint8_t) i );
+    }
+    struct test_loopback_context_t * context = (struct test_loopback_context_t*) _context;
+    context->num_loopback_packets_sent_to_server++;
+    netcode_server_process_loopback_packet( context->server, client_index, packet_data, packet_bytes, packet_sequence );
+}
+
 void server_send_loopback_packet_callback( void * _context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
 {
     (void) packet_sequence;
@@ -7153,6 +7170,7 @@ void server_send_loopback_packet_callback( void * _context, int client_index, NE
     }
     struct test_loopback_context_t * context = (struct test_loopback_context_t*) _context;
     context->num_loopback_packets_sent_to_client++;
+    netcode_client_process_loopback_packet( context->client, packet_data, packet_bytes, packet_sequence );
 }
 
 void test_loopback()
@@ -7173,18 +7191,23 @@ void test_loopback()
     // start the server
 
     struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator, NULL, NULL, NULL );
-
     check( server );
-
     int max_clients = 2;
-
     netcode_server_start( server, max_clients );
+    context.server = server;
 
     // connect a loopback client in slot 0
 
-    struct netcode_client_t * loopback_client = netcode_client_create_internal( "[::]:50001", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_t * loopback_client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
     check( loopback_client );
     netcode_client_connect_loopback( loopback_client, 0, max_clients );
+    netcode_client_send_loopback_packet_callback( loopback_client, &context, client_send_loopback_packet_callback );
+    context.client = loopback_client;
+
+    check( netcode_client_index( loopback_client ) == 0 );
+    check( netcode_client_loopback( loopback_client ) == 1 );
+    check( netcode_client_max_clients( loopback_client ) == max_clients );
+    check( netcode_client_state( loopback_client ) == NETCODE_CLIENT_STATE_CONNECTED );
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
@@ -7198,7 +7221,7 @@ void test_loopback()
 
     // connect a regular client in the other slot
 
-    struct netcode_client_t * regular_client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_t * regular_client = netcode_client_create_internal( "[::]:50001", time, network_simulator, NULL, NULL, NULL );
 
     check( regular_client );
 
