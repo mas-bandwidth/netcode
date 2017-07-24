@@ -2591,6 +2591,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
     netcode_assert( client );
 
     client->sequence = 0;
+    client->loopback = 0;
     client->client_index = 0;
     client->max_clients = 0;
     client->connect_start_time = 0.0;
@@ -2750,6 +2751,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
 void netcode_client_receive_packets( struct netcode_client_t * client )
 {
     netcode_assert( client );
+    netcode_assert( !client->loopback );
 
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 0, sizeof( allowed_packets ) );
@@ -2836,6 +2838,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 void netcode_client_send_packet_to_server_internal( struct netcode_client_t * client, void * packet )
 {
     netcode_assert( client );
+    netcode_assert( !client->loopback );
 
     uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
 
@@ -2865,6 +2868,7 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 void netcode_client_send_packets( struct netcode_client_t * client )
 {
     netcode_assert( client );
+    netcode_assert( !client->loopback );
 
     switch ( client->state )
     {
@@ -2956,6 +2960,9 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     netcode_assert( client );
 
     client->time = time;
+
+    if ( client->loopback )
+        return;
 
     netcode_client_receive_packets( client );
 
@@ -3079,23 +3086,20 @@ void netcode_client_free_packet( struct netcode_client_t * client, uint8_t * pac
 {
     netcode_assert( client );
     netcode_assert( packet );
-
-    (void) client;
-
     int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
-
     client->free_function( client->allocator_context, packet - offset );
 }
 
 void netcode_client_disconnect( struct netcode_client_t * client )
 {
     netcode_assert( client );
-
+    netcode_assert( !client->loopback );
     netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_DISCONNECTED, 1 );
 }
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets )
 {
+    netcode_assert( !client->loopback );
     netcode_assert( destination_state <= NETCODE_CLIENT_STATE_DISCONNECTED );
 
     if ( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED || client->state == destination_state )
@@ -3103,7 +3107,7 @@ void netcode_client_disconnect_internal( struct netcode_client_t * client, int d
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "client disconnected\n" );
 
-    if ( send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
+    if ( !client->loopback && send_disconnect_packets && client->state > NETCODE_CLIENT_STATE_DISCONNECTED )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent disconnect packets to server\n" );
 
@@ -3147,21 +3151,20 @@ void netcode_client_state_change_callback( struct netcode_client_t * client, voi
     client->state_change_callback_function = callback_function;
 }
 
-void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data )
+void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index )
 {
     netcode_assert( client );
-    (void) client;
-    (void) client_index;
-    (void) client_id;
-    (void) user_data;
-    // todo
+    netcode_assert( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED );
+    client->state = NETCODE_CLIENT_STATE_CONNECTED;
+    client->client_index = client_index;
+    client->loopback = 1;
 }
 
 void netcode_client_disconnect_loopback( struct netcode_client_t * client )
 {
     netcode_assert( client );
-    (void) client;
-    // todo
+    netcode_assert( client->loopback );
+    netcode_client_reset_connection_data( client, NETCODE_CLIENT_STATE_DISCONNECTED );
 }
 
 int netcode_client_loopback( struct netcode_client_t * client )
@@ -3170,9 +3173,25 @@ int netcode_client_loopback( struct netcode_client_t * client )
     return client->loopback;
 }
 
-void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
+void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+{
+    netcode_assert( client );
+    netcode_assert( client->loopback );
+    (void) client;
+    (void) packet_data;
+    (void) packet_bytes;
+    (void) packet_sequence;
+    // todo
+}
 
-void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
+void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) )
+{
+    netcode_assert( client );
+    (void) client;
+    (void) context;
+    (void) callback_function;
+    // todo
+}
 
 // ----------------------------------------------------------------
 

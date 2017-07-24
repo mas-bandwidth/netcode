@@ -128,7 +128,7 @@ int netcode_client_max_clients( struct netcode_client_t * client );
 
 void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) );
 
-void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data );
+void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index );
 
 void netcode_client_disconnect_loopback( struct netcode_client_t * client );
 
