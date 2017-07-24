@@ -7089,7 +7089,8 @@ void send_loopback_packet_callback( void * context, int client_index, uint8_t * 
     check( client_index == 0 );
     check( packet_data );
     check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-    for ( int i = 0; i < packet_bytes; ++i )
+    int i;
+    for ( i = 0; i < packet_bytes; ++i )
     {
         check( packet_data[i] == (uint8_t) i );
     }
