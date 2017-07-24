@@ -3155,12 +3155,14 @@ void netcode_client_state_change_callback( struct netcode_client_t * client, voi
     client->state_change_callback_function = callback_function;
 }
 
-void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index )
+void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, int max_clients )
 {
     netcode_assert( client );
     netcode_assert( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback at client index %d\n", client_index );
     client->state = NETCODE_CLIENT_STATE_CONNECTED;
     client->client_index = client_index;
+    client->max_clients = max_clients;
     client->loopback = 1;
 }
 
@@ -3181,11 +3183,12 @@ void netcode_client_process_loopback_packet( struct netcode_client_t * client, N
 {
     netcode_assert( client );
     netcode_assert( client->loopback );
-    (void) client;
-    (void) packet_data;
-    (void) packet_bytes;
-    (void) packet_sequence;
-    // todo
+    struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, client->allocator_context, client->allocate_function );
+    if ( !packet )
+        return;
+    memcpy( packet->payload_data, packet_data, packet_bytes );
+    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client processing loopback packet from server\n" );
+    netcode_packet_queue_push( &client->packet_receive_queue, packet, packet_sequence );
 }
 
 void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) )
@@ -4588,8 +4591,6 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
         return;
 
     memcpy( packet->payload_data, packet_data, packet_bytes );
-
-    packet->payload_bytes = packet_bytes;
 
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server processing loopback packet from client %d\n", client_index );
 
