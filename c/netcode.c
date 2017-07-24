@@ -2436,6 +2436,7 @@ struct netcode_client_t
     void * allocator_context;
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
+    int loopback;
 };
 
 struct netcode_client_t * netcode_client_create_internal( NETCODE_CONST char * address_string, 
@@ -2529,6 +2530,8 @@ struct netcode_client_t * netcode_client_create_internal( NETCODE_CONST char * a
     client->allocator_context = allocator_context;
     client->allocate_function = allocate_function;
     client->free_function = free_function;
+
+    client->loopback = 0;
 
     return client;
 }
@@ -3164,9 +3167,7 @@ void netcode_client_disconnect_loopback( struct netcode_client_t * client )
 int netcode_client_loopback( struct netcode_client_t * client )
 {
     netcode_assert( client );
-    (void) client;
-    // todo
-    return 0;
+    return client->loopback;
 }
 
 void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
