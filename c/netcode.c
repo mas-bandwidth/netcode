@@ -7128,16 +7128,18 @@ void test_client_reconnect()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-static int num_loopback_packets_sent_to_client = 0;
-
-void send_loopback_packet_callback( void * context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+struct test_loopback_context_t
 {
-    (void) context;
-    (void) client_index;
-    (void) packet_data;
-    (void) packet_bytes;
+    struct netcode_client_t * client;
+    struct netcode_server_t * server;
+    int num_loopback_packets_sent_to_client;
+    int num_loopback_packets_sent_to_server;
+};
+
+void server_send_loopback_packet_callback( void * _context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+{
     (void) packet_sequence;
-    check( context == NULL );
+    check( _context );
     check( client_index == 0 );
     check( packet_data );
     check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
@@ -7146,11 +7148,15 @@ void send_loopback_packet_callback( void * context, int client_index, NETCODE_CO
     {
         check( packet_data[i] == (uint8_t) i );
     }
-    num_loopback_packets_sent_to_client++;
+    struct test_loopback_context_t * context = (struct test_loopback_context_t*) _context;
+    context->num_loopback_packets_sent_to_client++;
 }
 
 void test_loopback()
 {
+    struct test_loopback_context_t context;
+    memset( &context, 0, sizeof( context ) );
+
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
 
     network_simulator->latency_milliseconds = 250;
@@ -7179,7 +7185,7 @@ void test_loopback()
     check( netcode_server_client_connected( server, 0 ) == 1 );
     check( netcode_server_num_connected_clients( server ) == 1 );
 
-    netcode_server_send_loopback_packet_callback( server, NULL, send_loopback_packet_callback );
+    netcode_server_send_loopback_packet_callback( server, &context, server_send_loopback_packet_callback );
 
     // connect a regular client in the other slot
 
@@ -7292,7 +7298,7 @@ void test_loopback()
         }
 
         if ( regular_client_num_packets_received >= 10 && regular_server_num_packets_received >= 10 && 
-             num_loopback_packets_sent_to_client >= 10 && loopback_server_num_packets_received >= 10 )
+             context.num_loopback_packets_sent_to_client >= 10 && loopback_server_num_packets_received >= 10 )
             break;
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
@@ -7303,8 +7309,8 @@ void test_loopback()
 
     check( regular_client_num_packets_received >= 10 );
     check( regular_server_num_packets_received >= 10 );
-    check( num_loopback_packets_sent_to_client >= 10 );
     check( loopback_server_num_packets_received >= 10 );
+    check( context.num_loopback_packets_sent_to_client >= 10 );
 
     // verify that we can disconnect the loopback client
 
@@ -7331,7 +7337,7 @@ void test_loopback()
 
     // verify that we can exchange packets for both regular and loopback client post reconnect
 
-    num_loopback_packets_sent_to_client = 0;
+    context.num_loopback_packets_sent_to_client = 0;
     regular_server_num_packets_received = 0;
     regular_client_num_packets_received = 0;
     loopback_server_num_packets_received = 0;
@@ -7396,7 +7402,7 @@ void test_loopback()
         }
 
         if ( regular_client_num_packets_received >= 10 && regular_server_num_packets_received >= 10 && 
-             num_loopback_packets_sent_to_client >= 10 && loopback_server_num_packets_received >= 10 )
+             context.num_loopback_packets_sent_to_client >= 10 && loopback_server_num_packets_received >= 10 )
             break;
 
         if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
@@ -7407,7 +7413,7 @@ void test_loopback()
 
     check( regular_client_num_packets_received >= 10 );
     check( regular_server_num_packets_received >= 10 );
-    check( num_loopback_packets_sent_to_client >= 10 );
+    check( context.num_loopback_packets_sent_to_client >= 10 );
     check( loopback_server_num_packets_received >= 10 );
 
     // verify the regular client times out but loopback client doesn't
