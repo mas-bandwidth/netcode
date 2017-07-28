@@ -15,7 +15,7 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
-This is the repository for the native code implementation of netcode.io in C, Rust and Golang.
+This is the repository for the native code implementations of netcode.io in C, Rust and Golang.
 
 If you want to use netcode.io from inside a browser, you can do that using [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser)
 
