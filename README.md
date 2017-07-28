@@ -41,9 +41,7 @@ Please refer to the second half of this whitepaper: [Why can't I send UDP packet
 
 For a complete technical specification, read the [netcode 1.0 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
 
-# Can I use netcode.io from inside a browser?
-
-Yes. You can do that using [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser)
+If you want to use netcode.io from inside a browser, you can do that using [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser)
 
 # How can I help?
 
