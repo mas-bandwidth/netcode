@@ -15,6 +15,10 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
+This is the repository for the native code implementation of netcode.io in C, Rust and Golang.
+
+If you want to use netcode.io from inside a browser, you can do that using [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser)
+
 # What are the benefits?
 
 ## Simplicity
@@ -40,8 +44,6 @@ Because netcode.io servers only accept connections from clients with short-lived
 Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
 
 For a complete technical specification, read the [netcode 1.0 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
-
-If you want to use netcode.io from inside a browser, you can do that using [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser)
 
 # How can I help?
 
