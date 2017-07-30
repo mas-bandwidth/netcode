@@ -66,7 +66,7 @@ These people are awesome:
 
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
-* [June Rhodes](https://github.com/hach-que) - [netcode.io-browser](https://github.com/RedpointGames/netcode.io-browser) and [C# Bindings](https://github.com/RedpointGames/netcode.io)
+* [June Rhodes](https://github.com/hach-que) - [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser) and [C# Bindings](https://github.com/RedpointGames/netcode.io)
 
 Thanks for your contributions to netcode.io!
 
