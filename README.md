@@ -19,7 +19,9 @@ This is the repository for the native code implementations of netcode.io in C, R
 
 If you want to use netcode.io from inside a browser, you can do that using [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser).
 
-If you want to use netcode.io with UE4, there is a project to support this here: [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4).
+If you want to use netcode.io with UE4, there is a project to support this: [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4).
+
+If you want to use netcode.io with Unity, there is a project to support this: [netcode.io Unity](https://github.com/KillaMaaki/Unity-Netcode.IO).
 
 # What are the benefits?
 
@@ -69,6 +71,7 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
+* [KillaMaaki](https://github.com/KillaMaaki) - Unity integration.
 
 Thanks for your contributions to netcode.io!
 
