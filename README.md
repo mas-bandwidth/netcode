@@ -15,7 +15,7 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
-This is the repository for the native code implementations of netcode.io in C, Rust and Golang.
+This repository holds the native code implementations of netcode.io in C, Rust and Golang.
 
 Other netcode.io repositories include:
 
@@ -71,7 +71,7 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
-* [KillaMaaki](https://github.com/KillaMaaki) - Unity integration.
+* [Alan Stagner](https://github.com/KillaMaaki) - Unity integration.
 
 Thanks for your contributions to netcode.io!
 
