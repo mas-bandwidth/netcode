@@ -17,11 +17,11 @@ It has the following features:
 
 This is the repository for the native code implementations of netcode.io in C, Rust and Golang.
 
-There are other netcode.io repositories:
+Other netcode.io repositories include:
 
-* [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser).
-* [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4).
-* [netcode.io Unity](https://github.com/KillaMaaki/Unity-Netcode.IO).
+* [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser)
+* [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4)
+* [netcode.io Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 
 # What are the benefits?
 
