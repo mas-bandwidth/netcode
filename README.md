@@ -73,7 +73,7 @@ These people are awesome:
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration.
 
-Thanks for your contributions to netcode.io!
+Thank you for your contributions to netcode.io!
 
 # Author
 
