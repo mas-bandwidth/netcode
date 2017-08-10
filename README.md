@@ -24,26 +24,6 @@ Other netcode.io repositories include:
 * [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
 * [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
 
-# What are the benefits?
-
-## Simplicity
-
-netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
-
-It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
-
-## Full bidirectional transfer of data
-
-Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
-
-## No head of line blocking
-
-Data is sent across UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
-
-## Connection rate limiting can be performed on the web backend
-
-Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level.
-
 # How does it work?
 
 Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
