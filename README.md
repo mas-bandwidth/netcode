@@ -19,9 +19,10 @@ This repository holds the native code implementations of netcode.io in C, Rust a
 
 Other netcode.io repositories include:
 
-* [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser)
-* [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4)
-* [netcode.io Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
+* [netcode.io pure C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
+* [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
+* [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
+* [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
 
 # What are the benefits?
 
