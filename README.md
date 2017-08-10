@@ -52,7 +52,7 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
-* [Alan Stagner](https://github.com/KillaMaaki) - Unity integration.
+* [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation.
 
 Thank you for your contributions to netcode.io!
 
