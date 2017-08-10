@@ -15,6 +15,8 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
+# Source Code
+
 This repository holds the native code implementations of netcode.io in C, Rust and Golang.
 
 Other netcode.io repositories include:
