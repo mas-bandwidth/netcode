@@ -76,11 +76,10 @@ func (b *Buffer) GetBytes(length int) ([]byte, error) {
 
 // GetUint8 decodes a little-endian uint8 from the buffer
 func (b *Buffer) GetUint8() (uint8, error) {
-	if b.Pos+SizeUint8 > len(b.Buf) {
-		return 0, io.EOF
+	buf, err := b.GetBytes(SizeUint8)
+	if err != nil {
+		return 0, nil
 	}
-	buf := b.Buf[b.Pos : b.Pos+SizeUint8]
-	b.Pos++
 	return uint8(buf[0]), nil
 }
 
@@ -130,10 +129,10 @@ func (b *Buffer) GetUint64() (uint64, error) {
 
 // GetInt8 decodes a little-endian int8 from the buffer
 func (b *Buffer) GetInt8() (int8, error) {
-	if b.Pos+1 > len(b.Buf) {
-		return 0, io.EOF
+	buf, err := b.GetBytes(SizeInt8)
+	if err != nil {
+		return 0, nil
 	}
-	buf := b.Buf[b.Pos : b.Pos+SizeInt8]
 	return int8(buf[0]), nil
 }
 
@@ -183,21 +182,21 @@ func (b *Buffer) GetInt64() (int64, error) {
 
 // WriteByte encodes a little-endian uint8 into the buffer.
 func (b *Buffer) WriteByte(n byte) {
-	b.Buf[b.Pos] = uint8(n)
+	b.Buf[b.Pos] = n
 	b.Pos++
 }
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytes(src []byte) {
 	for i := 0; i < len(src); i += 1 {
-		b.WriteByte(uint8(src[i]))
+		b.WriteByte(src[i])
 	}
 }
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytesN(src []byte, length int) {
 	for i := 0; i < length; i += 1 {
-		b.WriteByte(uint8(src[i]))
+		b.WriteByte(src[i])
 	}
 }
 
