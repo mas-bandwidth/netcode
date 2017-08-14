@@ -3171,7 +3171,7 @@ void netcode_client_connect_loopback( struct netcode_client_t * client, int clie
 {
     netcode_assert( client );
     netcode_assert( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED );
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback at client index %d\n", client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback as client %d\n", client_index );
     client->state = NETCODE_CLIENT_STATE_CONNECTED;
     client->client_index = client_index;
     client->max_clients = max_clients;
