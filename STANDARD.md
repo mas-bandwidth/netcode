@@ -1,4 +1,4 @@
-# netcode.io 1.0
+# netcode.io 1.01
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
@@ -42,6 +42,7 @@ The private portion is encrypted and signed with a private key shared between th
 Prior to encryption the private connect token data has the following binary format.
 
     [client id] (uint64) // globally unique identifier for an authenticated client
+    [timeout seconds] (uint32) // number of seconds with no packets before client times out
     [num server addresses] (uint32) // in [1,32]
     <for each server address>
     {
