@@ -66,10 +66,15 @@ func (b *Buffer) GetByte() (byte, error) {
 // GetBytes returns a byte slice possibly smaller than length if bytes are not available from the
 // reader.
 func (b *Buffer) GetBytes(length int) ([]byte, error) {
-	if len(b.Buf) < length {
+	bufferLength := len(b.Buf)
+	bufferWindow := b.Pos + length
+	if bufferLength < length {
 		return nil, io.EOF
 	}
-	value := b.Buf[b.Pos : b.Pos+length]
+	if bufferWindow > bufferLength {
+		return nil, io.EOF
+	}
+	value := b.Buf[b.Pos:bufferWindow]
 	b.Pos += length
 	return value, nil
 }
