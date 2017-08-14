@@ -12,7 +12,6 @@ func TestBuffer(t *testing.T) {
 	if string(b.Buf) != "abcdefghij" {
 		t.Fatalf("error should have written 'abcdefghij' got '%s'\n", string(b.Buf))
 	}
-
 }
 
 func TestBuffer_Copy(t *testing.T) {
@@ -33,7 +32,6 @@ func TestBuffer_Copy(t *testing.T) {
 	if string(data) != "abcdefghij" {
 		t.Fatalf("error expeced: %s got %d\n", "abcdefghij", string(data))
 	}
-
 }
 
 func TestBuffer_GetByte(t *testing.T) {
@@ -73,7 +71,27 @@ func TestBuffer_GetBytes(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected EOF")
 	}
+}
 
+func TestBuffer_GetBytes_Issue46(t *testing.T) {
+	buf := []byte{
+		72, 101, 108, 108, 111, // Hello
+		71, 108, 101, 110, // Glen
+	}
+	b := NewBufferFromBytes(buf)
+
+	expected1 := "Hello"
+	bytes1, err := b.GetBytes(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bytes1) != expected1 {
+		t.Fatalf("expected %q got: %s\n", expected1, bytes1)
+	}
+
+	if _, err = b.GetBytes(5); err == nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBuffer_GetInt8(t *testing.T) {
@@ -207,7 +225,6 @@ func TestBuffer_GetUint16(t *testing.T) {
 	if val != 0xffff {
 		t.Fatalf("expected 0xffff got: %x\n", val)
 	}
-
 }
 
 func TestBuffer_GetUint32(t *testing.T) {
@@ -263,5 +280,4 @@ func TestBuffer_WriteBytes(t *testing.T) {
 	if string(val) != "0123456789" {
 		t.Fatalf("expected 0123456789 got: %s %d\n", val, len(val))
 	}
-
 }
