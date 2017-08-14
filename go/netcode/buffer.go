@@ -182,21 +182,21 @@ func (b *Buffer) GetInt64() (int64, error) {
 
 // WriteByte encodes a little-endian uint8 into the buffer.
 func (b *Buffer) WriteByte(n byte) {
-	b.Buf[b.Pos] = uint8(n)
+	b.Buf[b.Pos] = n
 	b.Pos++
 }
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytes(src []byte) {
 	for i := 0; i < len(src); i += 1 {
-		b.WriteByte(uint8(src[i]))
+		b.WriteByte(src[i])
 	}
 }
 
 // WriteBytes encodes a little-endian byte slice into the buffer
 func (b *Buffer) WriteBytesN(src []byte, length int) {
 	for i := 0; i < length; i += 1 {
-		b.WriteByte(uint8(src[i]))
+		b.WriteByte(src[i])
 	}
 }
 
