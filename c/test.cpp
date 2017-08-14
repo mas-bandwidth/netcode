@@ -22,11 +22,12 @@
     USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define NETCODE_ENABLE_TESTS 1
+
 #include "netcode.h"
+#include "netcode.c"
 #include <stdio.h>
 #include <assert.h>
-
-extern void netcode_test();
 
 int main( int argc, char ** argv )
 {

@@ -71,7 +71,7 @@ int main( int argc, char ** argv )
         return 1;
     }
 
-    char * server_address = "[::1]:40000";
+    NETCODE_CONST char * server_address = "[::1]:40000";
 
     struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
 

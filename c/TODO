@@ -44,6 +44,54 @@ DONE
 
     Add support for custom allocators.
 
+    Improved support for C++ by adding NETCODE_CONST. Now compiles clean on C++11
+
+    Sketched out interface for server-side loopback clients.
+
+    Added client_loopback per-client to netcode server.
+
+    Updated disconnect function to assert if it's used to disconnect a loopback client.
+
+    Updated disconnect all clients to skip over loopback clients.
+
+    Disabled timeouts for loopback clients.
+
+    Added safety check in regular receive and packet send codepath to avoid doing so for loopback clients.
+
+    Added a special section for loopback clients to send their payload packets directly via callback.
+
+    Added special loopback client disconnect function.
+
+    Extended loopback client connect to take client id.
+
+    Added function pointer and context for callback when sending loopback packets to client.
+
+    Added support to user data for loopback client connect.
+
+    Added code to connect a loopback client.
+
+    Added code to disconnect a loopback client.
+
+    Sketched out code to process packets for loopback client directly.
+
+    Implement code to call into send packet callback when sending packets to loopback client.
+
+    Added packet sequence to loopback packet send and process.
+
+    Extended code for processing loopback packets from client to perform a copy and wrap a "packet" structure around it before adding to queue.
+
+    In theory, should all work now. AHAHAHAH. Yeah right...
+
+    Implement a unit test to ensure that the loopback client is properly created, reserves the slot, and can process packets and send packets through the callback properly.
+
+    Test on windows and linux, then we're ready for 1.0 release!
+
+    Extend client to support loopback operations as well as server, for consistency of integration with yojimbo.
+
+    Extend loopback test to include client-side loopback support in addition to server-side.
+
 TODO
 
-    Create an advanced interface to provide a way to read and write packets without copying or allocations.
+    --------------------
+
+    Add an interface for reading and writing packets without copying or allocations.

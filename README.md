@@ -6,7 +6,7 @@
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
-It’s designed for games like [agar.io](http://agar.io) that shunt players from a main website or web backend to a number of dedicated server instances, with each dedicated server having some maximum number of players.
+It’s designed for games that shunt players from a main website or web backend to a number of dedicated server instances, with each dedicated server having some maximum number of players.
 
 It has the following features:
 
@@ -15,29 +15,20 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
-# What are the benefits?
+# Source Code
 
-## Simplicity
+This repository holds the native code implementations of netcode.io in C, Rust and Golang.
 
-netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
+Other netcode.io repositories include:
 
-It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
-
-## Full bidirectional transfer of data
-
-Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
-
-## No head of line blocking
-
-Data is sent across UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
-
-## Connection rate limiting can be performed on the web backend
-
-Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level.
+* [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
+* [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
+* [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
+* [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
 
 # How does it work?
 
-Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://new.gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
+Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
 
 For a complete technical specification, read the [netcode 1.0 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
 
@@ -49,8 +40,7 @@ Here are some things that we think would be helpful:
 
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
-* Create bindings for netcode.io for your favorite language
-* Port netcode.io to your favorite language (eg. C#, Java, Lua, Python, Ruby...)
+* Port netcode.io to your favorite language (eg. Java, Lua, Python, Ruby...)
 * We welcome anybody who would like to volunteer to perform a security audit of the code
 * Develop a testing framework to guarantee that different languages implementations conform to the [standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md)
 
@@ -62,6 +52,8 @@ These people are awesome:
 
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
+* [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
+* [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation.
 
 Thank you for your contributions to netcode.io!
 

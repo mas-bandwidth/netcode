@@ -607,7 +607,7 @@ fn capi_connect_token<I>(hosts: I, private_key: &[u8; NETCODE_KEY_BYTES], expire
 
     let result = unsafe {
         match capi::netcode_generate_connect_token(host_count,
-            host_list_ptr.as_ptr() as *mut *mut i8,
+            host_list_ptr.as_ptr() as *mut *const i8,
             expire,
             client_id,
             protocol,
