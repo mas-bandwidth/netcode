@@ -57,9 +57,8 @@
 #define NETCODE_SERVER_SOCKET_SNDBUF_SIZE ( 4 * 1024 * 1024 )
 #define NETCODE_SERVER_SOCKET_RCVBUF_SIZE ( 4 * 1024 * 1024 )
 
-#define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.00" )
+#define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.01" )
 #define NETCODE_PACKET_SEND_RATE 10.0
-#define NETCODE_TIMEOUT_SECONDS 5.0
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
 
 #ifndef NETCODE_ENABLE_TESTS
@@ -919,6 +918,7 @@ int netcode_decrypt_aead( uint8_t * message, uint64_t message_length,
 struct netcode_connect_token_private_t
 {
     uint64_t client_id;
+    int timeout_seconds;
     int num_server_addresses;
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
@@ -928,6 +928,7 @@ struct netcode_connect_token_private_t
 
 void netcode_generate_connect_token_private( struct netcode_connect_token_private_t * connect_token, 
                                              uint64_t client_id, 
+                                             int timeout_seconds,
                                              int num_server_addresses, 
                                              struct netcode_address_t * server_addresses, 
                                              uint8_t * user_data )
@@ -939,7 +940,7 @@ void netcode_generate_connect_token_private( struct netcode_connect_token_privat
     netcode_assert( user_data );
 
     connect_token->client_id = client_id;
-    
+    connect_token->timeout_seconds = timeout_seconds;
     connect_token->num_server_addresses = num_server_addresses;
     
     int i;
@@ -976,6 +977,8 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
     (void) start;
 
     netcode_write_uint64( &buffer, connect_token->client_id );
+
+    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
 
     netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
@@ -1091,6 +1094,8 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
         return NETCODE_ERROR;
     
     connect_token->client_id = netcode_read_uint64( &buffer );
+
+    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
 
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
@@ -1584,7 +1589,7 @@ void * netcode_read_packet( uint8_t * buffer,
              version_info[8]  != '1' ||
              version_info[9]  != '.' ||
              version_info[10] != '0' ||
-             version_info[11] != '0' ||
+             version_info[11] != '1' ||
              version_info[12] != '\0' )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad version info\n" );
@@ -1910,11 +1915,11 @@ struct netcode_connect_token_t
     uint64_t expire_timestamp;
     uint64_t sequence;
     uint8_t private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    int timeout_seconds;
     int num_server_addresses;
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
-    int timeout_seconds;
 };
 
 void netcode_write_connect_token( struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
@@ -1941,6 +1946,8 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
     netcode_write_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     int i,j;
+
+    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
 
     netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
@@ -1974,8 +1981,6 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
 
     netcode_write_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
 
-    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
-
     netcode_assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );
 
     memset( buffer, 0, NETCODE_CONNECT_TOKEN_BYTES - ( buffer - start ) );
@@ -2004,7 +2009,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
          connect_token->version_info[8]  != '1' ||
          connect_token->version_info[9]  != '.' ||
          connect_token->version_info[10] != '0' ||
-         connect_token->version_info[11] != '0' ||
+         connect_token->version_info[11] != '1' ||
          connect_token->version_info[12] != '\0' )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info\n" );
@@ -2023,6 +2028,8 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
     connect_token->sequence = netcode_read_uint64( &buffer );
 
     netcode_read_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
 
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
@@ -2064,8 +2071,6 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
     netcode_read_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_read_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
-
-    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
     
     return NETCODE_OK;
 }
@@ -2998,7 +3003,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     {
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST:
         {
-            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
+            if ( client->connect_token.timeout_seconds > 0 && client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection request timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -3011,7 +3016,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
         case NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE:
         {
-            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
+            if ( client->connect_token.timeout_seconds > 0 && client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connection response timed out\n" );
                 if ( netcode_client_connect_to_next_server( client ) )
@@ -3024,7 +3029,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
         case NETCODE_CLIENT_STATE_CONNECTED:
         {
-            if ( client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
+            if ( client->connect_token.timeout_seconds > 0 && client->last_packet_receive_time + client->connect_token.timeout_seconds < time )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connection timed out\n" );
                 netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECTION_TIMED_OUT, 0 );
@@ -3217,6 +3222,7 @@ void netcode_client_send_loopback_packet_callback( struct netcode_client_t * cli
 struct netcode_encryption_manager_t
 {
     int num_encryption_mappings;
+    int timeout[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     double expire_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     double last_access_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     struct netcode_address_t address[NETCODE_MAX_ENCRYPTION_MAPPINGS];
@@ -3239,9 +3245,24 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
         encryption_manager->last_access_time[i] = -1000.0;
         memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
     }
-    
+
+    memset( encryption_manager->timeout, 0, sizeof( encryption_manager->timeout ) );    
     memset( encryption_manager->send_key, 0, sizeof( encryption_manager->send_key ) );
     memset( encryption_manager->receive_key, 0, sizeof( encryption_manager->receive_key ) );
+}
+
+int netcode_encryption_manager_entry_expired( struct netcode_encryption_manager_t * encryption_manager, int index, double time )
+{
+    netcode_assert( index >= 0 );
+    if ( encryption_manager->timeout[index] >= 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
+    {
+        return 1;
+    }
+    if ( encryption_manager->expire_time[index] >= 0.0 && encryption_manager->expire_time[index] < time )
+    {
+        return 1;
+    }
+    return 0;
 }
 
 int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, 
@@ -3249,13 +3270,16 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
                                                        uint8_t * send_key, 
                                                        uint8_t * receive_key, 
                                                        double time, 
-                                                       double expire_time )
+                                                       double expire_time,
+                                                       int timeout )
 {
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
+            !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
+            encryption_manager->timeout[i] = timeout;
             encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
             memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
@@ -3266,9 +3290,9 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
-        if ( encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS < time || 
-             ( encryption_manager->expire_time[i] >= 0.0 && encryption_manager->expire_time[i] < time ) )
+        if ( netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
+            encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
             encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
@@ -3304,8 +3328,7 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                 int index = i - 1;
                 while ( index >= 0 )
                 {
-                    if ( encryption_manager->last_access_time[index] + NETCODE_TIMEOUT_SECONDS >= time && 
-                        ( encryption_manager->expire_time[index] < 0 || encryption_manager->expire_time[index] > time ) )
+                    if ( !netcode_encryption_manager_entry_expired( encryption_manager, index, time ) )
                     {
                         break;
                     }
@@ -3327,7 +3350,7 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
         if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
-             encryption_manager->last_access_time[i] + NETCODE_TIMEOUT_SECONDS >= time && 
+             ( encryption_manager->timeout[i] <= 0.0f || encryption_manager->last_access_time[i] + encryption_manager->timeout[i] >= time ) && 
              ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
         {
             encryption_manager->last_access_time[i] = time;
@@ -3373,6 +3396,16 @@ uint8_t * netcode_encryption_manager_get_receive_key( struct netcode_encryption_
     netcode_assert( index >= 0 );
     netcode_assert( index < encryption_manager->num_encryption_mappings );
     return encryption_manager->receive_key + index * NETCODE_KEY_BYTES;
+}
+
+int netcode_encryption_manager_get_timeout( struct netcode_encryption_manager_t * encryption_manager, int index )
+{
+    netcode_assert( encryption_manager );
+    if ( index == -1 )
+        return 0;
+    netcode_assert( index >= 0 );
+    netcode_assert( index < encryption_manager->num_encryption_mappings );
+    return encryption_manager->timeout[index];
 }
 
 // ----------------------------------------------------------------
@@ -3468,6 +3501,7 @@ struct netcode_server_t
     uint64_t challenge_sequence;
     uint8_t challenge_key[NETCODE_KEY_BYTES];
     int client_connected[NETCODE_MAX_CLIENTS];
+    int client_timeout[NETCODE_MAX_CLIENTS];
     int client_loopback[NETCODE_MAX_CLIENTS];
     int client_confirmed[NETCODE_MAX_CLIENTS];
     int client_encryption_index[NETCODE_MAX_CLIENTS];
@@ -3884,7 +3918,6 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     (void) from;
 
     struct netcode_connect_token_private_t connect_token_private;
-
     if ( netcode_read_connect_token_private( packet->connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, &connect_token_private ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to read connect token\n" );
@@ -3944,7 +3977,8 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
                                                              connect_token_private.server_to_client_key, 
                                                              connect_token_private.client_to_server_key, 
                                                              server->time, 
-                                                             server->time + NETCODE_TIMEOUT_SECONDS ) )
+                                                             server->time + connect_token_private.timeout_seconds,
+                                                             connect_token_private.timeout_seconds ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
@@ -3992,7 +4026,8 @@ void netcode_server_connect_client( struct netcode_server_t * server,
                                     int client_index, 
                                     struct netcode_address_t * address, 
                                     uint64_t client_id, 
-                                    int encryption_index, 
+                                    int encryption_index,
+                                    int timeout_seconds, 
                                     void * user_data )
 {
     netcode_assert( server );
@@ -4012,6 +4047,7 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     netcode_encryption_manager_set_expire_time( &server->encryption_manager, encryption_index, -1.0 );
 
     server->client_connected[client_index] = 1;
+    server->client_timeout[client_index] = timeout_seconds;
     server->client_encryption_index[client_index] = encryption_index;
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
@@ -4097,7 +4133,9 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 
     netcode_assert( client_index != -1 );
 
-    netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index, challenge_token.user_data );
+    int timeout_seconds = netcode_encryption_manager_get_timeout( &server->encryption_manager, encryption_index );
+
+    netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index, timeout_seconds, challenge_token.user_data );
 }
 
 void netcode_server_process_packet( struct netcode_server_t * server, 
@@ -4320,8 +4358,8 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; ++i )
     {
-        if ( server->client_connected[i] && !server->client_loopback[i] &&
-             ( server->client_last_packet_receive_time[i] + NETCODE_TIMEOUT_SECONDS <= server->time ) )
+        if ( server->client_connected[i] && server->client_timeout[i] > 0 && !server->client_loopback[i] &&
+             ( server->client_last_packet_receive_time[i] + server->client_timeout[i] <= server->time ) )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "server timed out client %d\n", i );
             netcode_server_disconnect_client_internal( server, i, 0 );
@@ -4623,6 +4661,7 @@ void netcode_server_send_loopback_packet_callback( struct netcode_server_t * ser
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** server_addresses, 
                                     int expire_seconds, 
+                                    int timeout_seconds,
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
                                     uint64_t sequence, 
@@ -4653,7 +4692,7 @@ int netcode_generate_connect_token( int num_server_addresses,
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
     struct netcode_connect_token_private_t connect_token_private;
-    netcode_generate_connect_token_private( &connect_token_private, client_id, num_server_addresses, parsed_server_addresses, user_data );
+    netcode_generate_connect_token_private( &connect_token_private, client_id, timeout_seconds, num_server_addresses, parsed_server_addresses, user_data );
 
     // write it to a buffer
 
@@ -4683,7 +4722,7 @@ int netcode_generate_connect_token( int num_server_addresses,
         connect_token.server_addresses[i] = parsed_server_addresses[i];
     memcpy( connect_token.client_to_server_key, connect_token_private.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( connect_token.server_to_client_key, connect_token_private.server_to_client_key, NETCODE_KEY_BYTES );
-    connect_token.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
+    connect_token.timeout_seconds = timeout_seconds;
 
     // write the connect token to the output buffer
 
@@ -5111,6 +5150,7 @@ static void test_address()
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
 #define TEST_CONNECT_TOKEN_EXPIRY   30
+#define TEST_TIMEOUT_SECONDS        5
 
 static void test_connect_token()
 {
@@ -5129,7 +5169,7 @@ static void test_connect_token()
 
     struct netcode_connect_token_private_t input_token;
 
-    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, TEST_TIMEOUT_SECONDS, 1, &server_address, user_data );
 
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
@@ -5176,6 +5216,7 @@ static void test_connect_token()
     // make sure that everything matches the original connect token
 
     check( output_token.client_id == input_token.client_id );
+    check( output_token.timeout_seconds == input_token.timeout_seconds );
     check( output_token.num_server_addresses == input_token.num_server_addresses );
     check( netcode_address_equal( &output_token.server_addresses[0], &input_token.server_addresses[0] ) );
     check( memcmp( output_token.client_to_server_key, input_token.client_to_server_key, NETCODE_KEY_BYTES ) == 0 );
@@ -5239,7 +5280,7 @@ static void test_connection_request_packet()
 
     struct netcode_connect_token_private_t input_token;
 
-    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &input_token, TEST_CLIENT_ID, TEST_TIMEOUT_SECONDS, 1, &server_address, user_data );
 
     check( input_token.client_id == TEST_CLIENT_ID );
     check( input_token.num_server_addresses == 1 );
@@ -5570,6 +5611,8 @@ void test_connection_disconnect_packet()
     free( output_packet );
 }
 
+#define TEST_TIMEOUT_SECONDS 5
+
 void test_connect_token_public()
 {
     // generate a private connect token
@@ -5587,7 +5630,7 @@ void test_connect_token_public()
 
     struct netcode_connect_token_private_t connect_token_private;
 
-    netcode_generate_connect_token_private( &connect_token_private, TEST_CLIENT_ID, 1, &server_address, user_data );
+    netcode_generate_connect_token_private( &connect_token_private, TEST_CLIENT_ID, TEST_TIMEOUT_SECONDS, 1, &server_address, user_data );
 
     check( connect_token_private.client_id == TEST_CLIENT_ID );
     check( connect_token_private.num_server_addresses == 1 );
@@ -5628,7 +5671,7 @@ void test_connect_token_public()
     input_connect_token.server_addresses[0] = server_address;
     memcpy( input_connect_token.client_to_server_key, connect_token_private.client_to_server_key, NETCODE_KEY_BYTES );
     memcpy( input_connect_token.server_to_client_key, connect_token_private.server_to_client_key, NETCODE_KEY_BYTES );
-    input_connect_token.timeout_seconds = (int) NETCODE_TIMEOUT_SECONDS;
+    input_connect_token.timeout_seconds = (int) TEST_TIMEOUT_SECONDS;
 
     // write the connect token to a buffer
 
@@ -5703,7 +5746,8 @@ void test_encryption_manager()
                                                                   encryption_mapping[i].send_key, 
                                                                   encryption_mapping[i].receive_key, 
                                                                   time, 
-                                                                  -1.0 ) );
+                                                                  -1.0,
+                                                                  TEST_TIMEOUT_SECONDS ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5764,14 +5808,16 @@ void test_encryption_manager()
                                                               encryption_mapping[0].send_key, 
                                                               encryption_mapping[0].receive_key, 
                                                               time, 
-                                                              -1.0 ) );
+                                                              -1.0,
+                                                              TEST_TIMEOUT_SECONDS ) );
     
     check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, 
                                                               &encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].address, 
                                                               encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].send_key, 
                                                               encryption_mapping[NUM_ENCRYPTION_MAPPINGS-1].receive_key, 
                                                               time, 
-                                                              -1.0 ) );
+                                                              -1.0,
+                                                              TEST_TIMEOUT_SECONDS ) );
 
     // all encryption mappings should be able to be looked up by address again
 
@@ -5791,7 +5837,7 @@ void test_encryption_manager()
 
     // check that encryption mappings time out properly
 
-    time += NETCODE_TIMEOUT_SECONDS * 2;
+    time += TEST_TIMEOUT_SECONDS * 2;
 
     for ( i = 0; i < NUM_ENCRYPTION_MAPPINGS; ++i )
     {
@@ -5820,7 +5866,8 @@ void test_encryption_manager()
                                                                   encryption_mapping[i].send_key, 
                                                                   encryption_mapping[i].receive_key, 
                                                                   time, 
-                                                                  -1.0 ) );
+                                                                  -1.0,
+                                                                  TEST_TIMEOUT_SECONDS ) );
 
         encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[i].address, time );
 
@@ -5856,7 +5903,8 @@ void test_encryption_manager()
                                                               encryption_mapping[0].send_key, 
                                                               encryption_mapping[0].receive_key, 
                                                               time, 
-                                                              time + 1.0 ) );
+                                                              time + 1.0,
+                                                              TEST_TIMEOUT_SECONDS ) );
 
     int encryption_index = netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time );
 
@@ -5954,7 +6002,7 @@ void test_client_server_connect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6082,7 +6130,7 @@ void test_client_server_keep_alive()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6110,7 +6158,7 @@ void test_client_server_keep_alive()
 
     // pump the client and server long enough that they would timeout without keep alive packets
 
-    int num_iterations = (int) ceil( 1.25f * NETCODE_TIMEOUT_SECONDS / delta_time );
+    int num_iterations = (int) ceil( 1.25f * TEST_TIMEOUT_SECONDS / delta_time );
 
     int i;
     for ( i = 0; i < num_iterations; ++i )
@@ -6194,6 +6242,7 @@ void test_client_server_multiple_clients()
             check( netcode_generate_connect_token( 1, 
                                                    &server_address, 
                                                    TEST_CONNECT_TOKEN_EXPIRY, 
+                                                   TEST_TIMEOUT_SECONDS,
                                                    client_id, 
                                                    TEST_PROTOCOL_ID, 
                                                    token_sequence++, 
@@ -6391,7 +6440,7 @@ void test_client_server_multiple_servers()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 3, server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 3, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6509,7 +6558,7 @@ void test_client_error_connect_token_expired()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, 0, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, 0, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6583,7 +6632,7 @@ void test_client_error_connection_timed_out()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6663,7 +6712,7 @@ void test_client_error_connection_response_timeout()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6724,7 +6773,7 @@ void test_client_error_connection_request_timeout()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6785,7 +6834,7 @@ void test_client_error_connection_denied()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6822,7 +6871,7 @@ void test_client_error_connection_denied()
     uint64_t client_id2 = 0;
     netcode_random_bytes( (uint8_t*) &client_id2, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id2, TEST_PROTOCOL_ID, 0, private_key, connect_token2 ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id2, TEST_PROTOCOL_ID, 0, private_key, connect_token2 ) );
 
     netcode_client_connect( client2, connect_token2 );
 
@@ -6885,7 +6934,7 @@ void test_client_side_disconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6966,7 +7015,7 @@ void test_server_side_disconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7053,7 +7102,7 @@ void test_client_reconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7107,7 +7156,7 @@ void test_client_reconnect()
 
     netcode_network_simulator_reset( network_simulator );
 
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7182,6 +7231,132 @@ void server_send_loopback_packet_callback( void * _context, int client_index, NE
     netcode_client_process_loopback_packet( context->client, packet_data, packet_bytes, packet_sequence );
 }
 
+void test_disable_timeout()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    network_simulator->latency_milliseconds = 250;
+    network_simulator->jitter_milliseconds = 250;
+    network_simulator->packet_loss_percent = 5;
+    network_simulator->duplicate_packet_percent = 10;
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+
+    check( client );
+
+    struct netcode_server_t * server = netcode_server_create_internal( "[::1]:40000", TEST_PROTOCOL_ID, private_key, time, network_simulator, NULL, NULL, NULL );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, -1, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_client_index( client ) == 0 );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_connected_clients( server ) == 1 );
+
+    int server_num_packets_received = 0;
+    int client_num_packets_received = 0;
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    int i;
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; ++i )
+        packet_data[i] = (uint8_t) i;
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+        netcode_server_send_packet( server, 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            uint8_t * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            (void) packet_sequence;
+            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            client_num_packets_received++;
+            netcode_client_free_packet( client, packet );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            (void) packet_sequence;
+            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            server_num_packets_received++;
+            netcode_server_free_packet( server, packet );
+        }
+
+        if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
+        {
+            if ( netcode_server_client_connected( server, 0 ) )
+            {
+                netcode_server_disconnect_client( server, 0 );
+            }
+        }
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += 1000.0f;        // normally this would timeout the client
+    }
+
+    check( client_num_packets_received >= 10 && server_num_packets_received >= 10 );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
 void test_loopback()
 {
     struct test_loopback_context_t context;
@@ -7238,7 +7413,7 @@ void test_loopback()
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
-    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) );
 
     netcode_client_connect( regular_client, connect_token );
 
@@ -7572,6 +7747,7 @@ void netcode_test()
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_client_reconnect );
+        RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
     }
 }

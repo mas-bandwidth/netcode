@@ -15,31 +15,16 @@ It has the following features:
 3. All packets are delivered over UDP
 4. Only authenticated clients can connect to dedicated servers
 
-This is the repository for the native code implementations of netcode.io in C, Rust and Golang.
+# Source Code
 
-If you want to use netcode.io from inside a browser, you can do that using [netcode.io browser](https://github.com/RedpointGames/netcode.io-browser).
+This repository holds the native code implementations of netcode.io in C, Rust and Golang.
 
-If you want to use netcode.io with UE4, there is a project to support this here: [netcode.io UE4](https://github.com/RedpointGames/netcode.io-UE4).
+Other netcode.io repositories include:
 
-# What are the benefits?
-
-## Simplicity
-
-netcode.io is a simple protocol that can easily be incorporated into a client, dedicated server or web backend.
-
-It has no external dependencies except [libsodium](http://www.libsodium.org), which is widely used and well tested.
-
-## Full bidirectional transfer of data
-
-Once a netcode.io connection is established, data can be exchanged between client and server at any rate, bidirectionally.
-
-## No head of line blocking
-
-Data is sent across UDP so it's not subject to head of line blocking. No head of line blocking means games play better, as time series data like player inputs and object positions are transmitted as quickly as possible, without being artificially delayed waiting for dropped packets to be resent.
-
-## Connection rate limiting can be performed on the web backend
-
-Because netcode.io servers only accept connections from clients with short-lived connect tokens, traditional web rate limiting can be applied to the REST calls that generate connect tokens for authenticated users, instead of rate limiting incoming connections at the UDP protocol level.
+* [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
+* [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
+* [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
+* [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
 
 # How does it work?
 
@@ -55,8 +40,7 @@ Here are some things that we think would be helpful:
 
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
-* Create bindings for netcode.io for your favorite language
-* Port netcode.io to your favorite language (eg. C#, Java, Lua, Python, Ruby...)
+* Port netcode.io to your favorite language (eg. Java, Lua, Python, Ruby...)
 * We welcome anybody who would like to volunteer to perform a security audit of the code
 * Develop a testing framework to guarantee that different languages implementations conform to the [standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md)
 
@@ -69,8 +53,9 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration.
+* [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation.
 
-Thanks for your contributions to netcode.io!
+Thank you for your contributions to netcode.io!
 
 # Author
 

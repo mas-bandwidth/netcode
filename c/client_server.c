@@ -29,6 +29,10 @@
 #include <signal.h>
 #include <inttypes.h>
 
+#define CONNECT_TOKEN_EXPIRY 30
+#define CONNECT_TOKEN_TIMEOUT 5
+#define PROTOCOL_ID 0x1122334455667788
+
 static volatile int quit = 0;
 
 void interrupt_handler( int signal )
@@ -55,9 +59,6 @@ int main( int argc, char ** argv )
 
     netcode_log_level( NETCODE_LOG_LEVEL_INFO );
 
-    #define TEST_CONNECT_TOKEN_EXPIRY 30
-    #define TEST_PROTOCOL_ID 0x1122334455667788
-
     double time = 0.0;
     double delta_time = 1.0 / 60.0;
 
@@ -73,7 +74,7 @@ int main( int argc, char ** argv )
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
-    struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
+    struct netcode_server_t * server = netcode_server_create( server_address, PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {
@@ -89,7 +90,7 @@ int main( int argc, char ** argv )
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
     printf( "client id is %.16" PRIx64 "\n", client_id );
 
-    if ( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) != NETCODE_OK )
+    if ( netcode_generate_connect_token( 1, &server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, 0, private_key, connect_token ) != NETCODE_OK )
     {
         printf( "error: failed to generate connect token\n" );
         return 1;
