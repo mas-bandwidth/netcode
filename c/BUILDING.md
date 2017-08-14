@@ -1,5 +1,5 @@
-How to build the reference implementation of netcode.io
-=======================================================
+How to build netcode.io
+=======================
 
 ## Building on Windows
 

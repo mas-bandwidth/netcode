@@ -23,7 +23,7 @@
     USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <netcode.h>
+#include "netcode.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -48,7 +48,7 @@ int main( int argc, char ** argv )
     (void) argc;
     (void) argv;
 
-    if ( !netcode_init() )
+    if ( netcode_init() != NETCODE_OK )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;
@@ -72,7 +72,7 @@ int main( int argc, char ** argv )
     #define TEST_CONNECT_TOKEN_EXPIRY 30
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    char * server_address = "127.0.0.1:40000";
+    char * server_address = ( argc != 2 ) ? "127.0.0.1:40000" : argv[1];        
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
@@ -80,7 +80,7 @@ int main( int argc, char ** argv )
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
-    if ( !netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) )
+    if ( netcode_generate_connect_token( 1, &server_address, TEST_CONNECT_TOKEN_EXPIRY, client_id, TEST_PROTOCOL_ID, 0, private_key, connect_token ) != NETCODE_OK )
     {
         printf( "error: failed to generate connect token\n" );
         return 1;

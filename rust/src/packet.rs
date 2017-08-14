@@ -172,7 +172,7 @@ pub fn encode(out: &mut [u8], protocol_id: u64, packet: &Packet, crypt_info: Opt
 
         Ok(writer.position() as usize)
     } else {
-        if let Some((sequence,private_key)) = crypt_info {
+        if let Some((sequence, private_key)) = crypt_info {
             let (prefix_byte, offset) = {
                 let mut write = &mut io::Cursor::new(&mut out[..]);
 
@@ -727,7 +727,7 @@ fn test_decode_challenge_token() {
             capi_scratch.as_mut_ptr(),
             capi_scratch.len() as i32,
             &mut native_token);
-            
+
         assert_eq!(serialize, 1);
         assert_eq!(native_token.client_id, client_id);
         for i in 0..user_data.len() {

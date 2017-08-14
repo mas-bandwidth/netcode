@@ -22,7 +22,7 @@
     USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <netcode.h>
+#include "netcode.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -47,7 +47,7 @@ int main( int argc, char ** argv )
     (void) argc;
     (void) argv;
 
-    if ( !netcode_init() )
+    if ( netcode_init() != NETCODE_OK )
     {
         printf( "error: failed to initialize netcode.io\n" );
         return 1;
@@ -62,7 +62,11 @@ int main( int argc, char ** argv )
 
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
-    struct netcode_server_t * server = netcode_server_create( "0.0.0.0:40000", "127.0.0.1:40000", TEST_PROTOCOL_ID, private_key, time );
+    char * server_address = "127.0.0.1:40000";
+    if ( argc == 2 )
+        server_address = argv[1];
+
+    struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
 
     if ( !server )
     {

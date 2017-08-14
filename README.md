@@ -50,11 +50,20 @@ Here are some things that we think would be helpful:
 * Provide feedback on the reference implementation
 * Study the code, and look for flaws and weaknesses
 * Create bindings for netcode.io for your favorite language
-* Port netcode.io to your favorite language (eg. C#, Rust, Golang, Java, Lua, Python, Ruby...)
+* Port netcode.io to your favorite language (eg. C#, Java, Lua, Python, Ruby...)
 * We welcome anybody who would like to volunteer to perform a security audit of the code
 * Develop a testing framework to guarantee that different languages implementations conform to the [standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md)
 
 Please let me know if you have any more ideas, and feel free to ask questions and get involved by logging issues.
+
+# Contributors
+
+These people are awesome:
+
+* [Val Vanders](https://github.com/vvanders) - Rust Implementation
+* [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
+
+Thank you for your contributions to netcode.io!
 
 # Author
 
@@ -69,9 +78,11 @@ You can support Glenn's work writing articles and open source code via [Patreon]
 **netcode.io** is generously sponsored by:
 
 * **Gold Sponsors**
+    * [Remedy Entertainment](http://www.remedygames.com/)
     * [Cloud Imperium Games](https://cloudimperiumgames.com)
     
 * **Silver Sponsors**
+    * [Moon Studios](http://www.oriblindforest.com/#!moon-3/)
     * [The Network Protocol Company](http://www.thenetworkprotocolcompany.com)
     
 * **Bronze Sponsors**

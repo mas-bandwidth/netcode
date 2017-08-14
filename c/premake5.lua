@@ -25,12 +25,21 @@ solution "netcode"
         symbols "On"
         links { debug_libs }
     configuration "Release"
+        symbols "Off"
         optimize "Speed"
         defines { "NDEBUG" }
         links { release_libs }
         
 project "test"
     files { "test.c", "netcode.c" }
+
+project "soak"
+    files { "soak.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
+
+project "profile"
+    files { "profile.c", "netcode.c" }
+    defines { "NETCODE_ENABLE_TESTS=0" }
 
 project "client"
     files { "client.c", "netcode.c" }
@@ -72,6 +81,30 @@ else
             os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 test" == 0 then
                 os.execute "./bin/test"
+            end
+        end
+    }
+
+    newaction
+    {
+        trigger     = "soak",
+        description = "Build and run soak test",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 soak" == 0 then
+                os.execute "./bin/soak"
+            end
+        end
+    }
+
+    newaction
+    {
+        trigger     = "profile",
+        description = "Build and run profile tet",
+        execute = function ()
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j32 profile" == 0 then
+                os.execute "./bin/profile"
             end
         end
     }
@@ -212,7 +245,8 @@ newaction
             "cov-int",
             "docs",
             "xml",
-            "docker/netcode.io"
+            "docker/netcode.io",
+            "valgrind/netcode.io"
         }
 
         for i,v in ipairs( directories_to_delete ) do

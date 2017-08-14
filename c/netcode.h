@@ -56,7 +56,6 @@
 #define NETCODE_CONNECT_TOKEN_BYTES 2048
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
-#define NETCODE_NONCE_BYTES 8
 #define NETCODE_MAX_SERVERS_PER_CONNECT 32
 
 #define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -6
@@ -70,26 +69,28 @@
 #define NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE        2
 #define NETCODE_CLIENT_STATE_CONNECTED                          3
 
-#define NETCODE_SOCKET_IPV6         1
-#define NETCODE_SOCKET_IPV4         2
-
 #define NETCODE_MAX_CLIENTS         256
 #define NETCODE_MAX_PACKET_SIZE     1200
 
 #define NETCODE_LOG_LEVEL_NONE      0
-#define NETCODE_LOG_LEVEL_INFO      1
-#define NETCODE_LOG_LEVEL_ERROR     2
+#define NETCODE_LOG_LEVEL_ERROR     1
+#define NETCODE_LOG_LEVEL_INFO      2
 #define NETCODE_LOG_LEVEL_DEBUG     3
+
+#define NETCODE_OK                  1
+#define NETCODE_ERROR               0
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int netcode_init();
 
 void netcode_term();
 
-void netcode_log_level( int level );
-
-void netcode_random_bytes( uint8_t * data, int bytes );
-
 struct netcode_client_t * netcode_client_create( char * address, double time );
+
+struct netcode_client_t * netcode_client_create_with_allocator( char * address, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
@@ -101,9 +102,9 @@ uint64_t netcode_client_next_packet_sequence( struct netcode_client_t * client )
 
 void netcode_client_send_packet( struct netcode_client_t * client, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
+uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int * packet_bytes, uint64_t * packet_sequence );
 
-void netcode_client_free_packet( struct netcode_client_t * client, void * packet );
+void netcode_client_free_packet( struct netcode_client_t * client, uint8_t * packet );
 
 void netcode_client_disconnect( struct netcode_client_t * client );
 
@@ -113,13 +114,25 @@ int netcode_client_index( struct netcode_client_t * client );
 
 int netcode_client_max_clients( struct netcode_client_t * client );
 
+void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) );
+
 int netcode_generate_connect_token( int num_server_addresses, char ** server_addresses, int expire_seconds, uint64_t client_id, uint64_t protocol_id, uint64_t sequence, uint8_t * private_key, uint8_t * connect_token );
 
-struct netcode_server_t * netcode_server_create( char * bind_address, char * public_address, uint64_t protocol_id, uint8_t * private_key, double time );
+struct netcode_server_t * netcode_server_create( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time );
+
+struct netcode_server_t * netcode_server_create_with_allocator( char * server_address, uint64_t protocol_id, uint8_t * private_key, double time, void * allocator_context, void* (*allocate_function)(void*,uint64_t), void (*free_function)(void*,void*) );
+
+void netcode_server_destroy( struct netcode_server_t * server );
 
 void netcode_server_start( struct netcode_server_t * server, int max_clients );
 
-void netcode_server_update( struct netcode_server_t * client, double time );
+void netcode_server_stop( struct netcode_server_t * server );
+
+int netcode_server_running( struct netcode_server_t * server );
+
+int netcode_server_max_clients( struct netcode_server_t * server );
+
+void netcode_server_update( struct netcode_server_t * server, double time );
 
 int netcode_server_client_connected( struct netcode_server_t * server, int client_index );
 
@@ -133,18 +146,46 @@ uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, 
 
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, uint8_t * packet_data, int packet_bytes );
 
-void * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
+uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int client_index, int * packet_bytes, uint64_t * packet_sequence );
 
 void netcode_server_free_packet( struct netcode_server_t * server, void * packet );
 
-int netcode_server_num_clients_connected( struct netcode_server_t * server );
+int netcode_server_num_connected_clients( struct netcode_server_t * server );
 
 void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index );
 
-void netcode_server_destroy( struct netcode_server_t * server );
+void netcode_server_connect_disconnect_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,int) );
+
+void netcode_log_level( int level );
+
+void netcode_set_printf_function( int (*function)( const char *, ... ) );
+
+extern void (*netcode_assert_function)( const char *, const char *, const char * file, int line );
+
+#ifndef NDEBUG
+#define netcode_yojimbo_assert( condition )                                                 \
+do                                                                                          \
+{                                                                                           \
+    if ( !(condition) )                                                                     \
+    {                                                                                       \
+        netcode_assert_function( #condition, __FUNCTION__, __FILE__, __LINE__ );            \
+        exit(1);                                                                            \
+    }                                                                                       \
+} while(0)
+#else
+#define netcode_assert( ignore ) ((void)0)
+#endif
+
+void netcode_set_assert_function( void (*function)( const char * /*condition*/, const char * /*function*/, const char * /*file*/, int /*line*/ ) );
+
+void netcode_random_bytes( uint8_t * data, int bytes );
 
 void netcode_sleep( double seconds );
 
 double netcode_time();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // #ifndef NETCODE_H

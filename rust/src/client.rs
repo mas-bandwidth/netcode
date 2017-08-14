@@ -103,7 +103,8 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
                                 addr,
                                 self.token.protocol,
                                 0,
-                                0)
+                                0,
+                                self.time)
             },
             None => ()
         }
@@ -178,7 +179,7 @@ impl<I,S> ClientData<I,S> where I: SocketProvider<I,S> {
 
     fn send_connect_token(&mut self) -> Result<usize, SendError> {
         let packet = packet::ConnectionRequestPacket::from_token(&self.token);
-        
+
         self.channel.send(self.time, &packet::Packet::ConnectionRequest(packet), None, &mut self.socket)
     }
 
@@ -212,7 +213,8 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
             &token.hosts.get().next().unwrap(),
             token.protocol,
             0,
-            0);
+            0,
+            0.0);
 
         let mut data = ClientData {
                 time: 0.0,
@@ -356,7 +358,7 @@ impl<I,S> Client<I,S> where I: SocketProvider<I,S> {
     fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<(), io::Error> {
         self.data.socket.set_recv_timeout(duration)
     }
-    
+
     #[cfg(test)]
     pub fn get_socket_state(&mut self) -> &mut S {
         &mut self.data.socket_state
@@ -380,7 +382,7 @@ mod test {
         server: Option<Server<I,S>>
     }
 
-    
+
     #[allow(dead_code)]
     fn enable_logging() {
         use env_logger::LogBuilder;
@@ -446,7 +448,7 @@ mod test {
             }
         }
     }
- 
+
     #[test]
     fn test_client_connect() {
         let mut harness = TestHarness::<UdpSocket,()>::new(None);
@@ -461,7 +463,7 @@ mod test {
             ClientEvent::NewState(State::SendingConnectionResponse) => (),
             s => assert!(false, "{:?}", s)
         }
-        
+
         harness.update_server();
         match harness.update_client().unwrap() {
             ClientEvent::NewState(State::Connected) => (),
@@ -476,14 +478,14 @@ mod test {
         //Pending response
         harness.update_server();
         harness.update_client().unwrap();
-        
+
         //Connected
         harness.update_server();
         match harness.update_client().unwrap() {
             ClientEvent::NewState(State::Connected) => (),
             s => assert!(false, "{:?}", s)
         }
-   
+
         for i in 1..NETCODE_MAX_PAYLOAD_SIZE {
             let mut data = [0; NETCODE_MAX_PAYLOAD_SIZE];
             for d in 0..i {
