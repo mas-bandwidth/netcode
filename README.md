@@ -1,6 +1,4 @@
 [![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
-[![](http://meritbadge.herokuapp.com/netcode)](https://crates.io/crates/netcode)
-[![](https://docs.rs/netcode/badge.svg)](https://docs.rs/netcode)
 
 # netcode.io
 
