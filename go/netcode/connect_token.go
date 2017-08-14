@@ -31,12 +31,12 @@ func NewConnectToken() *ConnectToken {
 
 // Generates the token and private token data with the supplied config values and sequence id.
 // This will also write and encrypt the private token
-func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64, userData, privateKey []byte) error {
+func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, expireSeconds uint64, timeoutSeconds uint32, sequence uint64, userData, privateKey []byte) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
-	token.ExpireTimestamp = token.CreateTimestamp + (tokenExpiry * 1000)
+	token.ExpireTimestamp = token.CreateTimestamp + (expireSeconds * 1000)
+	token.TimeoutSeconds = timeoutSeconds
 	token.VersionInfo = []byte(VERSION_INFO)
 	token.ProtocolId = protocolId
-	token.TimeoutSeconds = timeoutSeconds
 	token.Sequence = sequence
 
 	token.PrivateData = NewConnectTokenPrivate(clientId, serverAddrs, userData)
@@ -76,7 +76,6 @@ func (token *ConnectToken) Write() ([]byte, error) {
 		return nil, err
 	}
 
-	buffer.WriteUint32(token.TimeoutSeconds)
 	return buffer.Buf, nil
 }
 
