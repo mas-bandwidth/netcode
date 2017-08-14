@@ -35,6 +35,3 @@ c/docker/netcode.io
 c/valgrind/netcode.io
 docs
 *.exe
-go/netcode/examples/client/client.exe
-target
-Cargo.lock
