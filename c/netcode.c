@@ -4677,7 +4677,6 @@ int netcode_generate_connect_token( int num_server_addresses,
     // parse server addresses
 
     struct netcode_address_t parsed_server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
-
     int i;
     for ( i = 0; i < num_server_addresses; ++i )
     {
@@ -4709,7 +4708,6 @@ int netcode_generate_connect_token( int num_server_addresses,
     // wrap a connect token around the private connect token data
 
     struct netcode_connect_token_t connect_token;
-
     memcpy( connect_token.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
     connect_token.protocol_id = protocol_id;
     connect_token.create_timestamp = create_timestamp;
@@ -4756,9 +4754,7 @@ double netcode_time()
         start = mach_absolute_time();
         return 0.0;
     }
-
     uint64_t current = mach_absolute_time();
-
     return ( (double) ( current - start ) ) * ( (double) timebase_info.numer ) / ( (double) timebase_info.denom ) / 1000000000.0;
 }
 
@@ -4776,7 +4772,6 @@ void netcode_sleep( double time )
 double netcode_time()
 {
     static double start = -1;
-
     if ( start == -1 )
     {
         struct timespec ts;
@@ -4784,7 +4779,6 @@ double netcode_time()
         start = ts.tv_sec + ( (double) ( ts.tv_nsec ) ) / 1000000000.0;
         return 0.0;
     }
-
     struct timespec ts;
     clock_gettime( CLOCK_MONOTONIC_RAW, &ts );
     double current = ts.tv_sec + ( (double) ( ts.tv_nsec ) ) / 1000000000.0;
