@@ -2012,7 +2012,8 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
          connect_token->version_info[11] != '1' ||
          connect_token->version_info[12] != '\0' )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info\n" );
+        connect_token->version_info[12] = '\0';
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info (got %s, expected %s)\n", connect_token->version_info, NETCODE_VERSION_INFO );
         return NETCODE_ERROR;
     }
 
