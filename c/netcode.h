@@ -140,7 +140,8 @@ void netcode_client_send_loopback_packet_callback( struct netcode_client_t * cli
 
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** server_addresses, 
-                                    int expire_seconds, 
+                                    int expire_seconds,
+                                    int timeout_seconds, 
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
                                     uint64_t sequence, 
