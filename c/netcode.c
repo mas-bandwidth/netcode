@@ -1915,11 +1915,11 @@ struct netcode_connect_token_t
     uint64_t expire_timestamp;
     uint64_t sequence;
     uint8_t private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    int timeout_seconds;
     int num_server_addresses;
     struct netcode_address_t server_addresses[NETCODE_MAX_SERVERS_PER_CONNECT];
     uint8_t client_to_server_key[NETCODE_KEY_BYTES];
     uint8_t server_to_client_key[NETCODE_KEY_BYTES];
-    int timeout_seconds;
 };
 
 void netcode_write_connect_token( struct netcode_connect_token_t * connect_token, uint8_t * buffer, int buffer_length )
@@ -1946,6 +1946,8 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
     netcode_write_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
     int i,j;
+
+    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
 
     netcode_write_uint32( &buffer, connect_token->num_server_addresses );
 
@@ -1978,8 +1980,6 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
     netcode_write_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_write_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
-
-    netcode_write_uint32( &buffer, connect_token->timeout_seconds );
 
     netcode_assert( buffer - start <= NETCODE_CONNECT_TOKEN_BYTES );
 
@@ -2029,6 +2029,8 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     netcode_read_bytes( &buffer, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
+    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
+
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
     if ( connect_token->num_server_addresses <= 0 || connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
@@ -2069,8 +2071,6 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
     netcode_read_bytes( &buffer, connect_token->client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_read_bytes( &buffer, connect_token->server_to_client_key, NETCODE_KEY_BYTES );
-
-    connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
     
     return NETCODE_OK;
 }
