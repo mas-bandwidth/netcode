@@ -4702,8 +4702,7 @@ int netcode_generate_connect_token( int num_server_addresses,
     // encrypt the buffer
 
     uint64_t create_timestamp = time( NULL );
-    uint64_t expire_timestamp = create_timestamp + expire_seconds;
-
+    uint64_t expire_timestamp = ( expire_seconds >= 0 ) ? ( create_timestamp + expire_seconds ) : 0xFFFFFFFFFFFFFFFFULL;
     if ( netcode_encrypt_connect_token_private( connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, sequence, private_key ) != NETCODE_OK )
         return NETCODE_ERROR;
 
