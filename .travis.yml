@@ -32,6 +32,6 @@ install:
   - sudo ldconfig
   
 script:
-  - premake5 gmake
+  - ./premake5 gmake
   - make clean && make all config=debug_x64 && ./bin/test
   - make clean && make all config=release_x64 && ./bin/test
