@@ -3254,7 +3254,10 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
 
 int netcode_encryption_manager_entry_expired( struct netcode_encryption_manager_t * encryption_manager, int index, double time )
 {
-    netcode_assert( index >= 0 );
+    if ( index < 0 )
+    {
+        return 0;
+    }
     if ( encryption_manager->timeout[index] >= 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
     {
         return 1;
@@ -3277,8 +3280,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
-            !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
             encryption_manager->timeout[i] = timeout;
             encryption_manager->expire_time[i] = expire_time;
@@ -3350,9 +3352,7 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
-             ( encryption_manager->timeout[i] <= 0.0f || encryption_manager->last_access_time[i] + encryption_manager->timeout[i] >= time ) && 
-             ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
             encryption_manager->last_access_time[i] = time;
             return i;
@@ -4237,6 +4237,9 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     if ( !server->running )
         return;
 
+    if ( packet_bytes <= 1 )
+        return;
+
     uint64_t sequence;
 
     int encryption_index = -1;
@@ -4253,6 +4256,13 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     }
     
     uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+
+    if ( !read_packet_key && packet_data[0] != 0 )
+    {
+        char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "could not process packet because no encryption mapping exists for %s\n", netcode_address_to_string( from, address_string ) );
+        return;
+    }
 
     void * packet = netcode_read_packet( packet_data, 
                                          packet_bytes, 
