@@ -3254,19 +3254,8 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
 
 int netcode_encryption_manager_entry_expired( struct netcode_encryption_manager_t * encryption_manager, int index, double time )
 {
-    if ( index < 0 )
-    {
-        return 0;
-    }
-    if ( encryption_manager->timeout[index] > 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
-    {
-        return 1;
-    }
-    if ( encryption_manager->expire_time[index] >= 0.0 && encryption_manager->expire_time[index] < time )
-    {
-        return 1;
-    }
-    return 0;
+    return ( encryption_manager->timeout[index] > 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time ) ||
+           ( encryption_manager->expire_time[index] >= 0.0 && encryption_manager->expire_time[index] < time );
 }
 
 int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption_manager_t * encryption_manager, 
@@ -3974,12 +3963,14 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
+    double expire_time = ( connect_token_private.timeout_seconds >= 0 ) ? server->time + connect_token_private.timeout_seconds : -1.0;
+
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, 
                                                              from, 
                                                              connect_token_private.server_to_client_key, 
                                                              connect_token_private.client_to_server_key, 
                                                              server->time, 
-                                                             server->time + connect_token_private.timeout_seconds,
+                                                             expire_time,
                                                              connect_token_private.timeout_seconds ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
@@ -5155,7 +5146,7 @@ static void test_address()
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
 #define TEST_CONNECT_TOKEN_EXPIRY   30
-#define TEST_TIMEOUT_SECONDS        5
+#define TEST_TIMEOUT_SECONDS        15
 
 static void test_connect_token()
 {
@@ -5615,8 +5606,6 @@ void test_connection_disconnect_packet()
 
     free( output_packet );
 }
-
-#define TEST_TIMEOUT_SECONDS 5
 
 void test_connect_token_public()
 {
