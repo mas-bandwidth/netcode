@@ -26,6 +26,7 @@ type ClientManager struct {
 	timeout    float64
 
 	instances            []*ClientInstance
+	connectedClientIds   []uint64 // slice of connected clientIds
 	connectTokensEntries []*connectTokenEntry
 	cryptoEntries        []*encryptionEntry
 	numCryptoEntries     int
@@ -38,6 +39,7 @@ func NewClientManager(timeout float64, maxClients int) *ClientManager {
 	m := &ClientManager{}
 	m.maxClients = maxClients
 	m.maxEntries = maxClients * 8
+	m.connectedClientIds = make([]uint64, maxClients)
 	m.timeout = timeout
 	m.emptyMac = make([]byte, MAC_BYTES)
 	m.emptyWriteKey = make([]byte, KEY_BYTES)
@@ -102,6 +104,49 @@ func (m *ClientManager) FindFreeClientIndex() int {
 	return -1
 }
 
+// Returns the clientIds of the connected clients. To avoid allocating a buffer everytime this is called
+// we simply re-add all connected clients to the connectedClientIds buffer and return the slice of how
+// many we were able to add.
+func (m *ClientManager) ConnectedClients() []uint64 {
+	i := 0
+	for clientIndex := 0; clientIndex < m.maxClients; clientIndex += 1 {
+		client := m.instances[clientIndex]
+		if client.connected && client.address != nil {
+			m.connectedClientIds[i] = client.clientId
+			i++
+		}
+	}
+	return m.connectedClientIds[0:i]
+}
+
+func (m *ClientManager) ConnectedClientCount() int {
+	return len(m.ConnectedClients())
+}
+
+// Initializes the client with the clientId
+func (m *ClientManager) ConnectClient(addr *net.UDPAddr, challengeToken *ChallengeToken) *ClientInstance {
+	clientIndex := m.FindFreeClientIndex()
+	if clientIndex == -1 {
+		log.Printf("failure to find free client index\n")
+		return nil
+	}
+	client := m.instances[clientIndex]
+	client.clientIndex = clientIndex
+	client.connected = true
+	client.sequence = 0
+	client.clientId = challengeToken.ClientId
+	client.address = addr
+	copy(client.userData, challengeToken.UserData.Bytes())
+	return client
+}
+
+// Disconnects the client referenced by the provided clientIndex.
+func (m *ClientManager) DisconnectClient(clientIndex int, sendDisconnect bool, serverTime float64) {
+	instance := m.instances[clientIndex]
+	m.disconnectClient(instance, sendDisconnect, serverTime)
+}
+
+// Finds the client index referenced by the provided UDPAddr.
 func (m *ClientManager) FindClientIndexByAddress(addr *net.UDPAddr) int {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
@@ -112,6 +157,7 @@ func (m *ClientManager) FindClientIndexByAddress(addr *net.UDPAddr) int {
 	return -1
 }
 
+// Finds the client index via the provided clientId.
 func (m *ClientManager) FindClientIndexById(clientId uint64) int {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
@@ -122,6 +168,7 @@ func (m *ClientManager) FindClientIndexById(clientId uint64) int {
 	return -1
 }
 
+// Finds the encryption index via the provided clientIndex, returns -1 if not found.
 func (m *ClientManager) FindEncryptionIndexByClientIndex(clientIndex int) int {
 	if clientIndex < 0 || clientIndex > m.maxClients {
 		return -1
@@ -130,6 +177,24 @@ func (m *ClientManager) FindEncryptionIndexByClientIndex(clientIndex int) int {
 	return m.instances[clientIndex].encryptionIndex
 }
 
+// Finds an encryption entry index via the provided UDPAddr.
+func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime float64) int {
+	for i := 0; i < m.numCryptoEntries; i += 1 {
+		entry := m.cryptoEntries[i]
+		if entry == nil || entry.address == nil {
+			continue
+		}
+
+		lastAccessTimeout := entry.lastAccess + m.timeout
+		if addressEqual(entry.address, addr) && serverTimedout(lastAccessTimeout, serverTime) && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
+			entry.lastAccess = serverTime
+			return i
+		}
+	}
+	return -1
+}
+
+// Finds or adds a token entry to our token entry slice.
 func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UDPAddr, serverTime float64) bool {
 	var oldestTime float64
 
@@ -169,6 +234,7 @@ func (m *ClientManager) FindOrAddTokenEntry(connectTokenMac []byte, addr *net.UD
 	return false
 }
 
+// Adds a new encryption mapping of client/server keys.
 func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, addr *net.UDPAddr, serverTime, expireTime float64) bool {
 	// already list
 	for i := 0; i < m.maxEntries; i += 1 {
@@ -204,44 +270,31 @@ func (m *ClientManager) AddEncryptionMapping(connectToken *ConnectTokenPrivate, 
 	return false
 }
 
-func (m *ClientManager) FindEncryptionEntryIndex(addr *net.UDPAddr, serverTime float64) int {
-	for i := 0; i < m.numCryptoEntries; i += 1 {
-		entry := m.cryptoEntries[i]
-		if entry == nil || entry.address == nil {
-			continue
-		}
-
-		lastAccessTimeout := entry.lastAccess + m.timeout
-		if addressEqual(entry.address, addr) && serverTimedout(lastAccessTimeout, serverTime) && (entry.expireTime < 0 || entry.expireTime >= serverTime) {
-			entry.lastAccess = serverTime
-			return i
-		}
-	}
-	return -1
-}
-
-func (m *ClientManager) TouchEncryptionEntry(index int, addr *net.UDPAddr, serverTime float64) bool {
-	if index < 0 || index > m.numCryptoEntries {
+// Update the encryption entry for the  provided encryption index.
+func (m *ClientManager) TouchEncryptionEntry(encryptionIndex int, addr *net.UDPAddr, serverTime float64) bool {
+	if encryptionIndex < 0 || encryptionIndex > m.numCryptoEntries {
 		return false
 	}
 
-	if !addressEqual(m.cryptoEntries[index].address, addr) {
+	if !addressEqual(m.cryptoEntries[encryptionIndex].address, addr) {
 		return false
 	}
 
-	m.cryptoEntries[index].lastAccess = serverTime
+	m.cryptoEntries[encryptionIndex].lastAccess = serverTime
 	return true
 }
 
-func (m *ClientManager) SetEncryptionEntryExpiration(index int, expireTime float64) bool {
-	if index < 0 || index > m.numCryptoEntries {
+// Sets the expiration for this encryption entry.
+func (m *ClientManager) SetEncryptionEntryExpiration(encryptionIndex int, expireTime float64) bool {
+	if encryptionIndex < 0 || encryptionIndex > m.numCryptoEntries {
 		return false
 	}
 
-	m.cryptoEntries[index].expireTime = expireTime
+	m.cryptoEntries[encryptionIndex].expireTime = expireTime
 	return true
 }
 
+// Removes the encryption entry for this UDPAddr.
 func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime float64) bool {
 	for i := 0; i < m.numCryptoEntries; i += 1 {
 		entry := m.cryptoEntries[i]
@@ -269,10 +322,12 @@ func (m *ClientManager) RemoveEncryptionEntry(addr *net.UDPAddr, serverTime floa
 	return false
 }
 
+// Returns the encryption send key.
 func (m *ClientManager) GetEncryptionEntrySendKey(index int) []byte {
 	return m.getEncryptionEntryKey(index, true)
 }
 
+// Returns the encryption recv key.
 func (m *ClientManager) GetEncryptionEntryRecvKey(index int) []byte {
 	return m.getEncryptionEntryKey(index, false)
 }
@@ -291,34 +346,39 @@ func (m *ClientManager) getEncryptionEntryKey(index int, sendKey bool) []byte {
 
 func (m *ClientManager) sendPayloads(payloadData []byte, serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
-		instance := m.instances[i]
-		if instance.encryptionIndex == -1 {
-			continue
-		}
-
-		writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
-		if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
-			continue
-		}
-
-		if !instance.confirmed {
-			packet := &KeepAlivePacket{}
-			packet.ClientIndex = uint32(instance.clientIndex)
-			packet.MaxClients = uint32(m.maxClients)
-			instance.SendPacket(packet, writePacketKey, serverTime)
-		}
-
-		if instance.connected {
-			if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
-				log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
-				continue
-			}
-			packet := NewPayloadPacket(payloadData)
-			instance.SendPacket(packet, writePacketKey, serverTime)
-		}
+		m.sendPayloadToInstance(i, payloadData, serverTime)
 	}
 }
 
+func (m *ClientManager) sendPayloadToInstance(index int, payloadData []byte, serverTime float64) {
+	instance := m.instances[index]
+	if instance.encryptionIndex == -1 {
+		return
+	}
+
+	writePacketKey := m.GetEncryptionEntrySendKey(instance.encryptionIndex)
+	if bytes.Equal(writePacketKey, m.emptyWriteKey) || instance.address == nil {
+		return
+	}
+
+	if !instance.confirmed {
+		packet := &KeepAlivePacket{}
+		packet.ClientIndex = uint32(instance.clientIndex)
+		packet.MaxClients = uint32(m.maxClients)
+		instance.SendPacket(packet, writePacketKey, serverTime)
+	}
+
+	if instance.connected {
+		if !m.TouchEncryptionEntry(instance.encryptionIndex, instance.address, serverTime) {
+			log.Printf("error: encryption mapping is out of date for client %d\n", instance.clientIndex)
+			return
+		}
+		packet := NewPayloadPacket(payloadData)
+		instance.SendPacket(packet, writePacketKey, serverTime)
+	}
+}
+
+// Send keep alives to all connected clients.
 func (m *ClientManager) SendKeepAlives(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
@@ -346,6 +406,7 @@ func (m *ClientManager) SendKeepAlives(serverTime float64) {
 	}
 }
 
+// Checks and disconnects any clients that have timed out.
 func (m *ClientManager) CheckTimeouts(serverTime float64) {
 	for i := 0; i < m.maxClients; i += 1 {
 		instance := m.instances[i]
@@ -353,50 +414,37 @@ func (m *ClientManager) CheckTimeouts(serverTime float64) {
 
 		if instance.connected && (timeout < serverTime || floatEquals(timeout, serverTime)) {
 			log.Printf("server timed out client: %d\n", i)
-			m.disconnectClient(instance, i, serverTime, false)
+			m.disconnectClient(instance, false, serverTime)
 		}
 	}
 }
 
 func (m *ClientManager) disconnectClients(serverTime float64) {
-	for i := 0; i < m.maxClients; i += 1 {
-		instance := m.instances[i]
-		m.disconnectClient(instance, i, serverTime, true)
+	for clientIndex := 0; clientIndex < m.maxClients; clientIndex += 1 {
+		instance := m.instances[clientIndex]
+		m.disconnectClient(instance, true, serverTime)
 	}
 }
 
-func (m *ClientManager) disconnectClient(client *ClientInstance, clientIndex int, serverTime float64, sendDisconnect bool) {
+func (m *ClientManager) disconnectClient(client *ClientInstance, sendDisconnect bool, serverTime float64) {
 	if !client.connected {
 		return
 	}
 
-	log.Printf("server disconnected client: %d\n", clientIndex)
 	if sendDisconnect {
-		log.Printf("server sent disconnect packets to client %d\n", clientIndex)
 		packet := &DisconnectPacket{}
 		writePacketKey := m.GetEncryptionEntrySendKey(client.encryptionIndex)
-		if writePacketKey != nil {
-			log.Printf("error: unable to retrieve encryption key for client: %d\n", clientIndex)
+		if writePacketKey == nil {
+			log.Printf("error: unable to retrieve encryption key for client for disconnect: %d\n", client.clientId)
 		} else {
 			for i := 0; i < NUM_DISCONNECT_PACKETS; i += 1 {
 				client.SendPacket(packet, writePacketKey, serverTime)
 			}
 		}
 	}
+	log.Printf("removing encryption entry for: %s", client.address.String())
 	m.RemoveEncryptionEntry(client.address, serverTime)
 	client.Clear()
-}
-
-func (m *ClientManager) ConnectedClientCount() int {
-	var count int
-
-	for i := 0; i < m.maxClients; i += 1 {
-		if m.instances[i].connected {
-			count += 1
-		}
-	}
-
-	return count
 }
 
 const EPSILON float64 = 0.000001
