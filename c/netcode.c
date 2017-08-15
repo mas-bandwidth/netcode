@@ -1098,9 +1098,6 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
 
     connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
 
-    // todo
-    printf( "connect token private timeout seconds = %d\n", connect_token->timeout_seconds );
-
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
     if ( connect_token->num_server_addresses <= 0 )
