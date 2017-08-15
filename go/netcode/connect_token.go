@@ -19,7 +19,6 @@ type ConnectToken struct {
 	ExpireTimestamp uint64               // when this token expires
 	Sequence        uint64               // the sequence id
 	PrivateData     *ConnectTokenPrivate // reference to the private parts of this connect token
-	TimeoutSeconds  uint32               // timeout of connect token in seconds
 }
 
 // Create a new empty token and empty private token
@@ -34,7 +33,7 @@ func NewConnectToken() *ConnectToken {
 func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, expireSeconds uint64, timeoutSeconds uint32, sequence uint64, userData, privateKey []byte) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
 	token.ExpireTimestamp = token.CreateTimestamp + (expireSeconds * 1000)
-	token.TimeoutSeconds = timeoutSeconds
+	token.sharedTokenData.TimeoutSeconds = timeoutSeconds
 	token.VersionInfo = []byte(VERSION_INFO)
 	token.ProtocolId = protocolId
 	token.Sequence = sequence
