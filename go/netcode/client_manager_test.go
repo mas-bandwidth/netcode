@@ -104,3 +104,39 @@ func TestAddEncryptionMappingTimeout(t *testing.T) {
 		t.Fatalf("error got encryption entry index when it should have been removed\n")
 	}
 }
+
+func TestDisconnectClient(t *testing.T) {
+	timeout := float64(4)
+	maxClients := 2
+	servers := make([]net.UDPAddr, 1)
+	servers[0] = net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
+
+	addr := &net.UDPAddr{IP: net.ParseIP("::1"), Port: 62424}
+
+	connectToken := testGenerateConnectToken(servers, TEST_PRIVATE_KEY, t)
+
+	cm := NewClientManager(timeout, maxClients)
+
+	serverTime := float64(1.0)
+	expireTime := float64(1.1)
+	if !cm.AddEncryptionMapping(connectToken.PrivateData, addr, serverTime, expireTime) {
+		t.Fatalf("error adding encryption mapping\n")
+	}
+
+	token := NewChallengeToken(TEST_CLIENT_ID)
+	client := cm.ConnectClient(addr, token)
+	clientIndex := cm.FindClientIndexById(TEST_CLIENT_ID)
+	if clientIndex == -1 {
+		t.Fatalf("error finding client index")
+	}
+
+	if cm.ConnectedClientCount() != 1 {
+		t.Fatalf("error client connected count should be 1")
+	}
+
+	cm.DisconnectClient(clientIndex, false, serverTime)
+	if client.connected {
+		t.Fatalf("error client should be disconnected")
+	}
+
+}
