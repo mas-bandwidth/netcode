@@ -20,6 +20,7 @@ This repository holds the native code implementations of netcode.io in C and Gol
 Other netcode.io repositories include:
 
 * [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
+* [netcode.io Rust implementation](https://github.com/vvanders/netcode.io)
 * [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
 * [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
