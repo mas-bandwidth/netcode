@@ -138,6 +138,8 @@ void netcode_client_process_loopback_packet( struct netcode_client_t * client, N
 
 void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
 
+uint16_t netcode_client_get_port( struct netcode_client_t * client );
+
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** server_addresses, 
                                     int expire_seconds,
@@ -201,6 +203,8 @@ int netcode_server_client_loopback( struct netcode_server_t * server, int client
 void netcode_server_process_loopback_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
 
 void netcode_server_send_loopback_packet_callback( struct netcode_server_t * server, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
+
+uint16_t netcode_server_get_port( struct netcode_server_t * server );
 
 void netcode_log_level( int level );
 

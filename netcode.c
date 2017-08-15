@@ -3216,6 +3216,12 @@ void netcode_client_send_loopback_packet_callback( struct netcode_client_t * cli
     client->send_loopback_packet_callback_function = callback_function;
 }
 
+uint16_t netcode_client_get_port( struct netcode_client_t * client )
+{
+    netcode_assert( client );
+    return client->socket.address.port;
+}
+
 // ----------------------------------------------------------------
 
 #define NETCODE_MAX_ENCRYPTION_MAPPINGS ( NETCODE_MAX_CLIENTS * 4 )
@@ -4657,6 +4663,12 @@ void netcode_server_send_loopback_packet_callback( struct netcode_server_t * ser
     netcode_assert( server );
     server->send_loopback_packet_callback_context = context;
     server->send_loopback_packet_callback_function = callback_function;
+}
+
+uint16_t netcode_server_get_port( struct netcode_server_t * server )
+{
+    netcode_assert( server );
+    return server->socket.address.port;
 }
 
 // ----------------------------------------------------------------
