@@ -3258,7 +3258,7 @@ int netcode_encryption_manager_entry_expired( struct netcode_encryption_manager_
     {
         return 0;
     }
-    if ( encryption_manager->timeout[index] >= 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
+    if ( encryption_manager->timeout[index] > 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
     {
         return 1;
     }
@@ -3293,7 +3293,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
-        if ( netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
+        if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
             encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
@@ -3335,6 +3335,7 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                     {
                         break;
                     }
+                    encryption_manager->address[index].type = NETCODE_ADDRESS_NONE;
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
