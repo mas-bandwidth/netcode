@@ -42,7 +42,7 @@ The private portion is encrypted and signed with a private key shared between th
 Prior to encryption the private connect token data has the following binary format.
 
     [client id] (uint64) // globally unique identifier for an authenticated client
-    [timeout seconds] (uint32) // number of seconds with no packets before client times out
+    [timeout seconds] (uint32) // timeout in seconds. negative values disable timeout (dev only)
     [num server addresses] (uint32) // in [1,32]
     <for each server address>
     {
@@ -100,7 +100,7 @@ Together the public and private data form a _connect token_:
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
     [connect token sequence] (uint64)
     [encrypted private connect token data] (1024 bytes)
-    [timeout seconds] (uint32)      // number of seconds with no packets before client times out
+    [timeout seconds] (uint32)      // timeout in seconds. negative values disable timeout (dev only)
     [num_server_addresses] (uint32) // in [1,32]
     <for each server address>
     {
