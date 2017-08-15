@@ -82,14 +82,13 @@ static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETC
     exit( 1 );
 }
 
-static int log_level = 9000; //0;
+static int log_level = 0;
 static int (*printf_function)( NETCODE_CONST char *, ... ) = ( int (*)( NETCODE_CONST char *, ... ) ) printf;
 void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) = netcode_default_assert_handler;
 
 void netcode_log_level( int level )
 {
-    (void) level;
-    //log_level = level;
+    log_level = level;
 }
 
 void netcode_set_printf_function( int (*function)( NETCODE_CONST char *, ... ) )
@@ -3296,7 +3295,6 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
     {
         if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
-            printf( "add new mapping: time = %f, expire_time = %f, timeout = %d\n", time, expire_time, timeout );
             encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
             encryption_manager->expire_time[i] = expire_time;
