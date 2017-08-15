@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const testClientCommsEnabled = false
+const testClientCommsEnabled = false // this is for testing servers independently
 
 const (
 	TEST_PROTOCOL_ID          = 0x1122334455667788

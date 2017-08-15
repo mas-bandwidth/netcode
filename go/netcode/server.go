@@ -119,6 +119,17 @@ func (s *Server) SendPayloads(payloadData []byte, serverTime float64) {
 	s.clientManager.sendPayloads(payloadData, serverTime)
 }
 
+// Sends the payload to the client specified by their clientId.
+func (s *Server) SendPayloadToClient(clientId uint64, payloadData []byte, serverTime float64) error {
+	clientIndex, err := s.getClientIndexByClientId(clientId)
+	if err != nil {
+		return err
+	}
+
+	s.clientManager.sendPayloadToInstance(clientIndex, payloadData, serverTime)
+	return nil
+}
+
 func (s *Server) Update(time float64) error {
 	if !s.running {
 		return errors.New("server shutdown")
@@ -139,6 +150,29 @@ DONE:
 	s.clientManager.SendKeepAlives(s.serverTime)
 	s.clientManager.CheckTimeouts(s.serverTime)
 	return nil
+}
+
+// Disconnects a single client via the specified clientId
+func (s *Server) DisconnectClient(clientId uint64, sendDisconnect bool, serverTime float64) error {
+	clientIndex, err := s.getClientIndexByClientId(clientId)
+	if err != nil {
+		return err
+	}
+
+	s.clientManager.DisconnectClient(clientIndex, sendDisconnect, serverTime)
+	return nil
+}
+
+func (s *Server) getClientIndexByClientId(clientId uint64) (int, error) {
+	if !s.running {
+		return -1, errors.New("server is not running")
+	}
+
+	clientIndex := s.clientManager.FindClientIndexById(clientId)
+	if clientIndex == -1 {
+		return -1, errors.New("unknown client id " + string(clientId))
+	}
+	return clientIndex, nil
 }
 
 // write the netcodeData to our buffered packet channel. The NetcodeConn verifies
@@ -229,7 +263,7 @@ func (s *Server) processPacket(clientIndex, encryptionIndex int, packet Packet, 
 		}
 		client := s.clientManager.instances[clientIndex]
 		log.Printf("server received disconnect packet from client %d:%s\n", client.clientId, client.address.String())
-		s.clientManager.disconnectClient(client, client.clientIndex, s.serverTime, false)
+		s.clientManager.disconnectClient(client, false, s.serverTime)
 	}
 }
 
@@ -356,12 +390,7 @@ func (s *Server) processConnectionResponse(clientIndex, encryptionIndex int, pac
 		return
 	}
 
-	clientIndex = s.clientManager.FindFreeClientIndex()
-	if clientIndex == -1 {
-		log.Printf("failure to find free client index\n")
-		return
-	}
-	s.connectClient(clientIndex, encryptionIndex, challengeToken, addr)
+	s.connectClient(encryptionIndex, challengeToken, addr)
 	return
 
 }
@@ -380,31 +409,28 @@ func (s *Server) sendDeniedPacket(sendKey []byte, addr *net.UDPAddr) {
 	s.sendGlobalPacket(packetBuffer[:bytesWritten], addr)
 }
 
-func (s *Server) connectClient(clientIndex, encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
-
+func (s *Server) connectClient(encryptionIndex int, challengeToken *ChallengeToken, addr *net.UDPAddr) {
 	if s.clientManager.ConnectedClientCount() > s.maxClients {
 		log.Printf("maxium number of clients reached")
 		return
 	}
 
 	s.clientManager.SetEncryptionEntryExpiration(encryptionIndex, -1)
-	client := s.clientManager.instances[clientIndex]
+	client := s.clientManager.ConnectClient(addr, challengeToken)
+	if client == nil {
+		return
+	}
 	client.serverConn = s.serverConn
-	client.clientIndex = clientIndex
 	client.encryptionIndex = encryptionIndex
-	client.connected = true
-	client.clientId = challengeToken.ClientId
 	client.protocolId = s.protocolId
-	client.sequence = 0
-	client.address = addr
 	client.lastSendTime = s.serverTime
 	client.lastRecvTime = s.serverTime
-	copy(client.userData, challengeToken.UserData.Bytes())
-	log.Printf("server accepted client %d from %s in slot: %d\n", client.clientId, addr.String(), clientIndex)
-	s.sendKeepAlive(client, clientIndex)
+	log.Printf("server accepted client %d from %s in slot: %d\n", client.clientId, addr.String(), client.clientIndex)
+	s.sendKeepAlive(client)
 }
 
-func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
+func (s *Server) sendKeepAlive(client *ClientInstance) {
+	clientIndex := client.clientIndex
 	packet := &KeepAlivePacket{}
 	packet.ClientIndex = uint32(clientIndex)
 	packet.MaxClients = uint32(s.maxClients)
@@ -424,6 +450,10 @@ func (s *Server) sendKeepAlive(client *ClientInstance, clientIndex int) {
 	if err := client.SendPacket(packet, writePacketKey, s.serverTime); err != nil {
 		log.Printf("%s\n", err)
 	}
+}
+
+func (s *Server) GetConnectedClientIds() []uint64 {
+	return s.clientManager.ConnectedClients()
 }
 
 func (s *Server) MaxClients() int {
