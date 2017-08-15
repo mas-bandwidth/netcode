@@ -1,6 +1,4 @@
 [![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
-[![](http://meritbadge.herokuapp.com/netcode)](https://crates.io/crates/netcode)
-[![](https://docs.rs/netcode/badge.svg)](https://docs.rs/netcode)
 
 # netcode.io
 
@@ -30,7 +28,7 @@ Other netcode.io repositories include:
 
 Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
 
-For a complete technical specification, read the [netcode 1.0 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
+For a complete technical specification, read the [netcode 1.01 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
 
 # How can I help?
 

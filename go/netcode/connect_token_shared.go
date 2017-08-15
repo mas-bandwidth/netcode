@@ -16,9 +16,10 @@ const (
 // This struct contains data that is shared in both public and private parts of the
 // connect token.
 type sharedTokenData struct {
-	ServerAddrs []net.UDPAddr // list of server addresses this client may connect to
-	ClientKey   []byte        // client to server key
-	ServerKey   []byte        // server to client key
+	TimeoutSeconds	int32	      // timeout in seconds. -1 means disable timeout (dev only).
+	ServerAddrs 	[]net.UDPAddr // list of server addresses this client may connect to
+	ClientKey   	[]byte        // client to server key
+	ServerKey   	[]byte        // server to client key
 }
 
 func (shared *sharedTokenData) GenerateShared() error {
@@ -39,6 +40,11 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 	var err error
 	var servers uint32
 	var ipBytes []byte
+
+	shared.TimeoutSeconds, err = buffer.GetInt32()
+	if err != nil {
+		return err
+	}
 
 	servers, err = buffer.GetUint32()
 	if err != nil {
@@ -103,6 +109,7 @@ func (shared *sharedTokenData) ReadShared(buffer *Buffer) error {
 
 // Writes the servers and client <-> server keys to the supplied buffer
 func (shared *sharedTokenData) WriteShared(buffer *Buffer) error {
+	buffer.WriteInt32(shared.TimeoutSeconds)
 	buffer.WriteUint32(uint32(len(shared.ServerAddrs)))
 
 	for _, addr := range shared.ServerAddrs {

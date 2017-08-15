@@ -15,13 +15,14 @@ func TestConnectTokenPrivate(t *testing.T) {
 
 	currentTimestamp := uint64(time.Now().Unix())
 	expireTimestamp := uint64(currentTimestamp + TEST_CONNECT_TOKEN_EXPIRY)
+	timeoutSeconds := (int32) (10)
 
 	userData, err := RandomBytes(USER_DATA_BYTES)
 	if err != nil {
 		t.Fatalf("error generating random bytes: %s\n", err)
 	}
 
-	token1 := NewConnectTokenPrivate(TEST_CLIENT_ID, servers, userData)
+	token1 := NewConnectTokenPrivate(TEST_CLIENT_ID, timeoutSeconds, servers, userData)
 	if err := token1.Generate(); err != nil {
 		t.Fatalf("error generating key: %s\n", err)
 	}

@@ -19,7 +19,6 @@ type ConnectToken struct {
 	ExpireTimestamp uint64               // when this token expires
 	Sequence        uint64               // the sequence id
 	PrivateData     *ConnectTokenPrivate // reference to the private parts of this connect token
-	TimeoutSeconds  uint32               // timeout of connect token in seconds
 }
 
 // Create a new empty token and empty private token
@@ -31,15 +30,15 @@ func NewConnectToken() *ConnectToken {
 
 // Generates the token and private token data with the supplied config values and sequence id.
 // This will also write and encrypt the private token
-func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, tokenExpiry uint64, timeoutSeconds uint32, sequence uint64, userData, privateKey []byte) error {
+func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, expireSeconds uint64, timeoutSeconds int32, sequence uint64, userData, privateKey []byte) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
-	token.ExpireTimestamp = token.CreateTimestamp + (tokenExpiry * 1000)
+	token.ExpireTimestamp = token.CreateTimestamp + (expireSeconds * 1000)
+	token.TimeoutSeconds = timeoutSeconds
 	token.VersionInfo = []byte(VERSION_INFO)
 	token.ProtocolId = protocolId
-	token.TimeoutSeconds = timeoutSeconds
 	token.Sequence = sequence
 
-	token.PrivateData = NewConnectTokenPrivate(clientId, serverAddrs, userData)
+	token.PrivateData = NewConnectTokenPrivate(clientId, timeoutSeconds, serverAddrs, userData)
 	if err := token.PrivateData.Generate(); err != nil {
 		return err
 	}
@@ -76,7 +75,6 @@ func (token *ConnectToken) Write() ([]byte, error) {
 		return nil, err
 	}
 
-	buffer.WriteUint32(token.TimeoutSeconds)
 	return buffer.Buf, nil
 }
 
@@ -126,10 +124,6 @@ func ReadConnectToken(tokenBuffer []byte) (*ConnectToken, error) {
 
 	// reads servers, client and server key
 	if err = token.ReadShared(buffer); err != nil {
-		return nil, err
-	}
-
-	if token.TimeoutSeconds, err = buffer.GetUint32(); err != nil {
 		return nil, err
 	}
 

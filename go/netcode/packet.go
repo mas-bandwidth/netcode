@@ -19,7 +19,7 @@ const MAC_BYTES = 16
 const NONCE_BYTES = 8
 const MAX_SERVERS_PER_CONNECT = 32
 
-const VERSION_INFO = "NETCODE 1.00\x00"
+const VERSION_INFO = "NETCODE 1.01\x00"
 
 const (
 	ConnectionRequest PacketType = iota

@@ -22,6 +22,7 @@ func TestReadWriteShared(t *testing.T) {
 
 	server := net.UDPAddr{IP: net.ParseIP("::1"), Port: 40000}
 	data := &sharedTokenData{}
+	data.TimeoutSeconds = 10
 	data.ServerAddrs = make([]net.UDPAddr, 1)
 	data.ServerAddrs[0] = server
 	data.ClientKey = clientKey
@@ -38,6 +39,10 @@ func TestReadWriteShared(t *testing.T) {
 
 	if err := outData.ReadShared(buffer); err != nil {
 		t.Fatalf("error reading data: %s\n", err)
+	}
+
+	if !bytes.Equal(clientKey, outData.ClientKey) {
+		t.Fatalf("timeout seconds did not match expected %d\ngot:%d\n", data.TimeoutSeconds, outData.TimeoutSeconds)
 	}
 
 	if !bytes.Equal(clientKey, outData.ClientKey) {

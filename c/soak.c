@@ -34,6 +34,7 @@
 #define MAX_CLIENTS 1024
 #define SERVER_BASE_PORT 40000
 #define CONNECT_TOKEN_EXPIRY 45
+#define CONNECT_TOKEN_TIMEOUT 5
 #define PROTOCOL_ID 0x1122334455667788
 
 static volatile int quit = 0;
@@ -237,7 +238,7 @@ void soak_iteration( double time )
                     }
                 }
 
-                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, client_id, PROTOCOL_ID, 0, private_key, connect_token ) )
+                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, 0, private_key, connect_token ) )
                 {
                     netcode_client_connect( client[i], connect_token );
                 }
