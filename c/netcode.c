@@ -82,13 +82,14 @@ static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETC
     exit( 1 );
 }
 
-static int log_level = 0;
+static int log_level = 9000; //0;
 static int (*printf_function)( NETCODE_CONST char *, ... ) = ( int (*)( NETCODE_CONST char *, ... ) ) printf;
 void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) = netcode_default_assert_handler;
 
 void netcode_log_level( int level )
 {
-    log_level = level;
+    (void) level;
+    //log_level = level;
 }
 
 void netcode_set_printf_function( int (*function)( NETCODE_CONST char *, ... ) )
@@ -1096,6 +1097,9 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
     connect_token->client_id = netcode_read_uint64( &buffer );
 
     connect_token->timeout_seconds = (int) netcode_read_uint32( &buffer );
+
+    // todo
+    printf( "connect token private timeout seconds = %d\n", connect_token->timeout_seconds );
 
     connect_token->num_server_addresses = netcode_read_uint32( &buffer );
 
@@ -3295,6 +3299,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
     {
         if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
+            printf( "add new mapping: time = %f, expire_time = %f, timeout = %d\n", time, expire_time, timeout );
             encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
             encryption_manager->expire_time[i] = expire_time;
@@ -4261,7 +4266,7 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     if ( !read_packet_key && packet_data[0] != 0 )
     {
         char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
-        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "could not process packet because no encryption mapping exists for %s\n", netcode_address_to_string( from, address_string ) );
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server could not process packet because no encryption mapping exists for %s\n", netcode_address_to_string( from, address_string ) );
         return;
     }
 

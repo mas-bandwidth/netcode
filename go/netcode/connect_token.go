@@ -33,12 +33,12 @@ func NewConnectToken() *ConnectToken {
 func (token *ConnectToken) Generate(clientId uint64, serverAddrs []net.UDPAddr, versionInfo string, protocolId uint64, expireSeconds uint64, timeoutSeconds int32, sequence uint64, userData, privateKey []byte) error {
 	token.CreateTimestamp = uint64(time.Now().Unix())
 	token.ExpireTimestamp = token.CreateTimestamp + (expireSeconds * 1000)
-	token.sharedTokenData.TimeoutSeconds = timeoutSeconds
+	token.TimeoutSeconds = timeoutSeconds
 	token.VersionInfo = []byte(VERSION_INFO)
 	token.ProtocolId = protocolId
 	token.Sequence = sequence
 
-	token.PrivateData = NewConnectTokenPrivate(clientId, serverAddrs, userData)
+	token.PrivateData = NewConnectTokenPrivate(clientId, timeoutSeconds, serverAddrs, userData)
 	if err := token.PrivateData.Generate(); err != nil {
 		return err
 	}
