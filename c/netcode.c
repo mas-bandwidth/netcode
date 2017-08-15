@@ -2012,7 +2012,8 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
          connect_token->version_info[11] != '1' ||
          connect_token->version_info[12] != '\0' )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info\n" );
+        connect_token->version_info[12] = '\0';
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad version info (got %s, expected %s)\n", connect_token->version_info, NETCODE_VERSION_INFO );
         return NETCODE_ERROR;
     }
 
@@ -3176,7 +3177,7 @@ void netcode_client_connect_loopback( struct netcode_client_t * client, int clie
 {
     netcode_assert( client );
     netcode_assert( client->state <= NETCODE_CLIENT_STATE_DISCONNECTED );
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback at client index %d\n", client_index );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback as client %d\n", client_index );
     client->state = NETCODE_CLIENT_STATE_CONNECTED;
     client->client_index = client_index;
     client->max_clients = max_clients;
@@ -3253,7 +3254,10 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
 
 int netcode_encryption_manager_entry_expired( struct netcode_encryption_manager_t * encryption_manager, int index, double time )
 {
-    netcode_assert( index >= 0 );
+    if ( index < 0 )
+    {
+        return 0;
+    }
     if ( encryption_manager->timeout[index] >= 0 && ( encryption_manager->last_access_time[index] + encryption_manager->timeout[index] ) < time )
     {
         return 1;
@@ -3276,8 +3280,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
-            !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
             encryption_manager->timeout[i] = timeout;
             encryption_manager->expire_time[i] = expire_time;
@@ -3349,9 +3352,7 @@ int netcode_encryption_manager_find_encryption_mapping( struct netcode_encryptio
     int i;
     for ( i = 0; i < encryption_manager->num_encryption_mappings; ++i )
     {
-        if ( netcode_address_equal( &encryption_manager->address[i], address ) && 
-             ( encryption_manager->timeout[i] <= 0.0f || encryption_manager->last_access_time[i] + encryption_manager->timeout[i] >= time ) && 
-             ( encryption_manager->expire_time[i] < 0.0 || encryption_manager->expire_time[i] >= time ) )
+        if ( netcode_address_equal( &encryption_manager->address[i], address ) && !netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
         {
             encryption_manager->last_access_time[i] = time;
             return i;
@@ -4236,6 +4237,9 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     if ( !server->running )
         return;
 
+    if ( packet_bytes <= 1 )
+        return;
+
     uint64_t sequence;
 
     int encryption_index = -1;
@@ -4252,6 +4256,13 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     }
     
     uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+
+    if ( !read_packet_key && packet_data[0] != 0 )
+    {
+        char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "could not process packet because no encryption mapping exists for %s\n", netcode_address_to_string( from, address_string ) );
+        return;
+    }
 
     void * packet = netcode_read_packet( packet_data, 
                                          packet_bytes, 
