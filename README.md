@@ -15,7 +15,7 @@ It has the following features:
 
 # Source Code
 
-This repository holds the native code implementations of netcode.io in C, Rust and Golang.
+This repository holds the native code implementations of netcode.io in C and Golang.
 
 Other netcode.io repositories include:
 
