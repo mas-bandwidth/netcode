@@ -2036,7 +2036,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     if ( connect_token->num_server_addresses <= 0 || connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad num server addresses (%d)\n", connect_token->num_server_addresses );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad number of server addresses (%d)\n", connect_token->num_server_addresses );
         return NETCODE_ERROR;
     }
 
@@ -2981,9 +2981,8 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
     if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
     {
-        uint64_t connect_token_expire_seconds = ( client->connect_token.expire_timestamp - client->connect_token.create_timestamp );
-        
-        if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
+        uint64_t connect_token_expire_seconds = ( client->connect_token.expire_timestamp - client->connect_token.create_timestamp );            
+        if ( client->time - client->connect_start_time >= connect_token_expire_seconds )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connect token expired\n" );
             netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED, 0 );
