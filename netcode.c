@@ -1280,7 +1280,6 @@ struct netcode_connection_payload_packet_t
     uint8_t packet_type;
     uint32_t payload_bytes;
     uint8_t payload_data[1];
-    // ...
 };
 
 struct netcode_connection_disconnect_packet_t
@@ -4183,7 +4182,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
                 server->client_last_packet_receive_time[client_index] = server->time;
                 if ( !server->client_confirmed[client_index] )
                 {
-                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection with client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
             }
@@ -4198,7 +4197,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
                 server->client_last_packet_receive_time[client_index] = server->time;
                 if ( !server->client_confirmed[client_index] )
                 {
-                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection with client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
                 netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
