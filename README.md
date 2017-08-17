@@ -20,7 +20,7 @@ This repository holds the reference implementation of netcode.io in C.
 Other netcode.io repositories include:
 
 * [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
-* [netcode.io Golang implementation](https://github.com/wirepair/netcode.io)
+* [netcode.io Golang implementation](https://github.com/wirepair/netcode)
 * [netcode.io Rust implementation](https://github.com/vvanders/netcode.io)
 * [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
