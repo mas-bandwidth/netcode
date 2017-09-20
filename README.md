@@ -63,7 +63,7 @@ The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennf
 
 Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
 
-Open source libraries by the same author include: [yojimbo](libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
+Open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
 
 # Sponsors
 
