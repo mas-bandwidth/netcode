@@ -61,9 +61,7 @@ Thank you for your contributions to netcode.io!
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
 
-Glenn is currently writing an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
-
-You can support Glenn's work writing articles and open source code via [Patreon](http://www.patreon.com/gafferongames).
+Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
 
 # Sponsors
 
