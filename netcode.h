@@ -26,6 +26,8 @@
 #define NETCODE_H
 
 #include <stdint.h>
+#include <stddef.h>
+#include "uthash.h"
 
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
@@ -91,6 +93,25 @@ extern "C" {
 #define NETCODE_CONST
 #endif
 #endif
+
+/**
+  * Skillz Definitions
+  **/
+
+#define SKILLZ_MAX_CLIENTS_PER_MATCH 2
+
+// SKILLZ_TOURNAMENT_T
+typedef struct skillz_match_t
+{
+    int 			skillz_match_id;		/* key */
+    uint64_t 		clients_in_match[SKILLZ_MAX_CLIENTS_PER_MATCH];
+    int 			num_clients_in_match;
+    UT_hash_handle 	hh;						/* Makes this structure hashable!! */
+
+} skillz_match_t;
+
+
+
 
 int netcode_init();
 

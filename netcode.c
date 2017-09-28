@@ -3491,10 +3491,13 @@ struct netcode_server_t
     int running;
     int max_clients;
     int num_connected_clients;
+    int max_clients_per_match;
     uint64_t global_sequence;
     uint8_t private_key[NETCODE_KEY_BYTES];
     uint64_t challenge_sequence;
     uint8_t challenge_key[NETCODE_KEY_BYTES];
+    skillz_match_t * skillz_matches;
+    int skillz_match_id[NETCODE_MAX_CLIENTS];
     int client_connected[NETCODE_MAX_CLIENTS];
     int client_timeout[NETCODE_MAX_CLIENTS];
     int client_loopback[NETCODE_MAX_CLIENTS];
@@ -3592,14 +3595,17 @@ struct netcode_server_t * netcode_server_create_internal( NETCODE_CONST char * s
     server->time = time;
     server->running = 0;
     server->max_clients = 0;
+    server->max_clients_per_match = 0;
     server->num_connected_clients = 0;
     server->global_sequence = 1ULL << 63;
+    server->skillz_matches = NULL;
 
     memcpy( server->private_key, private_key, NETCODE_KEY_BYTES );
     memset( server->client_connected, 0, sizeof( server->client_connected ) );
     memset( server->client_loopback, 0, sizeof( server->client_loopback ) );
     memset( server->client_confirmed, 0, sizeof( server->client_confirmed ) );
     memset( server->client_id, 0, sizeof( server->client_id ) );
+    memset( server->skillz_match_id, 0, sizeof( server->skillz_match_id ) );
     memset( server->client_sequence, 0, sizeof( server->client_sequence ) );
     memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
     memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
@@ -3670,10 +3676,12 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     if ( server->running )
         netcode_server_stop( server );
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server started with %d client slots\n", max_clients );
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server started with %d client slots and %d clients per match\n",
+                    max_clients, 2 ); 		/* TODO change hardcode here too */
 
     server->running = 1;
     server->max_clients = max_clients;
+    server->max_clients_per_match = 2;		/* TODO change from hardcoded value? */
     server->num_connected_clients = 0;
     server->challenge_sequence = 0;    
     netcode_generate_key( server->challenge_key );
@@ -3750,6 +3758,60 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
     server->client_last_packet_send_time[client_index] = server->time;
 }
 
+/**
+ * @brief skillz_print_all_matches
+ *
+ * Mostly just a test function.  Prints every match in the hash.
+ *
+ */
+void skillz_print_all_matches( struct netcode_server_t * server )
+{
+    skillz_match_t * match;
+
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "\n\nPrinting the matches and their clients.\n" );
+    for( match = server->skillz_matches; match != NULL; match = ( skillz_match_t * )( match->hh.next ) )
+    {
+        for( int i = 0; i < match->num_clients_in_match; ++i)
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_INFO, "match id: %d client id: %d clients in match: %d\n",
+                    match->skillz_match_id, match->clients_in_match[i], match->num_clients_in_match );
+        }
+    }
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "\n\n" );
+}
+
+/**
+ * @brief skillz_match_disconnect
+ * @param server
+ * @param client_index
+ * @return bool if success.
+ *
+ * Removes the match from the hash table, frees the memeory.
+ */
+int skillz_match_disconnect( struct netcode_server_t * server, int client_index )
+{
+    int disconnect_match_id = server->skillz_match_id[client_index];
+
+    skillz_match_t * match;
+    HASH_FIND_INT( server->skillz_matches, &disconnect_match_id, match );
+
+    if( !match )
+    {
+        netcode_printf(NETCODE_LOG_LEVEL_INFO, "match %d did not exist\n",
+                       disconnect_match_id);
+        return 0;
+    }
+
+    HASH_DEL( server->skillz_matches, match );
+    // TODO: maybe check the match to see if one user is still connected, then disconnect them?
+    free( match );
+
+    netcode_printf(NETCODE_LOG_LEVEL_INFO, "client %d disconnected from match %d\n",
+                   server->client_id[client_index], disconnect_match_id);
+
+    return 1;
+}
+
 void netcode_server_disconnect_client_internal( struct netcode_server_t * server, int client_index, int send_disconnect_packets )
 {
     netcode_assert( server );
@@ -3795,6 +3857,10 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     netcode_replay_protection_reset( &server->client_replay_protection[client_index] );
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
+
+    skillz_match_disconnect( server, client_index );
+    skillz_print_all_matches( server );
+    server->skillz_match_id[client_index] = 0;
 
     server->client_connected[client_index] = 0;
     server->client_confirmed[client_index] = 0;
@@ -3848,6 +3914,22 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
     }
 }
 
+/**
+ * @brief clear_matches
+ *
+ * This will clear any remaining matches if they've somehow lived past disconnects.  Mostly for safety.
+ */
+void skillz_clear_matches( struct netcode_server_t * server )
+{
+    skillz_match_t * current_match = NULL, * tmp = NULL;
+
+    HASH_ITER( hh, server->skillz_matches, current_match, tmp )
+    {
+        HASH_DEL( server->skillz_matches, current_match );
+        free( current_match );
+    }
+}
+
 void netcode_server_stop( struct netcode_server_t * server )
 {
     netcode_assert( server );
@@ -3864,6 +3946,8 @@ void netcode_server_stop( struct netcode_server_t * server )
     server->global_sequence = 0;
     server->challenge_sequence = 0;
     memset( server->challenge_key, 0, NETCODE_KEY_BYTES );
+
+    skillz_clear_matches(server);
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
@@ -4019,6 +4103,69 @@ int netcode_server_find_free_client_index( struct netcode_server_t * server )
     return -1;
 }
 
+/**
+ * @brief skillz_add_client_to_match
+ * @param server
+ * @param skillz_match_id
+ * @param client_id
+ * @return If client was successfully added to a match or a match was created return 1.  Else return 0.
+ *
+ */
+int skillz_add_client_to_match(struct netcode_server_t * server, int skillz_match_id,
+                               uint64_t client_id, int client_index)
+{
+    skillz_match_t * match;
+
+    HASH_FIND_INT(server->skillz_matches, &skillz_match_id, match);
+
+    // If null then match does not exist.  Create match, add user.
+    if ( match == NULL )
+    {
+        match = ( struct skillz_match_t * ) malloc( sizeof( skillz_match_t ) );
+        if ( !match )
+        {
+            // TODO: What should happen here.  Possibly disconnect client from server and try to get a new match id?
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "malloc failed while creating match &d\n", skillz_match_id );
+            return 0;
+        }
+        match->skillz_match_id = skillz_match_id;
+        match->clients_in_match[0] = client_id;
+        match->num_clients_in_match = 1;
+        HASH_ADD_INT( server->skillz_matches, skillz_match_id, match );
+        server->skillz_match_id[client_index] = skillz_match_id;
+
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "match %d created\n", skillz_match_id );
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client %d added to match %d\n", client_id, skillz_match_id );
+
+        return 1;
+    }
+    else
+    {
+        if ( match->num_clients_in_match <= 0 )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "match %d was already created with %d clients\n",
+                            match->skillz_match_id, match->num_clients_in_match );
+            return 0;
+        }
+        if ( match->num_clients_in_match >= server->max_clients_per_match )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "client %d tried to join match %d with %d clients already connected\n",
+                            client_id, skillz_match_id, match->num_clients_in_match );
+            return 0;
+        }
+
+        match->clients_in_match[match->num_clients_in_match] = client_id;
+        match->num_clients_in_match++;
+        server->skillz_match_id[client_index] = skillz_match_id;
+
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client %d added to match %d\n", client_id, skillz_match_id );
+
+        return 1;
+    }
+
+    return 0;
+}
+
 void netcode_server_connect_client( struct netcode_server_t * server, 
                                     int client_index, 
                                     struct netcode_address_t * address, 
@@ -4034,6 +4181,8 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     netcode_assert( address );
     netcode_assert( encryption_index != -1 );
     netcode_assert( user_data );
+    // TODO: Should adding a client to a match be added here, there is alot of error checking that is done in the method
+    // that seems to be beyond the scope of just asserts...
 
     server->num_connected_clients++;
 
@@ -4055,10 +4204,28 @@ void netcode_server_connect_client( struct netcode_server_t * server,
 
     char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %s %.16" PRIx64 " in slot %d\n", 
-        netcode_address_to_string( address, address_string ), client_id, client_index );
+    /* TODO: try to find a way to deliver match id. */
+    int test_id = 0;
+    if( server->num_connected_clients >= 3 )
+    {
+        test_id = 222;
+    }
+    else
+    {
+        test_id = 111;
+    }
+    if ( !skillz_add_client_to_match( server, test_id, client_id, client_index ) )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "failed to add client %d to match %d\n",
+                        client_id, 0);
+    }
+
+    skillz_print_all_matches( server );
 
     struct netcode_connection_keep_alive_packet_t packet;
+    netcode_printf( NETCODE_LOG_LEVEL_INFO, "server accepted client %s %.16" PRIx64 " in slot %d\n",
+        netcode_address_to_string( address, address_string ), client_id, client_index );
+
     packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
     packet.client_index = client_index;
     packet.max_clients = server->max_clients;
@@ -5972,6 +6139,16 @@ void test_replay_protection()
     }
 }
 
+void check_num_clients_in_matches(struct netcode_server_t * server)
+{
+    // Very basic test for checking if each match only has 2 or less clients connected.
+    skillz_match_t * m;
+    for( m = server->skillz_matches; m != NULL; m = ( skillz_match_t * ) ( m->hh.next ) )
+    {
+        check( m->num_clients_in_match <= server->max_clients_per_match );
+    }
+}
+
 static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea, 
                                                   0x9a, 0x65, 0x62, 0xf6, 0x6f, 0x2b, 0x30, 0xe4, 
                                                   0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
@@ -6080,11 +6257,25 @@ void test_client_server_connect()
             netcode_server_free_packet( server, packet );
         }
 
+        check_num_clients_in_matches(server);
+
+        skillz_match_t * match;
         if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
         {
             if ( netcode_server_client_connected( server, 0 ) )
             {
+                // Skillz test for match purge.
+                HASH_FIND_INT( server->skillz_matches,
+                               &( server->skillz_match_id[0] ),
+                               match);
+                check( match != NULL );
+
                 netcode_server_disconnect_client( server, 0 );
+
+                HASH_FIND_INT( server->skillz_matches,
+                               &( server->skillz_match_id[0] ),
+                               match );
+                check( match == NULL );
             }
         }
 
@@ -6400,6 +6591,8 @@ void test_client_server_multiple_clients()
         
         netcode_network_simulator_reset( network_simulator );
 
+        check_num_clients_in_matches(server);
+
         for ( j = 0; j < max_clients[i]; ++j )
         {
             netcode_client_destroy( client[j] );
@@ -6517,11 +6710,25 @@ void test_client_server_multiple_servers()
             netcode_server_free_packet( server, packet );
         }
 
+        check_num_clients_in_matches(server);
+
+        skillz_match_t * match;
         if ( client_num_packets_received >= 10 && server_num_packets_received >= 10 )
         {
             if ( netcode_server_client_connected( server, 0 ) )
             {
+                // Skillz test for match purge.
+                HASH_FIND_INT( server->skillz_matches,
+                               &( server->skillz_match_id[0] ),
+                               match);
+                check( match != NULL );
+
                 netcode_server_disconnect_client( server, 0 );
+
+                HASH_FIND_INT( server->skillz_matches,
+                               &( server->skillz_match_id[0] ),
+                               match);
+                check( match == NULL );
             }
         }
 
