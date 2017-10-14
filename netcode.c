@@ -4838,6 +4838,98 @@ double netcode_time()
 
 // ---------------------------------------------------------------
 
+void netcode_unified_address_load_ipv4( struct netcode_unified_address_t * address, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t port )
+{
+    netcode_assert( address );
+    (void) address;
+    (void) a;
+    (void) b;
+    (void) c;
+    (void) d;
+    (void) port;
+}
+
+void netcode_unified_address_load_ipv6( struct netcode_unified_address_t * address, uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h, uint16_t port )
+{
+    netcode_assert( address );
+    (void) address;
+    (void) a;
+    (void) b;
+    (void) c;
+    (void) d;
+    (void) e;
+    (void) f;
+    (void) g;
+    (void) h;
+    (void) port;
+}
+
+void netcode_unified_address_load_next( struct netcode_unified_address_t * address, uint64_t flow_id )
+{
+    netcode_assert( address );
+    (void) address;
+    (void) flow_id;
+    // ...
+}
+
+int netcode_unified_address_type( struct netcode_unified_address_t * address )
+{
+    netcode_assert( address );
+    return (int) address->data[0];
+}
+
+void netcode_unified_address_store_ipv4( struct netcode_unified_address_t * address, uint8_t * a, uint8_t * b, uint8_t * c, uint8_t * d, uint16_t * port )
+{
+    netcode_assert( address );
+    netcode_assert( address->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 );
+    (void) address;
+    (void) a;
+    (void) b;
+    (void) c;
+    (void) d;
+    (void) port;
+    // ...
+}
+
+void netcode_unified_address_store_ipv6( struct netcode_unified_address_t * address, uint16_t * a, uint16_t * b, uint16_t * c, uint16_t * d, uint16_t * e, uint16_t * f, uint16_t * g, uint16_t * h, uint16_t * port )
+{
+    netcode_assert( address );
+    netcode_assert( address->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV6 );
+    (void) address;
+    (void) a;
+    (void) b;
+    (void) c;
+    (void) d;
+    (void) e;
+    (void) f;
+    (void) g;
+    (void) h;
+    (void) port;
+    // ...
+}
+
+void netcode_unified_address_store_next( struct netcode_unified_address_t * address, uint64_t * flow_id )
+{
+    netcode_assert( address );
+    netcode_assert( address->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_NEXT );
+    netcode_assert( flow_id );
+    (void) address;
+    (void) flow_id;
+    // ...
+}
+
+int netcode_unified_address_compare( struct netcode_unified_address * a, struct netcode_unified_address * b )
+{
+    netcode_assert( a );
+    netcode_assert( b );
+    (void) a;
+    (void) b;
+    // ...
+    return 0;
+}
+
+// ---------------------------------------------------------------
+
 #if NETCODE_ENABLE_TESTS
 
 #include <stdio.h>
