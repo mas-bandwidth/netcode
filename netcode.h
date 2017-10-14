@@ -261,7 +261,7 @@ void netcode_unified_address_store_ipv6( struct netcode_unified_address_t * addr
 
 void netcode_unified_address_store_next( struct netcode_unified_address_t * address, uint64_t * flow_id );
 
-int netcode_unified_address_compare( struct netcode_unified_address * a, struct netcode_unified_address * b );
+int netcode_unified_address_compare( struct netcode_unified_address_t * a, struct netcode_unified_address_t * b );
 
 #ifdef __cplusplus
 }
