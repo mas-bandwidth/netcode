@@ -4941,6 +4941,66 @@ int netcode_unified_address_compare( struct netcode_unified_address_t * a, struc
     return memcmp( a, b, NETCODE_UNIFIED_ADDRESS_BYTES );
 }
 
+void netcode_standard_to_unified_address( struct netcode_address_t * standard, struct netcode_unified_address_t * unified )
+{
+    netcode_assert( standard );
+    netcode_assert( unified );
+    netcode_assert( standard->type != NETCODE_ADDRESS_NONE );
+    if ( standard->type == NETCODE_ADDRESS_IPV4 )
+    {
+        netcode_unified_address_load_ipv4( unified,
+                                           standard->data.ipv4[0], 
+                                           standard->data.ipv4[1], 
+                                           standard->data.ipv4[2], 
+                                           standard->data.ipv4[3], 
+                                           standard->port );
+    }
+    else
+    {
+        netcode_unified_address_load_ipv6( unified,
+                                           standard->data.ipv6[0], 
+                                           standard->data.ipv6[1], 
+                                           standard->data.ipv6[2], 
+                                           standard->data.ipv6[3], 
+                                           standard->data.ipv6[4], 
+                                           standard->data.ipv6[5], 
+                                           standard->data.ipv6[6], 
+                                           standard->data.ipv6[7], 
+                                           standard->port );
+    }
+}
+
+void netcode_unified_to_standard_address( struct netcode_unified_address_t * unified, struct netcode_address_t * standard )
+{
+    netcode_assert( unified );
+    netcode_assert( standard );
+    netcode_assert( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 || unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV6 );
+    if ( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 )
+    {
+        standard->type = NETCODE_ADDRESS_IPV4;
+        netcode_unified_address_store_ipv4( unified, 
+                                            &standard->data.ipv4[0],
+                                            &standard->data.ipv4[1],
+                                            &standard->data.ipv4[2],
+                                            &standard->data.ipv4[3],
+                                            &standard->port );
+    }
+    else
+    {
+        standard->type = NETCODE_ADDRESS_IPV6;
+        netcode_unified_address_store_ipv6( unified, 
+                                            &standard->data.ipv6[0],
+                                            &standard->data.ipv6[1],
+                                            &standard->data.ipv6[2],
+                                            &standard->data.ipv6[3],
+                                            &standard->data.ipv6[4],
+                                            &standard->data.ipv6[5],
+                                            &standard->data.ipv6[6],
+                                            &standard->data.ipv6[7],
+                                            &standard->port );
+    }
+}
+
 // ---------------------------------------------------------------
 
 #if NETCODE_ENABLE_TESTS
@@ -7870,6 +7930,38 @@ void test_unified_address()
         uint64_t flow_id;
         netcode_unified_address_store_next( &address_next, &flow_id );
         check( flow_id == 0x1122334455667788ULL );
+    }
+
+    {
+        struct netcode_address_t standard_address;
+        struct netcode_unified_address_t unified_address;
+        check( netcode_parse_address( "107.77.207.77:40000", &standard_address ) == NETCODE_OK );
+        netcode_standard_to_unified_address( &standard_address, &unified_address );
+        netcode_unified_to_standard_address( &unified_address, &standard_address );
+        check( standard_address.type == NETCODE_ADDRESS_IPV4 );
+        check( standard_address.port == 40000 );
+        check( standard_address.data.ipv4[0] == 107 );
+        check( standard_address.data.ipv4[1] == 77 );
+        check( standard_address.data.ipv4[2] == 207 );
+        check( standard_address.data.ipv4[3] == 77 );
+    }
+
+    {
+        struct netcode_address_t standard_address;
+        struct netcode_unified_address_t unified_address;
+        check( netcode_parse_address( "[::1]:50000", &standard_address ) == NETCODE_OK );
+        netcode_standard_to_unified_address( &standard_address, &unified_address );
+        netcode_unified_to_standard_address( &unified_address, &standard_address );
+        check( standard_address.type == NETCODE_ADDRESS_IPV6 );
+        check( standard_address.port == 50000 );
+        check( standard_address.data.ipv6[0] == 0 );
+        check( standard_address.data.ipv6[1] == 0 );
+        check( standard_address.data.ipv6[2] == 0 );
+        check( standard_address.data.ipv6[3] == 0 );
+        check( standard_address.data.ipv6[4] == 0 );
+        check( standard_address.data.ipv6[5] == 0 );
+        check( standard_address.data.ipv6[6] == 0 );
+        check( standard_address.data.ipv6[7] == 1 );
     }
 }
 
