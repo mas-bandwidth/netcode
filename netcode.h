@@ -101,13 +101,17 @@ int netcode_init();
 
 void netcode_term();
 
-struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address, double time );
+struct netcode_client_config_t
+{
+    void * allocator_context;
+    void * (*allocate_function)(void*,uint64_t);
+    void (*free_function)(void*,void*);
+    struct netcode_network_simulator_t * network_simulator;
+};
 
-struct netcode_client_t * netcode_client_create_with_allocator( NETCODE_CONST char * address, 
-                                                                double time, 
-                                                                void * allocator_context, 
-                                                                void * (*allocate_function)(void*,uint64_t), 
-                                                                void (*free_function)(void*,void*) );
+void netcode_default_client_config( struct netcode_client_config_t * config );
+
+struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address, NETCODE_CONST struct netcode_client_config_t * config, double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
 
