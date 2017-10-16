@@ -2455,7 +2455,7 @@ struct netcode_client_t
     int loopback;
 };
 
-struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_string, struct netcode_client_config_t * config, double time )
+struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_string, NETCODE_CONST struct netcode_client_config_t * config, double time )
 {
     netcode_assert( config );
     netcode_assert( netcode.initialized );
@@ -3466,7 +3466,7 @@ void netcode_default_server_config( struct netcode_server_config_t * config )
     config->callback_context = NULL;
     config->connect_disconnect_callback = NULL;
     config->send_loopback_packet_callback = NULL;
-    config->override_send_and_receive = false;
+    config->override_send_and_receive = 0;
     config->send_packet_override = NULL;
     config->receive_packet_override = NULL;
 };

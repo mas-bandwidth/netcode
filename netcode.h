@@ -101,6 +101,8 @@ int netcode_init();
 
 void netcode_term();
 
+struct netcode_address_t;
+
 struct netcode_client_config_t
 {
     void * allocator_context;
@@ -172,7 +174,7 @@ struct netcode_server_config_t
     void * callback_context;
     void (*connect_disconnect_callback)(void*,int,int);
     void (*send_loopback_packet_callback)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t);
-    bool override_send_and_receive;
+    int override_send_and_receive;
     void (*send_packet_override)(void*,struct netcode_address_t*,NETCODE_CONST uint8_t*,int);
     int (*receive_packet_override)(void*,struct netcode_address_t*,uint8_t*,int);
 };

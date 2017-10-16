@@ -66,7 +66,12 @@ int main( int argc, char ** argv )
     if ( argc == 2 )
         server_address = argv[1];
 
-    struct netcode_server_t * server = netcode_server_create( server_address, TEST_PROTOCOL_ID, private_key, time );
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
 
     if ( !server )
     {

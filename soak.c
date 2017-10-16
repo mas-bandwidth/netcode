@@ -119,6 +119,11 @@ void soak_iteration( double time )
 {
     int i;
 
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = PROTOCOL_ID;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
     for ( i = 0; i < MAX_SERVERS; ++i )
     {
         if ( server[i] == NULL && random_int( 0, 10 ) == 0 )
@@ -129,7 +134,9 @@ void soak_iteration( double time )
 			#else
 			sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
 			#endif
-            server[i] = netcode_server_create( server_address, PROTOCOL_ID, private_key, time );
+        
+            server[i] = netcode_server_create( server_address, &server_config, time );
+
             printf( "created server %p\n", server[i] );
         }
 
@@ -145,7 +152,9 @@ void soak_iteration( double time )
     {
         if ( client[i] == NULL && random_int( 0, 10 ) == 0 )
         {
-            client[i] = netcode_client_create( "0.0.0.0", time );
+            struct netcode_client_config_t client_config;
+            netcode_default_client_config( &client_config );
+            client[i] = netcode_client_create( "0.0.0.0", &client_config, time );
             printf( "created client %p\n", client[i] );
         }
 
