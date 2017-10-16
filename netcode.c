@@ -2418,6 +2418,9 @@ void netcode_default_client_config( struct netcode_client_config_t * config )
     config->allocate_function = netcode_default_allocate_function;
     config->free_function = netcode_default_free_function;
     config->network_simulator = NULL;
+    config->callback_context = NULL;
+    config->state_change_callback = NULL;
+    config->send_loopback_packet_callback = NULL;
 };
 
 struct netcode_client_t
@@ -2437,7 +2440,6 @@ struct netcode_client_t
     struct netcode_address_t address;
     struct netcode_address_t server_address;
     struct netcode_connect_token_t connect_token;
-    struct netcode_network_simulator_t * network_simulator;
     struct netcode_socket_t socket;
     struct netcode_context_t context;
     struct netcode_replay_protection_t replay_protection;
@@ -2447,14 +2449,7 @@ struct netcode_client_t
     uint8_t * receive_packet_data[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     int receive_packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     struct netcode_address_t receive_from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
-    void (*state_change_callback_function)(void*,int,int);
-    void * state_change_callback_context;
-    void * allocator_context;
-    void * (*allocate_function)(void*,uint64_t);
-    void (*free_function)(void*,void*);
     int loopback;
-    void * send_loopback_packet_callback_context;
-    void (*send_loopback_packet_callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t);
 };
 
 struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_string, struct netcode_client_config_t * config, double time )
@@ -2508,7 +2503,6 @@ struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_st
     client->config = *config;
     client->socket = socket;
     client->address = config->network_simulator ? address : socket.address;
-    client->network_simulator = config->network_simulator;                          // todo: standardize on config
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->time = time;
     client->connect_start_time = 0.0;
@@ -2521,8 +2515,7 @@ struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_st
     client->max_clients = 0;
     client->server_address_index = 0;
     client->challenge_token_sequence = 0;
-    client->state_change_callback_function = NULL;
-    client->state_change_callback_context = NULL;
+    client->loopback = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     memset( &client->connect_token, 0, sizeof( struct netcode_connect_token_t ) );
     memset( &client->context, 0, sizeof( struct netcode_context_t ) );
@@ -2531,15 +2524,6 @@ struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address_st
     netcode_packet_queue_init( &client->packet_receive_queue, config->allocator_context, config->allocate_function, config->free_function );
 
     netcode_replay_protection_reset( &client->replay_protection );
-
-    // todo: standardize on config instead
-    client->allocator_context = config->allocator_context;
-    client->allocate_function = config->allocate_function;
-    client->free_function = config->free_function;
-
-    client->loopback = 0;
-    client->send_loopback_packet_callback_context = NULL;
-    client->send_loopback_packet_callback_function = NULL;
 
     return client;
 }
@@ -2553,7 +2537,7 @@ void netcode_client_destroy( struct netcode_client_t * client )
         netcode_client_disconnect_loopback( client );
     netcode_socket_destroy( &client->socket );
     netcode_packet_queue_clear( &client->packet_receive_queue );
-    client->free_function( client->allocator_context, client );
+    client->config.free_function( client->config.allocator_context, client );
 }
 
 void netcode_client_set_state( struct netcode_client_t * client, int client_state )
@@ -2561,9 +2545,9 @@ void netcode_client_set_state( struct netcode_client_t * client, int client_stat
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client changed state from '%s' to '%s'\n", 
         netcode_client_state_name( client->state ), netcode_client_state_name( client_state ) );
 
-    if ( client->state_change_callback_function )
+    if ( client->config.state_change_callback )
     {
-        client->state_change_callback_function( client->state_change_callback_context, client->state, client_state );
+        client->config.state_change_callback( client->config.callback_context, client->state, client_state );
     }
 
     client->state = client_state;
@@ -2606,7 +2590,7 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
         void * packet = netcode_packet_queue_pop( &client->packet_receive_queue, NULL );
         if ( !packet )
             break;
-        client->free_function( client->allocator_context, packet );
+        client->config.free_function( client->config.allocator_context, packet );
     }
 
     netcode_packet_queue_clear( &client->packet_receive_queue );
@@ -2742,7 +2726,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
             break;
     }
 
-    client->free_function( client->allocator_context, packet );    
+    client->config.free_function( client->config.allocator_context, packet );    
 }
 
 void netcode_client_receive_packets( struct netcode_client_t * client )
@@ -2760,7 +2744,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
     uint64_t current_timestamp = (uint64_t) time( NULL );
 
-    if ( !client->network_simulator )
+    if ( !client->config.network_simulator )
     {
         // process packets received from socket
 
@@ -2785,8 +2769,8 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
                                                  NULL, 
                                                  allowed_packets, 
                                                  &client->replay_protection, 
-                                                 client->allocator_context, 
-                                                 client->allocate_function );
+                                                 client->config.allocator_context, 
+                                                 client->config.allocate_function );
 
             if ( !packet )
                 continue;
@@ -2798,7 +2782,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
     {
         // process packets received from network simulator
 
-        int num_packets_received = netcode_network_simulator_receive_packets( client->network_simulator, 
+        int num_packets_received = netcode_network_simulator_receive_packets( client->config.network_simulator, 
                                                                               &client->address, 
                                                                               NETCODE_CLIENT_MAX_RECEIVE_PACKETS, 
                                                                               client->receive_packet_data, 
@@ -2819,10 +2803,10 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
                                                  NULL, 
                                                  allowed_packets, 
                                                  &client->replay_protection, 
-                                                 client->allocator_context, 
-                                                 client->allocate_function );
+                                                 client->config.allocator_context, 
+                                                 client->config.allocate_function );
 
-            client->free_function( client->allocator_context, client->receive_packet_data[i] );
+            client->config.free_function( client->config.allocator_context, client->receive_packet_data[i] );
 
             if ( !packet )
                 continue;
@@ -2848,9 +2832,9 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
 
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-    if ( client->network_simulator )
+    if ( client->config.network_simulator )
     {
-        netcode_network_simulator_send_packet( client->network_simulator, &client->address, &client->server_address, packet_data, packet_bytes );
+        netcode_network_simulator_send_packet( client->config.network_simulator, &client->address, &client->server_address, packet_data, packet_bytes );
     }
     else
     {
@@ -3058,11 +3042,11 @@ void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST
     }
     else
     {
-        client->send_loopback_packet_callback_function( client->send_loopback_packet_callback_context, 
-                                                        client->client_index, 
-                                                        packet_data,
-                                                        packet_bytes,
-                                                        client->sequence++ );
+        client->config.send_loopback_packet_callback( client->config.callback_context, 
+                                                      client->client_index, 
+                                                      packet_data,
+                                                      packet_bytes,
+                                                      client->sequence++ );
     }
 }
 
@@ -3093,7 +3077,7 @@ void netcode_client_free_packet( struct netcode_client_t * client, uint8_t * pac
     netcode_assert( client );
     netcode_assert( packet );
     int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
-    client->free_function( client->allocator_context, packet - offset );
+    client->config.free_function( client->config.allocator_context, packet - offset );
 }
 
 void netcode_client_disconnect( struct netcode_client_t * client )
@@ -3150,13 +3134,6 @@ int netcode_client_max_clients( struct netcode_client_t * client )
     return client->max_clients;
 }
 
-void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) )
-{
-    netcode_assert( client );
-    client->state_change_callback_context = context;
-    client->state_change_callback_function = callback_function;
-}
-
 void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, int max_clients )
 {
     netcode_assert( client );
@@ -3185,19 +3162,12 @@ void netcode_client_process_loopback_packet( struct netcode_client_t * client, N
 {
     netcode_assert( client );
     netcode_assert( client->loopback );
-    struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, client->allocator_context, client->allocate_function );
+    struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, client->config.allocator_context, client->config.allocate_function );
     if ( !packet )
         return;
     memcpy( packet->payload_data, packet_data, packet_bytes );
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client processing loopback packet from server\n" );
     netcode_packet_queue_push( &client->packet_receive_queue, packet, packet_sequence );
-}
-
-void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) )
-{
-    netcode_assert( client );
-    client->send_loopback_packet_callback_context = context;
-    client->send_loopback_packet_callback_function = callback_function;
 }
 
 uint16_t netcode_client_get_port( struct netcode_client_t * client )
@@ -6578,8 +6548,6 @@ void test_client_server_multiple_clients()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-#if 0
-
 void test_client_server_multiple_servers()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -6592,7 +6560,11 @@ void test_client_server_multiple_servers()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6716,7 +6688,11 @@ void test_client_error_connect_token_expired()
 
     double time = 0.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6751,7 +6727,11 @@ void test_client_error_invalid_connect_token()
 
     double time = 0.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6784,7 +6764,11 @@ void test_client_error_connection_timed_out()
 
     // connect a client to the server
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6862,7 +6846,11 @@ void test_client_error_connection_response_timeout()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6923,7 +6911,11 @@ void test_client_error_connection_request_timeout()
     double time = 0.0;
     double delta_time = 1.0 / 60.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -6986,7 +6978,11 @@ void test_client_error_connection_denied()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -7031,7 +7027,7 @@ void test_client_error_connection_denied()
 
     // now attempt to connect a second client. the connection should be denied.
 
-    struct netcode_client_t * client2 = netcode_client_create_internal( "[::]:50001", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_t * client2 = netcode_client_create( "[::]:50001", &client_config, time );
 
     check( client2 );
 
@@ -7086,7 +7082,11 @@ void test_client_side_disconnect()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -7167,7 +7167,11 @@ void test_server_side_disconnect()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -7254,7 +7258,11 @@ void test_client_reconnect()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -7412,7 +7420,11 @@ void test_disable_timeout()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    struct netcode_client_t * client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
 
     check( client );
 
@@ -7551,10 +7563,15 @@ void test_loopback()
 
     // connect a loopback client in slot 0
 
-    struct netcode_client_t * loopback_client = netcode_client_create_internal( "[::]:50000", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.callback_context = &context;
+    client_config.send_loopback_packet_callback = client_send_loopback_packet_callback;
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * loopback_client = netcode_client_create( "[::]:50000", &client_config, time );
     check( loopback_client );
     netcode_client_connect_loopback( loopback_client, 0, max_clients );
-    netcode_client_send_loopback_packet_callback( loopback_client, &context, client_send_loopback_packet_callback );
     context.client = loopback_client;
 
     check( netcode_client_index( loopback_client ) == 0 );
@@ -7574,7 +7591,7 @@ void test_loopback()
 
     // connect a regular client in the other slot
 
-    struct netcode_client_t * regular_client = netcode_client_create_internal( "[::]:50001", time, network_simulator, NULL, NULL, NULL );
+    struct netcode_client_t * regular_client = netcode_client_create( "[::]:50001", &client_config, time );
 
     check( regular_client );
 
@@ -7876,8 +7893,6 @@ void test_loopback()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-#endif // #if 0
-
 void test_unified_address()
 {
     struct netcode_unified_address_t address_ipv4;
@@ -7995,7 +8010,6 @@ void netcode_test()
         RUN_TEST( test_client_server_connect );
         RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_server_multiple_clients );
-        /*
         RUN_TEST( test_client_server_multiple_servers );
         RUN_TEST( test_client_error_connect_token_expired );
         RUN_TEST( test_client_error_invalid_connect_token );
@@ -8008,7 +8022,6 @@ void netcode_test()
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
-        */
         RUN_TEST( test_unified_address );
     }
 }

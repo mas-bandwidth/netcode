@@ -107,6 +107,9 @@ struct netcode_client_config_t
     void * (*allocate_function)(void*,uint64_t);
     void (*free_function)(void*,void*);
     struct netcode_network_simulator_t * network_simulator;
+    void * callback_context;
+    void (*state_change_callback)(void*,int,int);
+    void (*send_loopback_packet_callback)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t);
 };
 
 void netcode_default_client_config( struct netcode_client_config_t * config );
@@ -135,8 +138,6 @@ int netcode_client_index( struct netcode_client_t * client );
 
 int netcode_client_max_clients( struct netcode_client_t * client );
 
-void netcode_client_state_change_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,int) );
-
 void netcode_client_connect_loopback( struct netcode_client_t * client, int client_index, int max_clients );
 
 void netcode_client_disconnect_loopback( struct netcode_client_t * client );
@@ -144,8 +145,6 @@ void netcode_client_disconnect_loopback( struct netcode_client_t * client );
 int netcode_client_loopback( struct netcode_client_t * client );
 
 void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
-
-void netcode_client_send_loopback_packet_callback( struct netcode_client_t * client, void * context, void (*callback_function)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t) );
 
 uint16_t netcode_client_get_port( struct netcode_client_t * client );
 
