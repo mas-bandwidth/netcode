@@ -110,7 +110,7 @@ struct netcode_client_config_t
     void * callback_context;
     void (*state_change_callback)(void*,int,int);
     void (*send_loopback_packet_callback)(void*,int,NETCODE_CONST uint8_t*,int,uint64_t);
-    bool override_send_and_receive;
+    int override_send_and_receive;
     void (*send_packet_override)(void*,struct netcode_address_t*,NETCODE_CONST uint8_t*,int);
     int (*receive_packet_override)(void*,struct netcode_address_t*,uint8_t*,int);
 };
