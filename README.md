@@ -20,7 +20,7 @@ This repository holds the reference implementation of netcode.io in C.
 Other netcode.io repositories include:
 
 * [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
-* [netcode.io Golang implementation](https://github.com/wirepair/netcode.io)
+* [netcode.io Golang implementation](https://github.com/wirepair/netcode)
 * [netcode.io Rust implementation](https://github.com/vvanders/netcode.io)
 * [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
@@ -61,9 +61,9 @@ Thank you for your contributions to netcode.io!
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
 
-Glenn is currently writing an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
+Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](http://gafferongames.com/2016/05/10/building-a-game-network-protocol/).
 
-You can support Glenn's work writing articles and open source code via [Patreon](http://www.patreon.com/gafferongames).
+Open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
 
 # Sponsors
 
@@ -81,7 +81,7 @@ You can support Glenn's work writing articles and open source code via [Patreon]
     * [Kite & Lightning](http://kiteandlightning.la/)
     * [Data Realms](http://datarealms.com)
  
-And by individual supporters on [Patreon](http://www.patreon.com/gafferongames). Thank you. You make this possible!
+And by individual supporters on Patreon. Thank you. You made this possible!
 
 # License
 

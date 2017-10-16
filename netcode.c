@@ -1280,7 +1280,6 @@ struct netcode_connection_payload_packet_t
     uint8_t packet_type;
     uint32_t payload_bytes;
     uint8_t payload_data[1];
-    // ...
 };
 
 struct netcode_connection_disconnect_packet_t
@@ -2036,7 +2035,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     if ( connect_token->num_server_addresses <= 0 || connect_token->num_server_addresses > NETCODE_MAX_SERVERS_PER_CONNECT )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad num server addresses (%d)\n", connect_token->num_server_addresses );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad number of server addresses (%d)\n", connect_token->num_server_addresses );
         return NETCODE_ERROR;
     }
 
@@ -2969,9 +2968,8 @@ void netcode_client_update( struct netcode_client_t * client, double time )
 
     if ( client->state > NETCODE_CLIENT_STATE_DISCONNECTED && client->state < NETCODE_CLIENT_STATE_CONNECTED )
     {
-        uint64_t connect_token_expire_seconds = ( client->connect_token.expire_timestamp - client->connect_token.create_timestamp );
-        
-        if ( client->connect_start_time + connect_token_expire_seconds <= client->time )
+        uint64_t connect_token_expire_seconds = ( client->connect_token.expire_timestamp - client->connect_token.create_timestamp );            
+        if ( client->time - client->connect_start_time >= connect_token_expire_seconds )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connect failed. connect token expired\n" );
             netcode_client_disconnect_internal( client, NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED, 0 );
@@ -4122,7 +4120,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
                 server->client_last_packet_receive_time[client_index] = server->time;
                 if ( !server->client_confirmed[client_index] )
                 {
-                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection with client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
             }
@@ -4137,7 +4135,7 @@ void netcode_server_process_packet( struct netcode_server_t * server,
                 server->client_last_packet_receive_time[client_index] = server->time;
                 if ( !server->client_confirmed[client_index] )
                 {
-                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection to client %d\n", client_index );
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server confirmed connection with client %d\n", client_index );
                     server->client_confirmed[client_index] = 1;
                 }
                 netcode_packet_queue_push( &server->client_packet_queue[client_index], packet, sequence );
