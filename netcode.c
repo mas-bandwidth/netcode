@@ -4770,7 +4770,7 @@ void netcode_unified_address_load_ipv4( struct netcode_unified_address_t * addre
     netcode_write_uint8( &p, c );
     netcode_write_uint8( &p, d );
     netcode_write_uint16( &p, port );
-    memset( p, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p, 0 );
+    memset( p, 0, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p );
 }
 
 void netcode_unified_address_load_ipv6( struct netcode_unified_address_t * address, uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h, uint16_t port )
@@ -4787,7 +4787,7 @@ void netcode_unified_address_load_ipv6( struct netcode_unified_address_t * addre
     netcode_write_uint16( &p, g );
     netcode_write_uint16( &p, h );
     netcode_write_uint16( &p, port );
-    memset( p, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p, 0 );
+    memset( p, 0, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p );
 }
 
 void netcode_unified_address_load_next( struct netcode_unified_address_t * address, uint64_t flow_id )
@@ -4796,7 +4796,7 @@ void netcode_unified_address_load_next( struct netcode_unified_address_t * addre
     uint8_t * p = &address->data[0];
     netcode_write_uint8( &p, NETCODE_UNIFIED_ADDRESS_TYPE_NEXT );
     netcode_write_uint64( &p, flow_id );
-    memset( p, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p, 0 );
+    memset( p, 0, &address->data[NETCODE_UNIFIED_ADDRESS_BYTES] - p );
 }
 
 int netcode_unified_address_type( struct netcode_unified_address_t * address )
