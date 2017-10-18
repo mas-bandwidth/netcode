@@ -71,7 +71,7 @@ int main( int argc, char ** argv )
     server_config.protocol_id = TEST_PROTOCOL_ID;
     memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
 
-    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
+    struct netcode_server_t * server = netcode_server_create( server_address, &server_config, time );
 
     if ( !server )
     {
