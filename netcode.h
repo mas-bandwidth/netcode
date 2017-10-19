@@ -82,14 +82,12 @@
 
 #define NETWORK_NEXT_EXTENSIONS     1
 
-#define NETCODE_UNIFIED_ADDRESS_TYPE_NONE   0
-#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV4   1
-#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV6   2
+#define NETCODE_ADDRESS_NONE        0
+#define NETCODE_ADDRESS_IPV4        1
+#define NETCODE_ADDRESS_IPV6        2
 #if NETWORK_NEXT_EXTENSIONS
-#define NETCODE_UNIFIED_ADDRESS_TYPE_NEXT   3
+#define NETCODE_ADDRESS_NEXT        3
 #endif // #if NETWORK_NEXT_EXTENSIONS
-
-#define NETCODE_UNIFIED_ADDRESS_BYTES      20
 
 #ifdef __cplusplus
 #define NETCODE_CONST const
@@ -102,11 +100,23 @@ extern "C" {
 #endif
 #endif
 
+struct netcode_address_t
+{
+    uint8_t type;
+    union
+    {
+        uint8_t ipv4[4];
+        uint16_t ipv6[8];
+#ifndef NETWORK_NEXT_EXTENSIONS
+        uint64_t flow_id;
+#endif // #if NETWORK_NEXT_EXTENSIONS
+    } data;
+    uint16_t port;
+};
+
 int netcode_init();
 
 void netcode_term();
-
-struct netcode_address_t;
 
 struct netcode_client_config_t
 {
@@ -260,33 +270,6 @@ void netcode_random_bytes( uint8_t * data, int bytes );
 void netcode_sleep( double seconds );
 
 double netcode_time();
-
-struct netcode_unified_address_t
-{
-    uint8_t data[NETCODE_UNIFIED_ADDRESS_BYTES];
-};
-
-void netcode_unified_address_load_none( struct netcode_unified_address_t * address );
-
-void netcode_unified_address_load_ipv4( struct netcode_unified_address_t * address, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t port );
-
-void netcode_unified_address_load_ipv6( struct netcode_unified_address_t * address, uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h, uint16_t port );
-
-#if NETWORK_NEXT_EXTENSIONS
-void netcode_unified_address_load_next( struct netcode_unified_address_t * address, uint64_t flow_id );
-#endif // #if NETWORK_NEXT_EXTENSIONS
-
-int netcode_unified_address_type( struct netcode_unified_address_t * address );
-
-void netcode_unified_address_store_ipv4( struct netcode_unified_address_t * address, uint8_t * a, uint8_t * b, uint8_t * c, uint8_t * d, uint16_t * port );
-
-void netcode_unified_address_store_ipv6( struct netcode_unified_address_t * address, uint16_t * a, uint16_t * b, uint16_t * c, uint16_t * d, uint16_t * e, uint16_t * f, uint16_t * g, uint16_t * h, uint16_t * port );
-
-#if NETWORK_NEXT_EXTENSIONS
-void netcode_unified_address_store_next( struct netcode_unified_address_t * address, uint64_t * flow_id );
-#endif // #if NETWORK_NEXT_EXTENSIONS
-
-int netcode_unified_address_compare( struct netcode_unified_address_t * a, struct netcode_unified_address_t * b );
 
 #ifdef __cplusplus
 }
