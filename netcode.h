@@ -100,6 +100,10 @@ extern "C" {
 #endif
 #endif
 
+int netcode_init();
+
+void netcode_term();
+
 struct netcode_address_t
 {
     uint8_t type;
@@ -114,9 +118,11 @@ struct netcode_address_t
     uint16_t port;
 };
 
-int netcode_init();
+int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcode_address_t * address );
 
-void netcode_term();
+char * netcode_address_to_string( struct netcode_address_t * address, char * buffer );
+
+int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b );
 
 struct netcode_client_config_t
 {
