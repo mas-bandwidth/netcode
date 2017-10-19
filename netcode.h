@@ -80,12 +80,13 @@
 #define NETCODE_OK                  1
 #define NETCODE_ERROR               0
 
-#define NETWORK_NEXT_EXTENSIONS     0
+#define NETWORK_NEXT_EXTENSIONS     1
 
-#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV4   0
-#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV6   1
+#define NETCODE_UNIFIED_ADDRESS_TYPE_NONE   0
+#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV4   1
+#define NETCODE_UNIFIED_ADDRESS_TYPE_IPV6   2
 #if NETWORK_NEXT_EXTENSIONS
-#define NETCODE_UNIFIED_ADDRESS_TYPE_NEXT   2
+#define NETCODE_UNIFIED_ADDRESS_TYPE_NEXT   3
 #endif // #if NETWORK_NEXT_EXTENSIONS
 
 #define NETCODE_UNIFIED_ADDRESS_BYTES      20
@@ -264,6 +265,8 @@ struct netcode_unified_address_t
 {
     uint8_t data[NETCODE_UNIFIED_ADDRESS_BYTES];
 };
+
+void netcode_unified_address_load_none( struct netcode_unified_address_t * address );
 
 void netcode_unified_address_load_ipv4( struct netcode_unified_address_t * address, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t port );
 

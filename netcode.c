@@ -4782,6 +4782,12 @@ double netcode_time()
 
 // ---------------------------------------------------------------
 
+void netcode_unified_address_load_none( struct netcode_unified_address_t * address )
+{
+    netcode_assert( address );
+    memset( address, 0, NETCODE_UNIFIED_ADDRESS_BYTES );
+}
+
 void netcode_unified_address_load_ipv4( struct netcode_unified_address_t * address, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t port )
 {
     netcode_assert( address );
@@ -4894,7 +4900,11 @@ void netcode_standard_to_unified_address( struct netcode_address_t * standard, s
     netcode_assert( standard );
     netcode_assert( unified );
     netcode_assert( standard->type != NETCODE_ADDRESS_NONE );
-    if ( standard->type == NETCODE_ADDRESS_IPV4 )
+    if ( standard->type == NETCODE_ADDRESS_NONE )
+    {
+        netcode_unified_address_load_none( unified );
+    }
+    else if ( standard->type == NETCODE_ADDRESS_IPV4 )
     {
         netcode_unified_address_load_ipv4( unified,
                                            standard->data.ipv4[0], 
@@ -4922,8 +4932,14 @@ void netcode_unified_to_standard_address( struct netcode_unified_address_t * uni
 {
     netcode_assert( unified );
     netcode_assert( standard );
-    netcode_assert( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 || unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV6 );
-    if ( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 )
+    #if NETCODE_NETWORK_NEXT_EXTENSIONS
+    netcode_assert( unified->data[0] != NETCODE_UNIFIED_ADDRESS_TYPE_NEXT );
+    #endif // #if NETCODE_NETWORK_NEXT_EXTENSIONS
+    if ( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_NONE )
+    {
+        standard->type = NETCODE_ADDRESS_NONE;
+    }
+    else if ( unified->data[0] == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 )
     {
         standard->type = NETCODE_ADDRESS_IPV4;
         netcode_unified_address_store_ipv4( unified, 
@@ -7971,30 +7987,35 @@ void test_loopback()
 
 void test_unified_address()
 {
+    struct netcode_unified_address_t address_none;
     struct netcode_unified_address_t address_ipv4;
     struct netcode_unified_address_t address_ipv6;
     #if NETWORK_NEXT_EXTENSIONS
     struct netcode_unified_address_t address_next;
     #endif // #if NETWORK_NEXT_EXTENSIONS
 
+    netcode_unified_address_load_none( &address_none );
     netcode_unified_address_load_ipv4( &address_ipv4, 127, 0, 0, 1, 40000 );
     netcode_unified_address_load_ipv6( &address_ipv6, 0, 0, 0, 0, 0, 0, 0, 1, 50000 );
     #if NETWORK_NEXT_EXTENSIONS
     netcode_unified_address_load_next( &address_next, 0x1122334455667788ULL );
     #endif // #if NETWORK_NEXT_EXTENSIONS
 
+    check( netcode_unified_address_type( &address_none ) == NETCODE_UNIFIED_ADDRESS_TYPE_NONE );
     check( netcode_unified_address_type( &address_ipv4 ) == NETCODE_UNIFIED_ADDRESS_TYPE_IPV4 );
     check( netcode_unified_address_type( &address_ipv6 ) == NETCODE_UNIFIED_ADDRESS_TYPE_IPV6 );
     #if NETWORK_NEXT_EXTENSIONS
     check( netcode_unified_address_type( &address_next ) == NETCODE_UNIFIED_ADDRESS_TYPE_NEXT );
     #endif // #if NETWORK_NEXT_EXTENSIONS
 
+    check( netcode_unified_address_compare( &address_none, &address_none ) == 0 );
     check( netcode_unified_address_compare( &address_ipv4, &address_ipv4 ) == 0 );
     check( netcode_unified_address_compare( &address_ipv6, &address_ipv6 ) == 0 );
     #if NETWORK_NEXT_EXTENSIONS
     check( netcode_unified_address_compare( &address_next, &address_next ) == 0 );
     #endif // #if NETWORK_NEXT_EXTENSIONS
 
+    check( netcode_unified_address_compare( &address_none, &address_ipv4 ) != 0 );
     check( netcode_unified_address_compare( &address_ipv4, &address_ipv6 ) != 0 );
     #if NETWORK_NEXT_EXTENSIONS
     check( netcode_unified_address_compare( &address_ipv6, &address_next ) != 0 );
