@@ -3642,7 +3642,14 @@ void netcode_server_send_global_packet( struct netcode_server_t * server, void *
     }
     else
     {
-        netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
+        if ( server->config.override_send_and_receive )
+        {
+            server->config.send_packet_override( server->config.callback_context, to, packet_data, packet_bytes );
+        }
+        else
+        {
+            netcode_socket_send_packet( &server->socket, to, packet_data, packet_bytes );
+        }
     }
 
     server->global_sequence++;
@@ -3680,7 +3687,14 @@ void netcode_server_send_client_packet( struct netcode_server_t * server, void *
     }
     else
     {
-        netcode_socket_send_packet( &server->socket, &server->client_address[client_index], packet_data, packet_bytes );
+        if ( server->config.override_send_and_receive )
+        {
+            server->config.send_packet_override( server->config.callback_context, &server->client_address[client_index], packet_data, packet_bytes );
+        }
+        else
+        {
+            netcode_socket_send_packet( &server->socket, &server->client_address[client_index], packet_data, packet_bytes );
+        }
     }
 
     server->client_sequence[client_index]++;
@@ -4238,7 +4252,15 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         {
             struct netcode_address_t from;
             uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
-            int packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
+            int packet_bytes;
+            if ( server->config.override_send_and_receive )
+            {
+                packet_bytes = server->config.receive_packet_override( server->config.callback_context, &from, packet_data, NETCODE_MAX_PACKET_BYTES );  
+            }
+            else
+            {
+                packet_bytes = netcode_socket_receive_packet( &server->socket, &from, packet_data, NETCODE_MAX_PACKET_BYTES );  
+            } 
             if ( packet_bytes == 0 )
                 break;
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
