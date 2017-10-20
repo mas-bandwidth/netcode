@@ -177,7 +177,8 @@ void netcode_client_process_loopback_packet( struct netcode_client_t * client, N
 uint16_t netcode_client_get_port( struct netcode_client_t * client );
 
 int netcode_generate_connect_token( int num_server_addresses, 
-                                    NETCODE_CONST char ** server_addresses, 
+                                    NETCODE_CONST char ** public_server_addresses, 
+                                    NETCODE_CONST char ** internal_server_addresses, 
                                     int expire_seconds,
                                     int timeout_seconds, 
                                     uint64_t client_id, 
