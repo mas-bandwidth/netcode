@@ -1556,6 +1556,8 @@ void * netcode_read_packet( uint8_t * buffer,
     netcode_assert( sequence );
     netcode_assert( allowed_packets );
 
+    printf( "packet bytes = %d\n", buffer_length );
+
     if ( allocate_function == NULL )
     {
         allocate_function = netcode_default_allocate_function;
