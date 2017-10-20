@@ -1556,8 +1556,6 @@ void * netcode_read_packet( uint8_t * buffer,
     netcode_assert( sequence );
     netcode_assert( allowed_packets );
 
-    printf( "packet bytes = %d\n", buffer_length );
-
     if ( allocate_function == NULL )
     {
         allocate_function = netcode_default_allocate_function;
@@ -1584,7 +1582,7 @@ void * netcode_read_packet( uint8_t * buffer,
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", buffer_length, 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, buffer_length );
             return NULL;
         }
 
