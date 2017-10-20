@@ -2649,7 +2649,7 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 }
 
-void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, void * packet, uint64_t sequence )
+void netcode_client_process_packet_internal( struct netcode_client_t * client, struct netcode_address_t * from, uint8_t * packet, uint64_t sequence )
 {
     netcode_assert( client );
     netcode_assert( packet );
@@ -2751,6 +2751,43 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     client->config.free_function( client->config.allocator_context, packet );    
 }
 
+void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes )
+{
+    (void) client;
+    (void) from;
+    (void) packet_data;
+    (void) packet_bytes;
+
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 0, sizeof( allowed_packets ) );
+    allowed_packets[NETCODE_CONNECTION_DENIED_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_CHALLENGE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_KEEP_ALIVE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
+
+    uint64_t current_timestamp = (uint64_t) time( NULL );
+
+    uint64_t sequence;
+
+    void * packet = netcode_read_packet( packet_data, 
+                                         packet_bytes, 
+                                         &sequence, 
+                                         client->context.read_packet_key, 
+                                         client->connect_token.protocol_id, 
+                                         current_timestamp, 
+                                         NULL, 
+                                         allowed_packets, 
+                                         &client->replay_protection, 
+                                         client->config.allocator_context, 
+                                         client->config.allocate_function );
+
+    if ( !packet )
+        return;
+    
+    netcode_client_process_packet_internal( client, from, packet, sequence );
+}
+
 void netcode_client_receive_packets( struct netcode_client_t * client )
 {
     netcode_assert( client );
@@ -2804,7 +2841,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             if ( !packet )
                 continue;
 
-            netcode_client_process_packet( client, &from, packet, sequence );
+            netcode_client_process_packet_internal( client, &from, packet, sequence );
         }
     }
     else
@@ -4104,12 +4141,12 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
     netcode_server_connect_client( server, client_index, from, challenge_token.client_id, encryption_index, timeout_seconds, challenge_token.user_data );
 }
 
-void netcode_server_process_packet( struct netcode_server_t * server, 
-                                    struct netcode_address_t * from, 
-                                    void * packet, 
-                                    uint64_t sequence, 
-                                    int encryption_index, 
-                                    int client_index )
+void netcode_server_process_packet_internal( struct netcode_server_t * server, 
+                                             struct netcode_address_t * from, 
+                                             void * packet, 
+                                             uint64_t sequence, 
+                                             int encryption_index, 
+                                             int client_index )
 {
     netcode_assert( server );
     netcode_assert( packet );
@@ -4192,6 +4229,60 @@ void netcode_server_process_packet( struct netcode_server_t * server,
     server->config.free_function( server->config.allocator_context, packet );
 }
 
+void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes )
+{
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 0, sizeof( allowed_packets ) );
+    allowed_packets[NETCODE_CONNECTION_REQUEST_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_RESPONSE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_KEEP_ALIVE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
+
+    uint64_t current_timestamp = (uint64_t) time( NULL );
+
+    uint64_t sequence;
+
+    int encryption_index = -1;
+    int client_index = netcode_server_find_client_index_by_address( server, from );
+    if ( client_index != -1 )
+    {
+        netcode_assert( client_index >= 0 );
+        netcode_assert( client_index < server->max_clients );
+        encryption_index = server->client_encryption_index[client_index];
+    }
+    else
+    {
+        encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, from, server->time );
+    }
+    
+    uint8_t * read_packet_key = netcode_encryption_manager_get_receive_key( &server->encryption_manager, encryption_index );
+
+    if ( !read_packet_key && packet_data[0] != 0 )
+    {
+        char address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server could not process packet because no encryption mapping exists for %s\n", netcode_address_to_string( from, address_string ) );
+        return;
+    }
+
+    void * packet = netcode_read_packet( packet_data, 
+                                         packet_bytes, 
+                                         &sequence, 
+                                         read_packet_key, 
+                                         server->config.protocol_id, 
+                                         current_timestamp, 
+                                         server->config.private_key, 
+                                         allowed_packets, 
+                                         ( client_index != -1 ) ? &server->client_replay_protection[client_index] : NULL, 
+                                         server->config.allocator_context, 
+                                         server->config.allocate_function );
+
+    if ( !packet )
+        return;
+
+    netcode_server_process_packet_internal( server, from, packet, sequence, encryption_index, client_index );
+}
+
 void netcode_server_read_and_process_packet( struct netcode_server_t * server, 
                                              struct netcode_address_t * from, 
                                              uint8_t * packet_data, 
@@ -4244,7 +4335,7 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
     if ( !packet )
         return;
 
-    netcode_server_process_packet( server, from, packet, sequence, encryption_index, client_index );
+    netcode_server_process_packet_internal( server, from, packet, sequence, encryption_index, client_index );
 }
 
 void netcode_server_receive_packets( struct netcode_server_t * server )

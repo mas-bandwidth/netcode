@@ -168,6 +168,8 @@ void netcode_client_connect_loopback( struct netcode_client_t * client, int clie
 
 void netcode_client_disconnect_loopback( struct netcode_client_t * client );
 
+void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes );
+
 int netcode_client_loopback( struct netcode_client_t * client );
 
 void netcode_client_process_loopback_packet( struct netcode_client_t * client, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence );
@@ -235,6 +237,8 @@ void netcode_server_free_packet( struct netcode_server_t * server, void * packet
 int netcode_server_num_connected_clients( struct netcode_server_t * server );
 
 void * netcode_server_client_user_data( struct netcode_server_t * server, int client_index );
+
+void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes );
 
 void netcode_server_connect_loopback_client( struct netcode_server_t * server, int client_index, uint64_t client_id, NETCODE_CONST uint8_t * user_data );
 
