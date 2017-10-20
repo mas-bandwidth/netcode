@@ -1003,6 +1003,7 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
 
     for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
+        // todo: should really have a function to write an address
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
@@ -1021,6 +1022,13 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
+#if NETCODE_NETWORK_NEXT
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
+        {
+            netcode_write_uint8( &buffer, NETCODE_ADDRESS_NEXT );
+            netcode_write_uint64( &buffer, connect_token->server_addresses[i].data.flow_id );
+        }
+#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_assert( 0 );
@@ -1126,6 +1134,7 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
 
     for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
+        // todo: should really have a function to read an address
         connect_token->server_addresses[i].type = netcode_read_uint8( &buffer );
 
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
@@ -1144,6 +1153,12 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
+#if NETCODE_NETWORK_NEXT
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
+        {
+            connect_token->server_addresses[i].data.flow_id = netcode_read_uint64( &buffer );
+        }
+#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             return NETCODE_ERROR;
@@ -1969,6 +1984,7 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
 
     for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
+        // todo: really just need a function to write an address. too much cut & paste here
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
         {
             netcode_write_uint8( &buffer, NETCODE_ADDRESS_IPV4 );
@@ -1987,6 +2003,13 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
+#if NETCODE_NETWORK_NEXT
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
+        {
+            netcode_write_uint8( &buffer, NETCODE_ADDRESS_NEXT );
+            netcode_write_uint64( &buffer, connect_token->server_addresses[i].data.flow_id );
+        }
+#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_assert( 0 );
@@ -2060,6 +2083,7 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
 
     for ( i = 0; i < connect_token->num_server_addresses; ++i )
     {
+        // todo: really need a function to read an address
         connect_token->server_addresses[i].type = netcode_read_uint8( &buffer );
 
         if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_IPV4 )
@@ -2078,6 +2102,12 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
+#if NETCODE_NETWORK_NEXT
+        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
+        {
+            connect_token->server_addresses[i].data.flow_id = netcode_read_uint64( &buffer );
+        }
+#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad address type (%d)\n", connect_token->server_addresses[i].type );
