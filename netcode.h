@@ -80,14 +80,14 @@
 #define NETCODE_OK                  1
 #define NETCODE_ERROR               0
 
-#define NETWORK_NEXT_EXTENSIONS     1
+#define NETCODE_NETWORK_NEXT        1
 
 #define NETCODE_ADDRESS_NONE        0
 #define NETCODE_ADDRESS_IPV4        1
 #define NETCODE_ADDRESS_IPV6        2
-#if NETWORK_NEXT_EXTENSIONS
+#if NETCODE_NETWORK_NEXT
 #define NETCODE_ADDRESS_NEXT        3
-#endif // #if NETWORK_NEXT_EXTENSIONS
+#endif // #if NETCODE_NETWORK_NEXT
 
 #ifdef __cplusplus
 #define NETCODE_CONST const
@@ -111,9 +111,9 @@ struct netcode_address_t
     {
         uint8_t ipv4[4];
         uint16_t ipv6[8];
-#ifndef NETWORK_NEXT_EXTENSIONS
+#ifdef NETCODE_NETWORK_NEXT
         uint64_t flow_id;
-#endif // #if NETWORK_NEXT_EXTENSIONS
+#endif // #if NETCODE_NETWORK_NEXT
     } data;
     uint16_t port;
 };

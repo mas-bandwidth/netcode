@@ -262,6 +262,16 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
         return NETCODE_OK;
     }
 
+#if NETCODE_NETWORK_NEXT
+    char * end;
+    uint64_t flow_id = strtoull( address_string_in, &end, 16 );
+    if ( flow_id != 0 )
+    {
+        address->type = NETCODE_ADDRESS_NEXT;
+        address->data.flow_id = flow_id;
+    }
+#endif // #if NETCODE_NETWORK_NEXT
+
     return NETCODE_ERROR;
 }
 
@@ -314,18 +324,15 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
         }
         return buffer;
     }
+#if NETCODE_NETWORK_NEXT
+    else if ( address->type == NETCODE_ADDRESS_NEXT )
+    {
+        snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%.16" PRIx64, address->data.flow_id );
+        return buffer;
+    }
+#endif // #if NETCODE_NETWORK_NEXT
     else
     {
-#if NETCODE_NETWORK_NEXT_EXTENSIONS
-        char *end;
-        uint64_t flow_id = strtoull( buffer, &end, 16 );
-        if ( flow_id != 0 )
-        {
-            address->type = NETCODE_ADDRESS_NEXT;
-            address->flow_id = flow_id;
-        }
-#endif // #if NETWORK_NEXT_EXTENSIONS
-
         snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%s", "NONE" );
         return buffer;
     }
@@ -360,12 +367,12 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
                 return 0;
         }
     }
-#if NETCODE_NETWORK_NEXT_EXTENSIONS
+#if NETCODE_NETWORK_NEXT
     else if ( a->type == NETCODE_ADDRESS_NEXT )
     {
-        return a->flow_id == b->flow_id;
+        return a->data.flow_id == b->data.flow_id;
     }
-#endif // #if NETCODE_NETWORK_NEXT_EXTENSIONS
+#endif // #if NETCODE_NETWORK_NEXT
     else
     {
         return 0;
