@@ -1574,7 +1574,7 @@ void * netcode_read_packet( uint8_t * buffer,
     {
         // connection request packet: first byte is zero
 
-        if ( !allowed_packets[0] )
+        if ( !allowed_packets[NETCODE_CONNECTION_REQUEST_PACKET] )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. packet type is not allowed\n" );
             return NULL;
@@ -1582,7 +1582,7 @@ void * netcode_read_packet( uint8_t * buffer,
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", buffer_length, 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
             return NULL;
         }
 
