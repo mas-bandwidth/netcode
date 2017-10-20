@@ -1675,7 +1675,7 @@ void * netcode_read_packet( uint8_t * buffer,
 
         if ( buffer_length < 1 + 1 + NETCODE_MAC_BYTES )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. packet is too small to be valid\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. packet is too small to be valid (%d bytes)\n", buffer_length );
             return NULL;
         }
 
@@ -2785,7 +2785,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     if ( !packet )
         return;
     
-    netcode_client_process_packet_internal( client, from, packet, sequence );
+    netcode_client_process_packet_internal( client, from, (uint8_t*)packet, sequence );
 }
 
 void netcode_client_receive_packets( struct netcode_client_t * client )
@@ -2841,7 +2841,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             if ( !packet )
                 continue;
 
-            netcode_client_process_packet_internal( client, &from, packet, sequence );
+            netcode_client_process_packet_internal( client, &from, (uint8_t*)packet, sequence );
         }
     }
     else
@@ -2877,7 +2877,7 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
             if ( !packet )
                 continue;
 
-            netcode_client_process_packet( client, &client->receive_from[i], packet, sequence );
+            netcode_client_process_packet_internal( client, &client->receive_from[i], (uint8_t*)packet, sequence );
         }
     }
 }
