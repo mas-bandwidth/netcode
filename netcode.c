@@ -187,6 +187,25 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
 
     memset( address, 0, sizeof( struct netcode_address_t ) );
 
+#if NETCODE_NETWORK_NEXT
+    if ( address_string_in[0] == 'f' && 
+         address_string_in[1] == 'l' && 
+         address_string_in[2] == 'o' && 
+         address_string_in[3] == 'w' && 
+         address_string_in[4] == ':' )
+    {
+        char * end;
+        errno = 0;
+        uint64_t flow_id = strtoull( &address_string_in[5], &end, 16 );
+        if ( errno == 0 )
+        {
+            address->type = NETCODE_ADDRESS_NEXT;
+            address->data.flow_id = flow_id;
+            return NETCODE_OK;
+        }
+    }
+#endif // #if NETCODE_NETWORK_NEXT
+
     // first try to parse the string as an IPv6 address:
     // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
     // 2. otherwise try to parse as a raw IPv6 address using inet_pton
@@ -262,16 +281,6 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
         return NETCODE_OK;
     }
 
-#if NETCODE_NETWORK_NEXT
-    char * end;
-    uint64_t flow_id = strtoull( address_string_in, &end, 16 );
-    if ( flow_id != 0 )
-    {
-        address->type = NETCODE_ADDRESS_NEXT;
-        address->data.flow_id = flow_id;
-    }
-#endif // #if NETCODE_NETWORK_NEXT
-
     return NETCODE_ERROR;
 }
 
@@ -327,7 +336,7 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
 #if NETCODE_NETWORK_NEXT
     else if ( address->type == NETCODE_ADDRESS_NEXT )
     {
-        snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%.16" PRIx64, address->data.flow_id );
+        snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "flow:%.16" PRIx64, address->data.flow_id );
         return buffer;
     }
 #endif // #if NETCODE_NETWORK_NEXT
@@ -5104,6 +5113,15 @@ static void test_address()
         check( address.data.ipv6[6] == 0x0000 );
         check( address.data.ipv6[7] == 0x0001 );
     }
+
+#if NETCODE_NETWORK_NEXT
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "flow:0x1122334455667788", &address ) == NETCODE_OK );
+        check( address.type == NETCODE_ADDRESS_NEXT );
+        check( address.data.flow_id == 0x1122334455667788ULL );
+    }
+#endif // #if NETCODE_NETWORK_NEXT
 }
 
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
