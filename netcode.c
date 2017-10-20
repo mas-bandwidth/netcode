@@ -2869,7 +2869,7 @@ void netcode_client_send_packet_to_server_internal( struct netcode_client_t * cl
     {
         if ( client->config.override_send_and_receive )
         {
-            client->config.send_packet_override( &client->config.callback_context, &client->server_address, packet_data, packet_bytes );
+            client->config.send_packet_override( client->config.callback_context, &client->server_address, packet_data, packet_bytes );
         }
         else
         {
