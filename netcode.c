@@ -355,6 +355,13 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
     if ( a->type != b->type )
         return 0;
 
+#if NETCODE_NETWORK_NEXT
+    if ( a->type == NETCODE_ADDRESS_NEXT )
+    {
+        return a->data.flow_id == b->data.flow_id;
+    }
+#endif // #if NETCODE_NETWORK_NEXT
+
     if ( a->port != b->port )
         return 0;
 
@@ -376,12 +383,6 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
                 return 0;
         }
     }
-#if NETCODE_NETWORK_NEXT
-    else if ( a->type == NETCODE_ADDRESS_NEXT )
-    {
-        return a->data.flow_id == b->data.flow_id;
-    }
-#endif // #if NETCODE_NETWORK_NEXT
     else
     {
         return 0;
@@ -1571,6 +1572,7 @@ void * netcode_read_packet( uint8_t * buffer,
     netcode_assert( sequence );
     netcode_assert( allowed_packets );
 
+    // todo: is this still necessary? probably not.
     if ( allocate_function == NULL )
     {
         allocate_function = netcode_default_allocate_function;
@@ -1579,7 +1581,10 @@ void * netcode_read_packet( uint8_t * buffer,
     *sequence = 0;
 
     if ( buffer_length < 1 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored packet. buffer length is less than 1\n" );
         return NULL;
+    }
 
     uint8_t * start = buffer;
 
