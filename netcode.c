@@ -2556,6 +2556,9 @@ struct netcode_client_t * netcode_client_create_overload( NETCODE_CONST char * a
     struct netcode_address_t address1;
     struct netcode_address_t address2;
 
+    memset( &address1, 0, sizeof( address1 ) );
+    memset( &address2, 0, sizeof( address2 ) );
+
     if ( netcode_parse_address( address1_string, &address1 ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse client address\n" );
@@ -3695,7 +3698,7 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
     struct netcode_address_t server_address2;
 
     memset( &server_address1, 0, sizeof( server_address1 ) );
-    memset( &server_address2, 0, sizeof( server_address1 ) );
+    memset( &server_address2, 0, sizeof( server_address2 ) );
 
     if ( netcode_parse_address( server_address1_string, &server_address1 ) != NETCODE_OK )
     {
