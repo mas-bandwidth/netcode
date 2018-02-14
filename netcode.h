@@ -140,6 +140,8 @@ struct netcode_client_config_t
 
 void netcode_default_client_config( struct netcode_client_config_t * config );
 
+struct netcode_client_t * netcode_client_create_overload( NETCODE_CONST char * address1, NETCODE_CONST char * address2, NETCODE_CONST struct netcode_client_config_t * config, double time );
+
 struct netcode_client_t * netcode_client_create( NETCODE_CONST char * address, NETCODE_CONST struct netcode_client_config_t * config, double time );
 
 void netcode_client_destroy( struct netcode_client_t * client );
@@ -204,6 +206,8 @@ struct netcode_server_config_t
 };
 
 void netcode_default_server_config( struct netcode_server_config_t * config );
+
+struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * server_address1, NETCODE_CONST char * server_address2, NETCODE_CONST struct netcode_server_config_t * config, double time );
 
 struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_address, NETCODE_CONST struct netcode_server_config_t * config, double time );
 
