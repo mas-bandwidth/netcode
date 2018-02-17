@@ -6253,10 +6253,10 @@ void test_client_create()
         struct netcode_client_config_t client_config;
         netcode_default_client_config( &client_config );
 
-        struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+        struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, 0.0 );
 
         struct netcode_address_t test_address;
-        netcode_parse_address( "[::1]:50000", &test_address );
+        netcode_parse_address( "[::]:50000", &test_address );
 
         check( client );
         check( client->socket_holder.ipv4.handle == 0 );
@@ -6270,7 +6270,7 @@ void test_client_create()
         struct netcode_client_config_t client_config;
         netcode_default_client_config( &client_config );
 
-        struct netcode_client_t * client = netcode_client_create_overload( "127.0.0.1:40000", "[::1]:50000", &client_config, 0.0 );
+        struct netcode_client_t * client = netcode_client_create_overload( "127.0.0.1:40000", "[::]:50000", &client_config, 0.0 );
 
         struct netcode_address_t test_address;
         netcode_parse_address( "127.0.0.1:40000", &test_address );
@@ -6287,10 +6287,10 @@ void test_client_create()
         struct netcode_client_config_t client_config;
         netcode_default_client_config( &client_config );
 
-        struct netcode_client_t * client = netcode_client_create_overload( "[::1]:50000", "127.0.0.1:40000", &client_config, 0.0 );
+        struct netcode_client_t * client = netcode_client_create_overload( "[::]:50000", "127.0.0.1:40000", &client_config, 0.0 );
 
         struct netcode_address_t test_address;
-        netcode_parse_address( "[::1]:50000", &test_address );
+        netcode_parse_address( "[::]:50000", &test_address );
 
         check( client );
         check( client->socket_holder.ipv4.handle != 0 );
