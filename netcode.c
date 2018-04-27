@@ -1539,9 +1539,6 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
 {
     netcode_assert( replay_protection );
 
-    if ( sequence & ( 1ULL << 63 ) )
-        return 0;
-
     if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
         return 1;
     
@@ -6187,12 +6184,6 @@ void test_replay_protection()
     for ( i = 0; i < 2; ++i )
     {
         netcode_replay_protection_reset( &replay_protection );
-
-        check( replay_protection.most_recent_sequence == 0 );
-
-        // sequence numbers with high bit set should be ignored
-
-        check( netcode_replay_protection_packet_already_received( &replay_protection, 1ULL<<63 ) == 0 );
 
         check( replay_protection.most_recent_sequence == 0 );
 
