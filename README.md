@@ -10,8 +10,6 @@ Once a client is connected, netcode.io provides secure communication over UDP wi
 
 netcode.io also takes great care to ensure that UDP response packets are smaller than UDP request packets, to avoid your dedicated server being used as part of a DDoS amplification attack.
 
-If you are building a UDP-based protocol for your game, you should definitely use netcode.io instead of writing all of this yourself.
-
 # Source Code
 
 This repository holds the reference implementation of netcode.io in C.
