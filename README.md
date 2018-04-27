@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple connection-oriented UDP protocol for games with dedicated servers. 
 
-The primary benefit of netcode.io is that you can seamlessly transfer client authentication from your web backend to the UDP session between a client and your dedicated server. Clients are not able to connect to your dedicated server without this authentication.
+The benefit of netcode.io is that you can seamlessly transfer client authentication from your web backend to the UDP session between a client and your dedicated server. Clients are not able to connect to your dedicated server without this authentication.
 
 netcode.io also provides secure communication over UDP with encrypted and signed packets, protecting against MITM attacks, and replay protection so an attacker cannot attack your protocol by replaying captured packets. 
 
