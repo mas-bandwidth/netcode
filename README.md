@@ -4,11 +4,11 @@
 
 **netcode.io** is a simple connection-oriented UDP protocol for games with dedicated servers. 
 
-netcode lets you easily transfer authentication from your web backend to a client/server connection over UDP. Clients are not able to connect to your server without this authentication.
+With netcode.io you can easily transfer authentication from your web backend to a client/server connection over UDP. Clients are not able to connect to your server without this authentication.
 
-Once a client is connected to your server, netcode provides secure communication over UDP with encrypted and signed packets, as well as replay protection so an attacker cannot attack your protocol by replaying captured packets. 
+Once a client is connected to your server, netcode.io provides secure communication over UDP with encrypted and signed packets, as well as replay protection so an attacker cannot attack your protocol by replaying captured packets. 
 
-netcode also takes great care to ensure that UDP response packets are smaller than UDP request packets, to avoid your dedicated server being used as part of a DDoS amplification attack.
+netcode.io also takes great care to ensure that UDP response packets are smaller than UDP request packets, so your dedicated server will not end up being used in a DDoS amplification attack.
 
 # Source Code
 
