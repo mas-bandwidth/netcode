@@ -8,7 +8,7 @@ With netcode.io you can easily transfer authentication from your web backend to 
 
 Once a client is connected to your server, netcode.io provides secure communication over UDP with encrypted and signed packets, as well as replay protection so an attacker cannot attack your game protocol by replaying captured packets. 
 
-netcode.io also takes great care to ensure that UDP response packets are smaller than request packets, so your dedicated server won't end up being using in a DDoS amplification attack.
+netcode.io also takes great care to ensure that UDP response packets are smaller than request packets, so your dedicated server won't be used as part of a packet amplification DDoS attack.
 
 # Source Code
 
