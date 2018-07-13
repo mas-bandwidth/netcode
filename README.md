@@ -2,15 +2,17 @@
 
 # netcode.io
 
-**netcode.io** is a simple UDP protocol for client/server games with dedicated servers.
+**netcode.io** is a simple connection-oriented UDP protocol for games with dedicated servers.
 
-Features:
+It has the following features:
 
 * Connection oriented protocol over UDP for n clients per-server.
 * Only authenticated clients can connect to your server.
 * Encrypted and signed communication over UDP.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
+
+IMPORTANT: netcode.io does not support NAT punchthrough, since it is designed for dedicated server based games only.
 
 # How does it work?
 
