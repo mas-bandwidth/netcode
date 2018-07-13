@@ -12,7 +12,7 @@ It has the following features:
 * Token system so only authenticated clients can connect to your server.
 * Packets sent between client and server are encrypted and signed.
 
-It is secure by design:
+And it's secure by design:
 
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
