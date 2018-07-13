@@ -19,7 +19,7 @@ It is secure by design:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-If you are developing a client/server game, save yourself some time and hassle by using netcode.io as the secure foundation for your game's netcode.
+If you are developing a client/server game, save yourself some time by using netcode.io instead of writing all this yourself.
 
 # How does it work?
 
