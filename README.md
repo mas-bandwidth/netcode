@@ -9,13 +9,12 @@ It has the following features:
 * Connection oriented protocol over UDP for n clients per-server.
 * Only authenticated clients can connect to your server.
 * Packets sent between client and server are encrypted and signed.
-
-Security features include:
-
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
 * Protection against zombie clients.
+
+If you are developing a client/server game, you should use netcode.io as a secure foundation, instead of writing it yourself.
 
 # How does it work?
 
