@@ -4,18 +4,18 @@
 
 **netcode.io** is a simple connection-oriented UDP protocol for games with dedicated servers.
 
-It has the following feature set:
+It has the following features:
 
 * Connection oriented protocol over UDP for n clients per-server.
 * Only authenticated clients can connect to your server.
 * Packets sent between client and server are encrypted and signed.
 
-netcode.io is secure by default:
+Security features include:
 
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
-* Protection against zombie client attacks.
+* Protection against zombie clients.
 
 # How does it work?
 
