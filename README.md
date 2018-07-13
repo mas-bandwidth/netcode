@@ -12,8 +12,6 @@ It has the following features:
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
 
-IMPORTANT: netcode.io does not support NAT punchthrough, since it is designed for dedicated server based games only.
-
 # How does it work?
 
 Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
