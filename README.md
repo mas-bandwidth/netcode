@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple connection-oriented protocol built on top of UDP. 
 
-It's designed for client server/games with dedicated servers, like first person shooters.
+It's designed for client server/games with dedicated servers, like first person shooters and e-sports.
 
 It has the following features:
 
@@ -12,14 +12,14 @@ It has the following features:
 * Token system so only authenticated clients can connect to your server.
 * Packets sent between client and server are encrypted and signed.
 
-And it's secure by design:
+... and it's secure by design:
 
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-If you are developing a client/server game, save yourself some time by using netcode.io instead of writing all this yourself.
+Save yourself some time by using netcode.io instead of writing and testing all this yourself!
 
 # How does it work?
 
