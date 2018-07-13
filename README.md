@@ -8,9 +8,11 @@ It has the following features:
 
 * Connection oriented protocol over UDP for n clients per-server.
 * Only authenticated clients can connect to your server.
-* Encrypted and signed communication over UDP.
+* Packets sent between client and server are encrypted and signed.
+* Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
+* Protection against zombie client attacks.
 
 # How does it work?
 
