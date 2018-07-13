@@ -10,16 +10,16 @@ It has the following features:
 
 * Connection oriented protocol over UDP for n clients per-server.
 * Token system so only authenticated clients can connect to your server.
-* Packets sent between clients and the server are encrypted and signed.
+* Packets sent between client and server are encrypted and signed.
 
-netcode.io is secure by design:
+It is secure by design:
 
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-If you are developing a client/server game, save yourself the time and hassle and use netcode.io as a secure foundation for your game's netcode.
+If you are developing a client/server game, save yourself some time and use netcode.io as a secure foundation for your game's netcode.
 
 # How does it work?
 
