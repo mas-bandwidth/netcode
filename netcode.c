@@ -45,8 +45,8 @@
 #define NETCODE_CHALLENGE_TOKEN_BYTES 300
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_USER_DATA_BYTES 256
-#define NETCODE_MAX_PACKET_BYTES 1220
-#define NETCODE_MAX_PAYLOAD_BYTES 1200
+#define NETCODE_MAX_PACKET_BYTES 1200
+#define NETCODE_MAX_PAYLOAD_BYTES 1100
 #define NETCODE_MAX_ADDRESS_STRING_LENGTH 256
 #define NETCODE_PACKET_QUEUE_SIZE 256
 #define NETCODE_REPLAY_PROTECTION_BUFFER_SIZE 256
@@ -187,25 +187,6 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
 
     memset( address, 0, sizeof( struct netcode_address_t ) );
 
-#if NETCODE_NETWORK_NEXT
-    if ( address_string_in[0] == 'f' && 
-         address_string_in[1] == 'l' && 
-         address_string_in[2] == 'o' && 
-         address_string_in[3] == 'w' && 
-         address_string_in[4] == ':' )
-    {
-        char * end;
-        errno = 0;
-        uint64_t flow_id = strtoull( &address_string_in[5], &end, 16 );
-        if ( errno == 0 )
-        {
-            address->type = NETCODE_ADDRESS_NEXT;
-            address->data.flow_id = flow_id;
-            return NETCODE_OK;
-        }
-    }
-#endif // #if NETCODE_NETWORK_NEXT
-
     // first try to parse the string as an IPv6 address:
     // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
     // 2. otherwise try to parse as a raw IPv6 address using inet_pton
@@ -333,13 +314,6 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
         }
         return buffer;
     }
-#if NETCODE_NETWORK_NEXT
-    else if ( address->type == NETCODE_ADDRESS_NEXT )
-    {
-        snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "flow:%.16" PRIx64, address->data.flow_id );
-        return buffer;
-    }
-#endif // #if NETCODE_NETWORK_NEXT
     else
     {
         snprintf( buffer, NETCODE_MAX_ADDRESS_STRING_LENGTH, "%s", "NONE" );
@@ -354,13 +328,6 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
 
     if ( a->type != b->type )
         return 0;
-
-#if NETCODE_NETWORK_NEXT
-    if ( a->type == NETCODE_ADDRESS_NEXT )
-    {
-        return a->data.flow_id == b->data.flow_id;
-    }
-#endif // #if NETCODE_NETWORK_NEXT
 
     if ( a->port != b->port )
         return 0;
@@ -1030,13 +997,6 @@ void netcode_write_connect_token_private( struct netcode_connect_token_private_t
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
-#if NETCODE_NETWORK_NEXT
-        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
-        {
-            netcode_write_uint8( &buffer, NETCODE_ADDRESS_NEXT );
-            netcode_write_uint64( &buffer, connect_token->server_addresses[i].data.flow_id );
-        }
-#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_assert( 0 );
@@ -1161,12 +1121,6 @@ int netcode_read_connect_token_private( uint8_t * buffer, int buffer_length, str
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
-#if NETCODE_NETWORK_NEXT
-        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
-        {
-            connect_token->server_addresses[i].data.flow_id = netcode_read_uint64( &buffer );
-        }
-#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             return NETCODE_ERROR;
@@ -2012,13 +1966,6 @@ void netcode_write_connect_token( struct netcode_connect_token_t * connect_token
             }
             netcode_write_uint16( &buffer, connect_token->server_addresses[i].port );
         }
-#if NETCODE_NETWORK_NEXT
-        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
-        {
-            netcode_write_uint8( &buffer, NETCODE_ADDRESS_NEXT );
-            netcode_write_uint64( &buffer, connect_token->server_addresses[i].data.flow_id );
-        }
-#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_assert( 0 );
@@ -2111,12 +2058,6 @@ int netcode_read_connect_token( uint8_t * buffer, int buffer_length, struct netc
             }
             connect_token->server_addresses[i].port = netcode_read_uint16( &buffer );
         }
-#if NETCODE_NETWORK_NEXT
-        else if ( connect_token->server_addresses[i].type == NETCODE_ADDRESS_NEXT )
-        {
-            connect_token->server_addresses[i].data.flow_id = netcode_read_uint64( &buffer );
-        }
-#endif // #if NETCODE_NETWORK_NEXT
         else
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: read connect data has bad address type (%d)\n", connect_token->server_addresses[i].type );
@@ -3250,12 +3191,13 @@ uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int *
     }
 }
 
-void netcode_client_free_packet( struct netcode_client_t * client, uint8_t * packet )
+void netcode_client_free_packet( struct netcode_client_t * client, void * packet )
 {
     netcode_assert( client );
     netcode_assert( packet );
+    uint8_t * packet_data = (uint8_t*) packet;
     int offset = offsetof( struct netcode_connection_payload_packet_t, payload_data );
-    client->config.free_function( client->config.allocator_context, packet - offset );
+    client->config.free_function( client->config.allocator_context, packet_data - offset );
 }
 
 void netcode_client_disconnect( struct netcode_client_t * client )
@@ -3352,6 +3294,12 @@ uint16_t netcode_client_get_port( struct netcode_client_t * client )
 {
     netcode_assert( client );
     return client->address.type == NETCODE_ADDRESS_IPV4 ? client->socket_holder.ipv4.address.port : client->socket_holder.ipv6.address.port;
+}
+
+struct netcode_address_t * netcode_client_server_address( struct netcode_client_t * client )
+{
+    netcode_assert( client );
+    return &client->server_address;
 }
 
 // ----------------------------------------------------------------
@@ -4533,8 +4481,11 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
         while ( 1 )
         {
             struct netcode_address_t from;
+            
             uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+            
             int packet_bytes = 0;
+            
             if ( server->config.override_send_and_receive )
             {
                 packet_bytes = server->config.receive_packet_override( server->config.callback_context, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
@@ -4550,6 +4501,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
             if ( packet_bytes == 0 )
                 break;
+
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
     }
@@ -5396,15 +5348,6 @@ static void test_address()
         check( address.data.ipv6[6] == 0x0000 );
         check( address.data.ipv6[7] == 0x0001 );
     }
-
-#if NETCODE_NETWORK_NEXT
-    {
-        struct netcode_address_t address;
-        check( netcode_parse_address( "flow:0x1122334455667788", &address ) == NETCODE_OK );
-        check( address.type == NETCODE_ADDRESS_NEXT );
-        check( address.data.flow_id == 0x1122334455667788ULL );
-    }
-#endif // #if NETCODE_NETWORK_NEXT
 }
 
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
