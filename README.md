@@ -8,9 +8,8 @@ It's designed for client server/games with dedicated servers, like first person 
 
 It has the following features:
 
-* Connection oriented protocol over UDP for n clients per-server.
 * Token system so only authenticated clients can connect to your server.
-* Packets sent between client and server are encrypted and signed.
+* Packets sent between clients and server are encrypted and signed.
 
 And it's secure by design:
 
