@@ -418,7 +418,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the packet is not the expected size of 1062 bytes, ignore the packet.
 
-* If the version info in the packet doesn't match "NETCODE 1.01" (13 bytes, with null terminator), ignore the packet.
+* If the version info in the packet doesn't match "NETCODE 1.02" (13 bytes, with null terminator), ignore the packet.
 
 * If the protocol id in the packet doesn't match the expected protocol id of the dedicated server, ignore the packet.
 
