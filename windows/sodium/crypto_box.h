@@ -3,8 +3,8 @@
 
 /*
  * THREAD SAFETY: crypto_box_keypair() is thread-safe,
- * provided that you called sodium_init() once before using any
- * other libsodium function.
+ * provided that sodium_init() was called before.
+ *
  * Other functions are always thread-safe.
  */
 
@@ -14,7 +14,7 @@
 #include "export.h"
 
 #ifdef __cplusplus
-# if __GNUC__
+# ifdef __GNUC__
 #  pragma GCC diagnostic ignored "-Wlong-long"
 # endif
 extern "C" {
@@ -39,6 +39,10 @@ size_t  crypto_box_noncebytes(void);
 #define crypto_box_MACBYTES crypto_box_curve25519xsalsa20poly1305_MACBYTES
 SODIUM_EXPORT
 size_t  crypto_box_macbytes(void);
+
+#define crypto_box_MESSAGEBYTES_MAX crypto_box_curve25519xsalsa20poly1305_MESSAGEBYTES_MAX
+SODIUM_EXPORT
+size_t  crypto_box_messagebytes_max(void);
 
 #define crypto_box_PRIMITIVE "curve25519xsalsa20poly1305"
 SODIUM_EXPORT

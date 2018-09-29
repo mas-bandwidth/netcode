@@ -77,13 +77,13 @@ Prior to encryption the private connect token data has the following binary form
 
 This data is variable size but for simplicity is written to a fixed size buffer of 1024 bytes. Unused bytes are zero padded.
 
-Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* using the following binary data as the _associated data_: 
+Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_xchacha20poly1305_ietf_encrypt* using the following binary data as the _associated data_: 
 
     [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
-The nonce used for encryption is a 64 bit sequence number that starts at zero and increases with each connect token generated. The sequence number is extended by padding high bits with zero to create a 96 bit nonce.
+The nonce used for encryption is a 24 bytes number that is randomly generated for every token.
 
 Encryption is performed on the first 1024 - 16 bytes in the buffer, leaving the last 16 bytes to store the HMAC:
 
@@ -98,7 +98,7 @@ Together the public and private data form a _connect token_:
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
-    [connect token sequence] (uint64)
+    [connect token nonce] (24 bytes)
     [encrypted private connect token data] (1024 bytes)
     [timeout seconds] (uint32)      // timeout in seconds. negative values disable timeout (dev only)
     [num_server_addresses] (uint32) // in [1,32]
