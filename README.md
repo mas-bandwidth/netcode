@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple connection-oriented protocol built on top of UDP. 
 
-It's designed for client server/games with dedicated servers, like first person shooters and e-sports.
+It's designed for client server/games with dedicated servers, like first person shooters.
 
 It has the following features:
 
