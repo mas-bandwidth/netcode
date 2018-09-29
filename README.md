@@ -34,7 +34,6 @@ Other netcode.io repositories include:
 
 * [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
 * [netcode.io Golang implementation](https://github.com/wirepair/netcode)
-* [netcode.io Rust implementation](https://github.com/vvanders/netcode.io) (unmaintained)
 * [netcode.io Rust implementation](https://github.com/jaynus/netcode.io) (updated fork of [vvanders/netcode.io](https://github.com/vvanders/netcode.io))
 * [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
