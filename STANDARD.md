@@ -1,4 +1,4 @@
-# netcode.io 1.01
+# netcode.io 1.02
 
 **netcode.io** is a simple protocol for creating secure client/server connections over UDP.
 
@@ -79,7 +79,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_xchacha20poly1305_ietf_encrypt* using the following binary data as the _associated data_: 
 
-    [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
@@ -94,7 +94,7 @@ Post encryption, this is referred to as the _encrypted private connect token dat
 
 Together the public and private data form a _connect token_:
 
-    [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
@@ -168,7 +168,7 @@ This is referred to as the _encrypted challenge token data_.
 The first packet type _connection request packet_ (0) is not encrypted and has the following format:
 
     0 (uint8) // prefix byte of zero
-    [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
     [connect token sequence number] (8 bytes)
@@ -229,7 +229,7 @@ _connection disconnect packet_:
 
 The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with the following binary data as the _associated data_: 
 
-    [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
 
@@ -402,7 +402,7 @@ The server follows these strict rules when processing connection requests:
 When a server receives a connection request packet from a client it contains the following data:
 
     0 (uint8) // prefix byte of zero
-    [version info] (13 bytes)       // "NETCODE 1.01" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
     [connect token sequence number] (8 bytes)
