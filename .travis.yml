@@ -15,7 +15,7 @@ install:
   - pushd .
   - cd /tmp
   - tar -zxvf /tmp/libsodium.tar.gz
-  - cd libsodium-1.0.10
+  - cd libsodium-1.0.16
   - ./configure
   - make
   - sudo make install
