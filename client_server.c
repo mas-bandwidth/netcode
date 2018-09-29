@@ -97,7 +97,10 @@ int main( int argc, char ** argv )
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
     printf( "client id is %.16" PRIx64 "\n", client_id );
 
-    if ( netcode_generate_connect_token( 1, (NETCODE_CONST char**) &server_address, (NETCODE_CONST char**) &server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, 0, private_key, connect_token ) != NETCODE_OK )
+    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
+    netcode_random_bytes(nonce, sizeof(nonce));
+
+    if ( netcode_generate_connect_token( 1, (NETCODE_CONST char**) &server_address, (NETCODE_CONST char**) &server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, nonce, private_key, connect_token ) != NETCODE_OK )
     {
         printf( "error: failed to generate connect token\n" );
         return 1;

@@ -53,6 +53,7 @@
 #define NETCODE_PLATFORM NETCODE_PLATFORM_UNIX
 #endif
 
+#define NETCODE_CONNECT_TOKEN_NONCE_BYTES 24
 #define NETCODE_CONNECT_TOKEN_BYTES 2048
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
@@ -173,7 +174,7 @@ int netcode_generate_connect_token( int num_server_addresses,
                                     int timeout_seconds, 
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
-                                    uint64_t sequence, 
+                                    NETCODE_CONST uint8_t * nonce, 
                                     NETCODE_CONST uint8_t * private_key, 
                                     uint8_t * connect_token );
 
