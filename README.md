@@ -48,6 +48,7 @@ These people are awesome:
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation
+* [Jérôme Leclercq](https://github.com/DrLynix) - Support for random connect token nonce
 
 Thanks for your contributions to netcode.io!
 
