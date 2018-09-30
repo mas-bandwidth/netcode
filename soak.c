@@ -65,7 +65,6 @@ float random_float( float a, float b )
 
 struct netcode_server_t * server[MAX_SERVERS];
 struct netcode_client_t * client[MAX_CLIENTS];
-uint8_t connect_nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
 uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
 uint8_t private_key[NETCODE_KEY_BYTES];
 
@@ -80,7 +79,6 @@ void soak_initialize()
     memset( server, 0, sizeof( server ) );
     memset( client, 0, sizeof( client ) );
 
-    netcode_random_bytes( connect_nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
     netcode_random_bytes( private_key, NETCODE_KEY_BYTES );
 
     int i;
@@ -249,7 +247,7 @@ void soak_iteration( double time )
                     }
                 }
 
-                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, connect_nonce, private_key, connect_token ) )
+                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, private_key, connect_token ) )
                 {
                     netcode_client_connect( client[i], connect_token );
                 }

@@ -41,6 +41,7 @@
 #define NETCODE_SOCKET_IPV6         1
 #define NETCODE_SOCKET_IPV4         2
 
+#define NETCODE_CONNECT_TOKEN_NONCE_BYTES 24
 #define NETCODE_CONNECT_TOKEN_PRIVATE_BYTES 1024
 #define NETCODE_CHALLENGE_TOKEN_BYTES 300
 #define NETCODE_VERSION_INFO_BYTES 13
@@ -5038,7 +5039,6 @@ int netcode_generate_connect_token( int num_server_addresses,
                                     int timeout_seconds,
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
-                                    NETCODE_CONST uint8_t * nonce, 
                                     NETCODE_CONST uint8_t * private_key, 
                                     uint8_t * output_buffer )
 {
@@ -5046,7 +5046,6 @@ int netcode_generate_connect_token( int num_server_addresses,
     netcode_assert( num_server_addresses <= NETCODE_MAX_SERVERS_PER_CONNECT );
     netcode_assert( public_server_addresses );
     netcode_assert( internal_server_addresses );
-    netcode_assert( nonce );
     netcode_assert( private_key );
     netcode_assert( output_buffer );
 
@@ -5074,6 +5073,9 @@ int netcode_generate_connect_token( int num_server_addresses,
     }
 
     // generate a connect token
+
+    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
+    netcode_generate_nonce(nonce);
 
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
@@ -6529,10 +6531,7 @@ void test_client_server_connect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6660,10 +6659,7 @@ void test_client_server_ipv4_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6716,10 +6712,7 @@ void test_client_server_ipv4_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6772,10 +6765,7 @@ void test_client_server_ipv4_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6828,10 +6818,7 @@ void test_client_server_ipv4_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6887,10 +6874,7 @@ void test_client_server_ipv6_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6943,10 +6927,7 @@ void test_client_server_ipv6_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -6999,10 +6980,7 @@ void test_client_server_ipv6_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -7055,10 +7033,7 @@ void test_client_server_ipv6_socket_connect()
         uint64_t client_id = 0;
         netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-        uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-        netcode_generate_nonce(nonce);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
         netcode_client_connect( client, connect_token );
 
@@ -7124,10 +7099,7 @@ void test_client_server_keep_alive()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7240,9 +7212,6 @@ void test_client_server_multiple_clients()
             uint64_t client_id = j;
             netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-            uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-            netcode_generate_nonce(nonce);
-
             NETCODE_CONST char * server_address = "[::1]:40000";
 
             uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
@@ -7254,7 +7223,6 @@ void test_client_server_multiple_clients()
                                                    TEST_TIMEOUT_SECONDS,
                                                    client_id, 
                                                    TEST_PROTOCOL_ID, 
-                                                   nonce, 
                                                    private_key, 
                                                    connect_token ) );
 
@@ -7459,10 +7427,7 @@ void test_client_server_multiple_servers()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 3, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 3, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7584,10 +7549,7 @@ void test_client_error_connect_token_expired()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, 0, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, 0, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7675,10 +7637,7 @@ void test_client_error_connection_timed_out()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7768,10 +7727,7 @@ void test_client_error_connection_response_timeout()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7842,10 +7798,7 @@ void test_client_error_connection_request_timeout()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7916,10 +7869,7 @@ void test_client_error_connection_denied()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -7956,7 +7906,7 @@ void test_client_error_connection_denied()
     uint64_t client_id2 = 0;
     netcode_random_bytes( (uint8_t*) &client_id2, 8 );
 
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id2, TEST_PROTOCOL_ID, nonce, private_key, connect_token2 ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id2, TEST_PROTOCOL_ID, private_key, connect_token2 ) );
 
     netcode_client_connect( client2, connect_token2 );
 
@@ -8029,10 +7979,7 @@ void test_client_side_disconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8123,10 +8070,7 @@ void test_server_side_disconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8223,10 +8167,7 @@ void test_client_reconnect()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8280,7 +8221,7 @@ void test_client_reconnect()
 
     netcode_network_simulator_reset( network_simulator );
 
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8394,10 +8335,7 @@ void test_disable_timeout()
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, -1, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, -1, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8566,10 +8504,7 @@ void test_loopback()
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
-    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
-    netcode_generate_nonce(nonce);
-
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, nonce, private_key, connect_token ) );
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, connect_token ) );
 
     netcode_client_connect( regular_client, connect_token );
 
