@@ -8558,7 +8558,7 @@ void test_loopback()
     // verify that we can exchange packets for both regular and loopback client post reconnect
 
     loopback_server_num_packets_received = 0;
-    loopback_server_num_packets_received = 0;
+    loopback_client_num_packets_received = 0;
     regular_server_num_packets_received = 0;
     regular_client_num_packets_received = 0;
     context.num_loopback_packets_sent_to_client = 0;
