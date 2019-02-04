@@ -56,6 +56,7 @@
 #define NETCODE_CONNECT_TOKEN_BYTES 2048
 #define NETCODE_KEY_BYTES 32
 #define NETCODE_MAC_BYTES 16
+#define NETCODE_USER_DATA_BYTES 256
 #define NETCODE_MAX_SERVERS_PER_CONNECT 32
 
 #define NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED              -6
@@ -174,6 +175,7 @@ int netcode_generate_connect_token( int num_server_addresses,
                                     uint64_t client_id, 
                                     uint64_t protocol_id, 
                                     NETCODE_CONST uint8_t * private_key, 
+                                    uint8_t * user_data, 
                                     uint8_t * connect_token );
 
 struct netcode_server_config_t
