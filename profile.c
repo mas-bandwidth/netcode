@@ -198,6 +198,9 @@ void profile_iteration( double time )
                 uint64_t client_id = 0;
                 netcode_random_bytes( (uint8_t*) &client_id, 8 );
 
+                uint8_t user_data[NETCODE_USER_DATA_BYTES];
+                netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
                 uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
                 int num_server_addresses = 0;
@@ -220,7 +223,7 @@ void profile_iteration( double time )
                     }
                 }
 
-                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, private_key, connect_token ) )
+                if ( num_server_addresses > 0 && netcode_generate_connect_token( num_server_addresses, (NETCODE_CONST char**) server_address, (NETCODE_CONST char**) server_address, CONNECT_TOKEN_EXPIRY, CONNECT_TOKEN_TIMEOUT, client_id, PROTOCOL_ID, private_key, user_data, connect_token ) )
                 {
                     netcode_client_connect( client[i], connect_token );
                 }
