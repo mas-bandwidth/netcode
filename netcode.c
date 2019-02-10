@@ -3357,7 +3357,7 @@ uint8_t * netcode_client_receive_packet( struct netcode_client_t * client, int *
         netcode_assert( packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
         *packet_bytes = packet->payload_bytes;
         netcode_assert( *packet_bytes >= 0 );
-        netcode_assert( *packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+        netcode_assert( *packet_bytes <= NETCODE_MAX_PAYLOAD_BYTES );
         return (uint8_t*) &packet->payload_data;
     }
     else
@@ -4856,7 +4856,7 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
         netcode_assert( packet->packet_type == NETCODE_CONNECTION_PAYLOAD_PACKET );
         *packet_bytes = packet->payload_bytes;
         netcode_assert( *packet_bytes >= 0 );
-        netcode_assert( *packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+        netcode_assert( *packet_bytes <= NETCODE_MAX_PAYLOAD_BYTES );
         return (uint8_t*) &packet->payload_data;
     }
     else
