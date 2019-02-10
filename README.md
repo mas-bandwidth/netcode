@@ -2,9 +2,11 @@
 
 # netcode.io
 
-**netcode.io** is a simple client/server protocol built on top of UDP. 
+**netcode.io** is a connection-oriented protocol built on top of UDP. 
 
-It's secure by design:
+It's designed for client/server games with dedicated servers, like modern first person shooters.
+
+It has the following features:
 
 * Token system so only authenticated clients can connect to your server.
 * Protection against man-in-the-middle attacks.
@@ -12,7 +14,7 @@ It's secure by design:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-Save yourself some time by using netcode.io instead of writing and testing all this yourself!
+Save some time by using netcode.io as the foundation for your network protocol instead of writing and testing all this yourself!
 
 # How does it work?
 
