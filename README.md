@@ -2,17 +2,11 @@
 
 # netcode.io
 
-**netcode.io** is a simple connection-oriented protocol built on top of UDP. 
+**netcode.io** is a simple client/server protocol built on top of UDP. 
 
-It's designed for client server/games with dedicated servers, like first person shooters.
-
-It has the following features:
+It's secure by design:
 
 * Token system so only authenticated clients can connect to your server.
-* Packets sent between clients and server are encrypted and signed.
-
-And it's secure by design:
-
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
@@ -54,11 +48,11 @@ Thanks for your contributions to netcode.io!
 
 # Author
 
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler), a recognized expert in the field of game network programming with over 15 years experience in the game industry.
+The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
 
 Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](https://gafferongames.com/categories/building-a-game-network-protocol).
 
-Open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
+Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
 
 # Sponsors
 
