@@ -9,6 +9,7 @@ It's designed for client/server games with dedicated servers, like modern first 
 It has the following features:
 
 * Token system so only authenticated clients can connect to your server.
+* Packet encryption and signature checks.
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
