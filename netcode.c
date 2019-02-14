@@ -4780,10 +4780,10 @@ struct netcode_address_t * netcode_server_client_address( struct netcode_server_
     netcode_assert( server );
 
     if (!server->running)
-        return 0;
+        return NULL;
 
     if (client_index < 0 || client_index >= server->max_clients)
-        return 0;
+        return NULL;
 
     return &server->client_address[client_index];
 }
