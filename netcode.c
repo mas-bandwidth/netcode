@@ -4775,6 +4775,19 @@ uint64_t netcode_server_client_id( struct netcode_server_t * server, int client_
     return server->client_id[client_index];
 }
 
+struct netcode_address_t * netcode_server_client_address( struct netcode_server_t * server, int client_index )
+{
+    netcode_assert( server );
+
+    if (!server->running)
+        return NULL;
+
+    if (client_index < 0 || client_index >= server->max_clients)
+        return NULL;
+
+    return &server->client_address[client_index];
+}
+
 uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, int client_index )
 {
     netcode_assert( client_index >= 0 );
