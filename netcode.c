@@ -1668,9 +1668,6 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
 
     if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
         return 1;
-    
-    if ( sequence > replay_protection->most_recent_sequence )
-        replay_protection->most_recent_sequence = sequence;
 
     int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
 
@@ -1686,6 +1683,12 @@ int netcode_replay_protection_packet_already_received( struct netcode_replay_pro
     replay_protection->received_packet[index] = sequence;
 
     return 0;
+}
+
+void netcode_replay_protection_record_max_sequence( struct netcode_replay_protection_t * replay_protection, uint64_t sequence )
+{
+    if ( sequence > replay_protection->most_recent_sequence )
+        replay_protection->most_recent_sequence = sequence;
 }
 
 void * netcode_read_packet( uint8_t * buffer, 
@@ -1914,6 +1917,10 @@ void * netcode_read_packet( uint8_t * buffer,
         }
 
         int decrypted_bytes = encrypted_bytes - NETCODE_MAC_BYTES;
+
+        if ( replay_protection && packet_type >= NETCODE_CONNECTION_KEEP_ALIVE_PACKET ) {
+            netcode_replay_protection_record_max_sequence( replay_protection, *sequence );
+        }
 
         // process the per-packet type data that was just decrypted
         
@@ -2508,6 +2515,7 @@ int netcode_network_simulator_receive_packets( struct netcode_network_simulator_
             continue;
 
         packet_data[num_packets] = network_simulator->pending_receive_packets[i].packet_data;
+
         packet_bytes[num_packets] = network_simulator->pending_receive_packets[i].packet_bytes;
         from[num_packets] = network_simulator->pending_receive_packets[i].from;
 
