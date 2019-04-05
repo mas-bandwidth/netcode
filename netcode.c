@@ -1,7 +1,7 @@
 /*
     netcode.io reference implementation
 
-    Copyright © 2017, The Network Protocol Company, Inc.
+    Copyright © 2017 - 2019, The Network Protocol Company, Inc.
 
     Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -1703,13 +1703,12 @@ void * netcode_read_packet( uint8_t * buffer,
     netcode_assert( sequence );
     netcode_assert( allowed_packets );
 
-    // todo: is this still necessary? probably not.
+    *sequence = 0;
+
     if ( allocate_function == NULL )
     {
         allocate_function = netcode_default_allocate_function;
     }
-
-    *sequence = 0;
 
     if ( buffer_length < 1 )
     {
@@ -1871,17 +1870,6 @@ void * netcode_read_packet( uint8_t * buffer,
             (*sequence) |= ( uint64_t) ( value ) << ( 8 * i );
         }
 
-        // replay protection (optional)
-
-        if ( replay_protection && packet_type >= NETCODE_CONNECTION_KEEP_ALIVE_PACKET )
-        {
-            if ( netcode_replay_protection_packet_already_received( replay_protection, *sequence ) )
-            {
-                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. sequence %.16" PRIx64 " already received (replay protection)\n", *sequence );
-                return NULL;
-            }
-        }
-
         // decrypt the per-packet type data
 
         uint8_t additional_data[NETCODE_VERSION_INFO_BYTES+8+1];
@@ -1914,6 +1902,17 @@ void * netcode_read_packet( uint8_t * buffer,
         }
 
         int decrypted_bytes = encrypted_bytes - NETCODE_MAC_BYTES;
+
+        // replay protection
+
+        if ( replay_protection && packet_type >= NETCODE_CONNECTION_KEEP_ALIVE_PACKET )
+        {
+            if ( netcode_replay_protection_packet_already_received( replay_protection, *sequence ) )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. sequence %.16" PRIx64 " already received (replay protection)\n", *sequence );
+                return NULL;
+            }
+        }
 
         // process the per-packet type data that was just decrypted
         
