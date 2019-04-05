@@ -271,9 +271,11 @@ The following steps are taken when reading an encrypted packet, in this exact or
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
 
+* If the packet type fails the replay protection already received test, ignore the packet. _See the section on replay protection below for details_.
+
 * If the per-packet type data fails to decrypt, ignore the packet.
 
-* If the packet type fails the replay protection test, ignore the packet. _See the section on replay protection below for details_.
+* Advance the most recent replay protection sequence #. _See the section on replay protection below for details_.
 
 * If all the above checks pass, the packet is processed.
 
@@ -293,7 +295,7 @@ The replay protection algorithm is as follows:
 
 1. Any packet older than the most recent sequence number received, minus the _replay buffer size_, is discarded on the receiver side.
 
-2. When a packet arrives that is newer than the most recent sequence number received, the most recent sequence number is updated on the receiver side and the packet is accepted.
+2. When a packet arrives that is newer than the most recent sequence number received.
 
 3. If a packet arrives that is within _replay buffer size_ of the most recent sequence number, it is accepted only if its sequence number has not already been received, otherwise it is ignored.
 
