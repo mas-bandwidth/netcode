@@ -262,10 +262,6 @@ The following steps are taken when reading an encrypted packet, in this exact or
 
 * If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
 
-* If the packet type fails the replay protection test, ignore the packet. _See the section on replay protection below for details_.
-
-* If the per-packet type data fails to decrypt, ignore the packet.
-
 * If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
 
     * 0 bytes for _connection denied packet_
@@ -274,6 +270,10 @@ The following steps are taken when reading an encrypted packet, in this exact or
     * 8 bytes for _connection keep-alive packet_
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
+
+* If the per-packet type data fails to decrypt, ignore the packet.
+
+* If the packet type fails the replay protection test, ignore the packet. _See the section on replay protection below for details_.
 
 * If all the above checks pass, the packet is processed.
 
