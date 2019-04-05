@@ -1676,7 +1676,7 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 
     if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
         return 0;
-    
+
     if ( replay_protection->received_packet[index] >= sequence )
         return 1;
     
@@ -1789,7 +1789,6 @@ void * netcode_read_packet( uint8_t * buffer,
             return NULL;
         }
 
-
         uint8_t packet_connect_token_nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
         netcode_read_bytes(&buffer, packet_connect_token_nonce, sizeof(packet_connect_token_nonce));
 
@@ -1888,7 +1887,7 @@ void * netcode_read_packet( uint8_t * buffer,
         {
             if ( netcode_replay_protection_already_received( replay_protection, *sequence ) )
             {
-                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection payload packet. sequence %.16" PRIx64 " already received (replay protection)\n", *sequence );
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored packet. sequence %.16" PRIx64 " already received (replay protection)\n", *sequence );
                 return NULL;
             }
         }
