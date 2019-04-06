@@ -6,20 +6,24 @@ WORKDIR /app
 
 RUN apt-get -y update && apt-get install -y wget make g++ dh-autoreconf pkg-config
 
-RUN wget https://github.com/jedisct1/libsodium/releases/download/1.0.16/libsodium-1.0.16.tar.gz && \
-    tar -zxvf libsodium-1.0.16.tar.gz && \
-    cd libsodium-1.0.16 && \
+RUN curl -L -O https://github.com/jedisct1/libsodium/releases/download/1.0.17/libsodium-1.0.17.tar.gz && \
+    tar xf libsodium-*.tar.gz && \
+    cd libsodium-* && \
     ./configure && \
-    make && make check && \
+    make && \
     make install && \
     cd .. && \
-    rm -rf libsodium* && \
+    rm -rf libsodium-* && \
     ldconfig
 
-RUN wget https://github.com/premake/premake-core/releases/download/v5.0.0-alpha10/premake-5.0.0-alpha10-linux.tar.gz && \ 
-    tar -zxvf premake-*.tar.gz && \
-    rm premake-*.tar.gz && \
-    mv premake5 /usr/local/bin
+RUN curl -L -O https://github.com/premake/premake-core/releases/download/v5.0.0-alpha13/premake-5.0.0-alpha13-src.zip && \
+    unzip premake-*.zip && \
+    cd premake-* && \
+    cd build/gmake.unix && \
+    make && \
+    mv ../../bin/release/premake5 /usr/local/bin && \
+    cd ../../../ && \
+    rm -rf premake-*
 
 ADD netcode.io /app/netcode.io
 
