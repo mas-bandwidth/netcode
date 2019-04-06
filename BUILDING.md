@@ -3,7 +3,7 @@ How to build netcode.io
 
 ## Building on Windows
 
-Download [premake 5](https://premake.github.io/download.html) and copy the **premake5** executable somewhere in your path. Please make sure you have at least premake5 alpha 10.
+Download [premake 5](https://premake.github.io/download.html) and copy the **premake5** executable somewhere in your path. Please make sure you have at least premake5 alpha 13.
 
 You need Visual Studio to build the source code. If you don't have Visual Studio 2015 you can [download the community edition for free](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx).
 
@@ -17,7 +17,7 @@ Now you can build the library and run individual test programs as you would for 
 
 ## Building on MacOS and Linux
 
-First, download and install [premake 5](https://premake.github.io/download.html).
+First, download and install [premake 5](https://premake.github.io/download.html) alpha 13 or greater.
 
 Next, install libsodium.
 
