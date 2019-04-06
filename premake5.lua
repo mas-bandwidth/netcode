@@ -1,5 +1,5 @@
 
-if os.is "windows" then
+if os.istarget "windows" then
     debug_libs = { "sodium-debug" }
     release_libs = { "sodium-release" }
 else
@@ -12,7 +12,7 @@ solution "netcode"
     language "C"
     platforms { "x64" }
     configurations { "Debug", "Release" }
-    if os.is "windows" then
+    if os.istarget "windows" then
         includedirs { ".", "./windows" }
         libdirs { "./windows" }
     else
@@ -20,7 +20,10 @@ solution "netcode"
         targetdir "bin/"  
     end
     rtti "Off"
-    flags { "ExtraWarnings", "StaticRuntime", "FloatFast", "EnableSSE2" }
+    warnings "Extra"
+    staticruntime "On"
+    floatingpoint "Fast"
+    vectorextensions "SSE2"
     configuration "Debug"
         symbols "On"
         links { debug_libs }
@@ -50,7 +53,7 @@ project "server"
 project "client_server"
     files { "client_server.c", "netcode.c" }
 
-if os.is "windows" then
+if os.ishost "windows" then
 
     -- Windows
 
@@ -76,7 +79,7 @@ else
         description = "Build and run all unit tests",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 test" == 0 then
+            if os.execute "make -j32 test" then
                 os.execute "./bin/test"
             end
         end
@@ -88,7 +91,7 @@ else
         description = "Build and run soak test",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 soak" == 0 then
+            if os.execute "make -j32 soak" then
                 os.execute "./bin/soak"
             end
         end
@@ -100,7 +103,7 @@ else
         description = "Build and run profile tet",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 profile" == 0 then
+            if os.execute "make -j32 profile" then
                 os.execute "./bin/profile"
             end
         end
@@ -112,7 +115,7 @@ else
         description = "Build and run the client",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client" == 0 then
+            if os.execute "make -j32 client" then
                 os.execute "./bin/client"
             end
         end
@@ -124,7 +127,7 @@ else
         description = "Build and run the server",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 server" == 0 then
+            if os.execute "make -j32 server" then
                 os.execute "./bin/server"
             end
         end
@@ -136,7 +139,7 @@ else
         description = "Build and run the client/server testbed",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client_server" == 0 then
+            if os.execute "make -j32 client_server" then
                 os.execute "./bin/client_server"
             end
         end
@@ -167,7 +170,7 @@ else
         description = "Launch 256 client instances to stress test the server",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client" == 0 then
+            if os.execute "make -j32 client" then
                 for i = 0, 255 do
                     os.execute "./bin/client &"
                 end
@@ -250,7 +253,7 @@ newaction
           os.rmdir( v )
         end
 
-        if not os.is "windows" then
+        if not os.ishost "windows" then
             os.execute "find . -name .DS_Store -delete"
             for i,v in ipairs( files_to_delete ) do
               os.execute( "rm -f " .. v )
