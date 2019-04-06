@@ -15,7 +15,7 @@ It has the following features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-It's stable and well tested having been released and used in AAA game projects for over 2 years now.
+netcode.io is stable and well tested having been released and used in AAA game projects for over 2 years now.
 
 # How does it work?
 
