@@ -295,9 +295,9 @@ The replay protection algorithm is as follows:
 
 1. Any packet older than the most recent sequence number received, minus the _replay buffer size_, is discarded on the receiver side.
 
-2. When a packet arrives that is newer than the most recent sequence number received.
+2. If a packet arrives that is within _replay buffer size_ of the most recent sequence number, it is accepted only if its sequence number has not already been received, otherwise it is ignored.
 
-3. If a packet arrives that is within _replay buffer size_ of the most recent sequence number, it is accepted only if its sequence number has not already been received, otherwise it is ignored.
+3. After the packet has been successfully decrypted, a) if the packet sequence # is in the replay buffer window that entry is set as received, and b) the most recent sequence number is updated if the packet sequence # is > than the previous most recent sequence number received.
 
 Replay protection is applied to the following packet types on both client and server:
 

@@ -60,7 +60,7 @@ Other open source libraries by the same author include: [yojimbo](http://libyoji
 
 # Sponsors
 
-**netcode.io** is generously sponsored by:
+**netcode.io** was generously sponsored by:
 
 * **Gold Sponsors**
     * [Remedy Entertainment](http://www.remedygames.com/)
