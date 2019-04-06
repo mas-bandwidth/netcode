@@ -15,7 +15,7 @@ It has the following features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-Save some time by using netcode.io as the foundation for your network protocol instead of writing and testing all this yourself!
+netcode.io is stable and well tested having been used in AAA game projects for over 2 years now.
 
 # How does it work?
 
@@ -25,7 +25,7 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 
 # Source Code
 
-This repository holds the reference implementation of netcode.io in C.
+This repository holds the implementation of netcode.io in C.
 
 Other netcode.io repositories include:
 
