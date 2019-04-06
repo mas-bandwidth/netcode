@@ -4,7 +4,7 @@ CMD ["/sbin/my_init"]
 
 WORKDIR /app
 
-RUN apt-get -y update && apt-get install -y wget make g++ dh-autoreconf pkg-config
+RUN apt-get -y update && apt-get install -y wget make g++ dh-autoreconf pkg-config unzip
 
 RUN curl -L -O https://github.com/jedisct1/libsodium/releases/download/1.0.17/libsodium-1.0.17.tar.gz && \
     tar xf libsodium-*.tar.gz && \
