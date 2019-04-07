@@ -71,7 +71,7 @@
 #define NETCODE_CLIENT_STATE_CONNECTED                          3
 
 #define NETCODE_MAX_CLIENTS         256
-#define NETCODE_MAX_PACKET_SIZE     1024
+#define NETCODE_MAX_PACKET_SIZE     1200
 
 #define NETCODE_LOG_LEVEL_NONE      0
 #define NETCODE_LOG_LEVEL_ERROR     1
