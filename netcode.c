@@ -1669,9 +1669,6 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
     if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
         return 1;
     
-    if ( sequence > replay_protection->most_recent_sequence )
-        replay_protection->most_recent_sequence = sequence;
-
     int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
 
     if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
@@ -1679,8 +1676,6 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 
     if ( replay_protection->received_packet[index] >= sequence )
         return 1;
-    
-    replay_protection->received_packet[index] = sequence;
 
     return 0;
 }
@@ -1694,10 +1689,7 @@ void netcode_replay_protection_advance_sequence( struct netcode_replay_protectio
 
     int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
 
-    if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
-    {
-        replay_protection->received_packet[index] = sequence;
-    }
+    replay_protection->received_packet[index] = sequence;
 }
 
 void * netcode_read_packet( uint8_t * buffer, 
