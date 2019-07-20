@@ -6,9 +6,8 @@
 
 It's designed for client/server games with dedicated servers, like modern first person shooters.
 
-It has the following features:
+It has the following security features:
 
-* Only authenticated clients can connect to your server.
 * Protection against man-in-the-middle attacks.
 * Protection against DDoS amplification attacks.
 * Protection against packet replay attacks.
