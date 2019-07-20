@@ -2,7 +2,7 @@
 
 # netcode.io
 
-**netcode.io** is a connection-oriented protocol built on top of UDP. 
+**netcode.io** is a connection-oriented protocol built on top of UDP. It's typically used as the foundation of a higher-level game network protocol.
 
 It's designed for use in client/server games with dedicated servers.
 
