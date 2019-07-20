@@ -13,7 +13,7 @@ It has the following security features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-netcode.io is stable and well tested having been used in AAA game projects for over 2 years now.
+netcode.io is stable and well tested having been used in AAA game projects for over 2 years.
 
 # How does it work?
 
