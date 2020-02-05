@@ -503,6 +503,31 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
     }
 }
 
+int netcode_address_is_any_address(struct netcode_address_t *a) {
+    if (a->type == NETCODE_ADDRESS_IPV4) {
+        // 0.0.0.0
+        if (a->data.ipv4[0] == 0 &&
+            a->data.ipv4[1] == 0 &&
+            a->data.ipv4[2] == 0 &&
+            a->data.ipv4[3] == 0)
+            return 1;
+
+    } else if ( a->type == NETCODE_ADDRESS_IPV6 ) {
+        // [::] aka [0:0:0:0:0:0:0:0]
+        if (a->data.ipv6[0] == 0 &&
+            a->data.ipv6[1] == 0 &&
+            a->data.ipv6[2] == 0 &&
+            a->data.ipv6[3] == 0 &&
+            a->data.ipv6[4] == 0 &&
+            a->data.ipv6[5] == 0 &&
+            a->data.ipv6[6] == 0 &&
+            a->data.ipv6[7] == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
 int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
     netcode_assert( a );
@@ -542,31 +567,6 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
     }
 
     return 1;
-}
-
-int netcode_address_is_any_address(struct netcode_address_t *a) {
-    if (a->type == NETCODE_ADDRESS_IPV4) {
-        // 0.0.0.0
-        if (a->data.ipv4[0] == 0 &&
-            a->data.ipv4[1] == 0 &&
-            a->data.ipv4[2] == 0 &&
-            a->data.ipv4[3] == 0)
-            return 1;
-
-    } else if ( a->type == NETCODE_ADDRESS_IPV6 ) {
-        // [::] aka [0:0:0:0:0:0:0:0]
-        if (a->data.ipv6[0] == 0 &&
-            a->data.ipv6[1] == 0 &&
-            a->data.ipv6[2] == 0 &&
-            a->data.ipv6[3] == 0 &&
-            a->data.ipv6[4] == 0 &&
-            a->data.ipv6[5] == 0 &&
-            a->data.ipv6[6] == 0 &&
-            a->data.ipv6[7] == 0)
-            return 1;
-    }
-
-    return 0;
 }
 
 // ----------------------------------------------------------------
