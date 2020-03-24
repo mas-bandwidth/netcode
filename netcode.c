@@ -503,6 +503,31 @@ char * netcode_address_to_string( struct netcode_address_t * address, char * buf
     }
 }
 
+int netcode_address_is_any_address(struct netcode_address_t *a) {
+    if (a->type == NETCODE_ADDRESS_IPV4) {
+        // 0.0.0.0
+        if (a->data.ipv4[0] == 0 &&
+            a->data.ipv4[1] == 0 &&
+            a->data.ipv4[2] == 0 &&
+            a->data.ipv4[3] == 0)
+            return 1;
+
+    } else if ( a->type == NETCODE_ADDRESS_IPV6 ) {
+        // [::] aka [0:0:0:0:0:0:0:0]
+        if (a->data.ipv6[0] == 0 &&
+            a->data.ipv6[1] == 0 &&
+            a->data.ipv6[2] == 0 &&
+            a->data.ipv6[3] == 0 &&
+            a->data.ipv6[4] == 0 &&
+            a->data.ipv6[5] == 0 &&
+            a->data.ipv6[6] == 0 &&
+            a->data.ipv6[7] == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
 int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b )
 {
     netcode_assert( a );
@@ -513,6 +538,10 @@ int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_
 
     if ( a->port != b->port )
         return 0;
+
+    // At this point, ports match. If either address is 0.0.0.0 or [::], then mark them as matching. These addresses are never routed, they're only used when listening.
+    if (netcode_address_is_any_address(a) || netcode_address_is_any_address(b))
+        return 1;
 
     if ( a->type == NETCODE_ADDRESS_IPV4 )
     {
@@ -3895,7 +3924,7 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
     server->config = *config;
     server->socket_holder.ipv4 = socket_ipv4;
     server->socket_holder.ipv6 = socket_ipv6;
-    server->address = server_address1;
+    server->address = server_address1.type == NETCODE_ADDRESS_IPV4 ? server->socket_holder.ipv4.address : server->socket_holder.ipv6.address;
     server->flags = 0;
     server->time = time;
     server->running = 0;
