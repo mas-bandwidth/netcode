@@ -23,7 +23,7 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 
 # Source Code
 
-This repository holds the implementation of netcode.io in C.
+This repository holds the reference implementation of netcode.io in C.
 
 Other netcode.io repositories include:
 
