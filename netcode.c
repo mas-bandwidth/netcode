@@ -5179,10 +5179,7 @@ int netcode_generate_connect_token( int num_server_addresses,
 
 void netcode_sleep( double time )
 {
-    struct timespec ts;
-    ts.tv_sec = (time_t) time;
-    ts.tv_nsec = (long) ((time - (double) ( ts.tv_sec )) * 1000000000.0);
-    nanosleep( &ts, NULL );
+    usleep( (int) ( time * 1000000 ) );
 }
 
 static uint64_t start = 0;
@@ -5208,10 +5205,7 @@ double netcode_time()
 
 void netcode_sleep( double time )
 {
-    struct timespec ts;
-    ts.tv_sec = (time_t) time;
-    ts.tv_nsec = (long) ((time - (double) ( ts.tv_sec )) * 1000000000.0);
-    nanosleep( &ts, NULL );
+    usleep( (int) ( time * 1000000 ) );
 }
 
 double netcode_time()
