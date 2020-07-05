@@ -1,8 +1,8 @@
 [![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
 
-# netcode.io
+# netcode
 
-**netcode.io** is a simple connection based protocol built on top of UDP. 
+**netcode** is a simple connection based protocol built on top of UDP. 
 
 It's designed for use in games that host dedicated servers with public IP addresses.
 
@@ -13,7 +13,7 @@ It has the following security features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-netcode.io is stable and production ready.
+netcode is stable and production ready.
 
 # How does it work?
 
@@ -23,18 +23,18 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 
 # Source Code
 
-This repository holds the reference implementation of netcode.io in C.
+This repository holds the reference implementation of netcode in C.
 
 This is the primary implementation of netcode, and is always up to date with the latest features.
 
 Other netcode.io repositories include:
 
-* [netcode.io C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
-* [netcode.io Golang implementation](https://github.com/wirepair/netcode)
-* [netcode.io Rust implementation](https://github.com/jaynus/netcode.io) (updated fork of [vvanders/netcode.io](https://github.com/vvanders/netcode.io))
-* [netcode.io for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
-* [netcode.io for UE4](https://github.com/RedpointGames/netcode.io-UE4)
-* [netcode.io browser plugin](https://github.com/RedpointGames/netcode.io-browser)
+* [netcode C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
+* [netcode Golang implementation](https://github.com/wirepair/netcode)
+* [netcode Rust implementation](https://github.com/jaynus/netcode.io) (updated fork of [vvanders/netcode.io](https://github.com/vvanders/netcode.io))
+* [netcode for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
+* [netcode for UE4](https://github.com/RedpointGames/netcode.io-UE4)
+* [netcode browser plugin](https://github.com/RedpointGames/netcode.io-browser)
 
 # Contributors
 
@@ -48,19 +48,19 @@ These people are awesome:
 * [Jérôme Leclercq](https://github.com/DrLynix) - Support for random connect token nonce
 * [Randy Gaul](https://github.com/RandyGaul) - Discovered vulnerability in replay protection
 
-Thanks for your contributions to netcode.io!
+Thanks for your contributions to netcode!
 
 # Author
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
 
-Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
+Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
 
 Glenn is the founder and CEO of Network Next. Network Next is a radically new way to link networks together, it's a new internet for games, one where networks compete on performance and price to carry your game's traffic. Check it out at https://networknext.com
 
 # Sponsors
 
-**netcode.io** was generously sponsored by:
+**netcode** was generously sponsored by:
 
 * **Gold Sponsors**
     * [Remedy Entertainment](http://www.remedygames.com/)
