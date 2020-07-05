@@ -2,9 +2,9 @@
 
 # netcode.io
 
-**netcode.io** is a connection-oriented protocol built on top of UDP. 
+**netcode.io** is a simple connection based protocol built on top of UDP. 
 
-It's designed for use in client/server games with dedicated servers.
+It's designed for use in games with client/server topology that host dedicated servers with public IP addresses.
 
 It has the following security features:
 
@@ -13,7 +13,7 @@ It has the following security features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-netcode.io has been used in several AAA game projects and is stable and mature.
+netcode.io is stable and production ready. It's used by several AAA game studios as the foundation of their multiplayer game.
 
 # How does it work?
 
@@ -24,6 +24,8 @@ For a complete technical specification, read the [netcode 1.02 standard](https:/
 # Source Code
 
 This repository holds the reference implementation of netcode.io in C.
+
+This is the primary implementation of netcode, and is always up to date with the latest features.
 
 Other netcode.io repositories include:
 
@@ -52,9 +54,9 @@ Thanks for your contributions to netcode.io!
 
 The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
 
-Glenn wrote an article series about the development of this library called [Building a Game Network Protocol](https://gafferongames.com/categories/building-a-game-network-protocol).
-
 Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable.io](https://github.com/networkprotocol/reliable.io)
+
+Glenn is the founder and CEO of Network Next. Network Next is a radically new way to link networks together, it's a new internet for games, one where networks compete on performance and price to carry your game's traffic. Check it out at https://networknext.com
 
 # Sponsors
 
