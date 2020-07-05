@@ -13,7 +13,9 @@ It has the following security features:
 * Protection against packet replay attacks.
 * Protection against zombie clients.
 
-netcode.io is stable and production ready. It's used by several AAA game studios as the foundation of their multiplayer game.
+netcode.io is used by several AAA game studios as the foundation of their network code. 
+
+It's stable and production ready.
 
 # How does it work?
 
