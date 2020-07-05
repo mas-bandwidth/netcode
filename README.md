@@ -10,7 +10,7 @@ It has the following features:
 
 * Encrypted and signed packets
 * Secure client connection with connect tokens
-* Connection based protocol with multiplexing and demultiplexing
+* Connection based protocol with multiplexing and demultiplexing on a single UDP socket
 
 netcode protect your game server from the following common attacks:
 
