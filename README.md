@@ -6,12 +6,18 @@
 
 It's designed for use in games that host dedicated servers with public IP addresses.
 
-It has the following security features:
+It has the following features:
 
-* Protection against man-in-the-middle attacks.
-* Protection against DDoS amplification attacks.
-* Protection against packet replay attacks.
-* Protection against zombie clients.
+* Encrypted and signed packets
+* Secure client connection with connect tokens
+* Connection based protocol with multiplexing and demultiplexing
+
+netcode protect your game server from the following common attacks:
+
+* Zombie clients
+* Man in the middle
+* DDoS amplification
+* Packet replay attacks
 
 netcode is stable and production ready.
 
