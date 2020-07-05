@@ -4,7 +4,7 @@
 
 **netcode.io** is a simple connection based protocol built on top of UDP. 
 
-It's designed for use in games with client/server topology that host dedicated servers with public IP addresses.
+It's designed for use in games that host dedicated servers with public IP addresses.
 
 It has the following security features:
 
