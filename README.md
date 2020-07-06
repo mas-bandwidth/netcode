@@ -12,7 +12,7 @@ It has the following features:
 * Secure client connection with connect tokens
 * Connection based protocol built on top of UDP
 
-netcode protects your game server from the following common attacks:
+and protects your game server from the following attacks:
 
 * Zombie clients
 * Man in the middle
