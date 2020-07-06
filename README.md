@@ -2,9 +2,7 @@
 
 # netcode
 
-**netcode** is a simple connection based protocol built on top of UDP. 
-
-It's designed for use in games that host dedicated servers with public IP addresses.
+**netcode** is a simple connection based client/server protocol built on top of UDP. 
 
 It has the following features:
 
