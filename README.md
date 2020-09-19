@@ -60,7 +60,7 @@ The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennf
 
 Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
 
-Glenn is now the founder and CEO of Network Next. Network Next is a radically new way to link networks together, it's a new internet for games, one where networks compete on performance and price to carry your game's traffic. Check it out at https://networknext.com
+Glenn is now the founder and CEO of Network Next. Network Next is a radically new way to link networks together. A new internet one where networks compete on performance and price to carry your traffic. Check it out at https://networknext.com
 
 # Sponsors
 
