@@ -638,10 +638,6 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     s->address = *address;
 
-    // todo
-    char buffer[1024];
-    printf( "socket address: %s\n", netcode_address_to_string( address, buffer ) );
-
     // create socket
 
     s->handle = socket( ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET, SOCK_DGRAM, IPPROTO_UDP );
