@@ -30,9 +30,9 @@
 #include <signal.h>
 #include <inttypes.h>
 
-#define MAX_SERVERS 64
-#define MAX_CLIENTS 1024
-#define SERVER_BASE_PORT 40000
+#define MAX_SERVERS 2
+#define MAX_CLIENTS 64
+#define SERVER_BASE_PORT 20000
 #define CONNECT_TOKEN_EXPIRY 45
 #define CONNECT_TOKEN_TIMEOUT 5
 #define PROTOCOL_ID 0x1122334455667788
@@ -119,6 +119,7 @@ void soak_iteration( double time )
 {
     int i;
 
+    /*
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = PROTOCOL_ID;
@@ -147,6 +148,7 @@ void soak_iteration( double time )
             server[i] = NULL;
         }
     }
+    */
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
     {
@@ -155,17 +157,26 @@ void soak_iteration( double time )
             struct netcode_client_config_t client_config;
             netcode_default_client_config( &client_config );
             client[i] = netcode_client_create( "0.0.0.0", &client_config, time );
-            printf( "created client %p\n", client[i] );
+            if ( client[i] != NULL )
+            {
+                printf( "created client %d: %p\n", i, client[i] );
+            }
+            else
+            {
+                printf( "failed to create client\n" );
+                exit( 1 );
+            }
         }
 
         if ( client[i] != NULL && random_int( 0, 1000 ) == 0 )
         {
-            printf( "destroy client %p\n", client[i] );
+            printf( "destroy client %d: %p\n", i, client[i] );
             netcode_client_destroy( client[i] );
             client[i] = NULL;
         }
     }
 
+    /*
     for ( i = 0; i < MAX_SERVERS; ++i )
     {
         if ( server[i] != NULL )
@@ -212,9 +223,9 @@ void soak_iteration( double time )
             }
 
             netcode_server_update( server[i], time );
-        }
-        
+        }  
     }
+    */
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
     {
