@@ -171,7 +171,7 @@ The first packet type _connection request packet_ (0) is not encrypted and has t
     [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
-    [connect token sequence number] (8 bytes)
+    [connect token nonce] (24 bytes)
     [encrypted private connect token data] (1024 bytes)
     
 All other packet types are encrypted. 
@@ -407,7 +407,7 @@ When a server receives a connection request packet from a client it contains the
     [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
-    [connect token sequence number] (8 bytes)
+    [connect token nonce] (24 bytes)
     [encrypted private connect token data] (1024 bytes)
 
 This packet is not encrypted, however:
@@ -418,7 +418,7 @@ This packet is not encrypted, however:
 
 The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
-* If the packet is not the expected size of 1062 bytes, ignore the packet.
+* If the packet is not the expected size of 1078 bytes, ignore the packet.
 
 * If the version info in the packet doesn't match "NETCODE 1.02" (13 bytes, with null terminator), ignore the packet.
 
