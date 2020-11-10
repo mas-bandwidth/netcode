@@ -38,7 +38,7 @@ Other netcode.io repositories include:
 * [netcode Rust implementation](https://github.com/jaynus/netcode.io) (updated fork of [vvanders/netcode.io](https://github.com/vvanders/netcode.io))
 * [netcode for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode for UE4](https://github.com/RedpointGames/netcode.io-UE4)
-* [netcode browser plugin](https://github.com/RedpointGames/netcode.io-browser)
+* [netcode for Typescript](https://github.com/bennychen/netcode.io-typescript)
 
 # Contributors
 
@@ -47,10 +47,10 @@ These people are awesome:
 * [Val Vanders](https://github.com/vvanders) - Rust Implementation
 * [Walter Pearce](https://github.com/jaynus) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
-* [June Rhodes](https://github.com/hach-que) - C# bindings, browser support, UE4 integration
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation
 * [Jérôme Leclercq](https://github.com/DrLynix) - Support for random connect token nonce
 * [Randy Gaul](https://github.com/RandyGaul) - Discovered vulnerability in replay protection
+* [Benny Chen](https://github.com/bennychen) - Typescript Implementation
 
 Thanks for your contributions to netcode!
 
