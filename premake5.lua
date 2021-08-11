@@ -27,10 +27,11 @@ solution "netcode"
     configuration "Debug"
         symbols "On"
         links { debug_libs }
+        defines { "NETCODE_DEBUG" }
     configuration "Release"
         symbols "Off"
         optimize "Speed"
-        defines { "NDEBUG" }
+        defines { "NETCODE_RELEASE" }
         links { release_libs }
     configuration { "gmake" }
         linkoptions { "-lm" }    

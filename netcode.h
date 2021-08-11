@@ -27,6 +27,16 @@
 
 #include <stdint.h>
 
+#if !defined(NETCODE_DEBUG) && !defined(NETCODE_RELEASE)
+#if defined(NDEBUG)
+#define NETCODE_RELEASE
+#else
+#define NETCODE_DEBUG
+#endif
+#elif defined(NETCODE_DEBUG) && defined(NETCODE_RELEASE)
+#error Can only define one of debug & release
+#endif
+
 #if    defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
     || defined(_M_X64)  || defined(__x86_64__)                    \
