@@ -1671,7 +1671,7 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
     
     int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
 
-    if ( replay_protection->received_packet[index] == 0xFFFFFFFFFFFFFFFFLL )
+    if ( replay_protection->received_packet[index] == UINT64_MAX )
         return 0;
 
     if ( replay_protection->received_packet[index] >= sequence )
