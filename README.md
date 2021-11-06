@@ -48,7 +48,7 @@ These people are awesome:
 * [Walter Pearce](https://github.com/jaynus) - Rust Implementation
 * [Isaac Dawson](https://github.com/wirepair) - Golang Implementation
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation
-* [Jérôme Leclercq](https://github.com/DrLynix) - Support for random connect token nonce
+* [Jérôme Leclercq](https://github.com/SirLynix) - Support for random connect token nonce
 * [Randy Gaul](https://github.com/RandyGaul) - Discovered vulnerability in replay protection
 * [Benny Chen](https://github.com/bennychen) - Typescript Implementation
 
