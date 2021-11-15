@@ -1,4 +1,4 @@
-[![Travis Build Status](https://travis-ci.org/networkprotocol/netcode.io.svg?branch=master)](https://travis-ci.org/networkprotocol/netcode.io)
+[![Build status](https://github.com/networkprotocol/netcode/workflows/CI/badge.svg)](https://github.com/networkprotocol/netcode/actions?query=workflow%3ACI)
 
 # netcode
 
