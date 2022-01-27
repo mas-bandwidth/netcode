@@ -23,7 +23,6 @@ solution "netcode"
     warnings "Extra"
     staticruntime "On"
     floatingpoint "Fast"
-    vectorextensions "SSE2"
     configuration "Debug"
         symbols "On"
         links { debug_libs }

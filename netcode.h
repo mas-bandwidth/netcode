@@ -43,6 +43,7 @@
     || defined(alpha)   || defined(__alpha) || defined(__alpha__) \
     || defined(_M_ALPHA)                                          \
     || defined(ARM)     || defined(_ARM)    || defined(__arm__)   \
+    || defined(__aarch64__) 								      \
     || defined(WIN32)   || defined(_WIN32)  || defined(__WIN32__) \
     || defined(_WIN32_WCE) || defined(__NT__)                     \
     || defined(__MIPSEL__)
