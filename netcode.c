@@ -3497,6 +3497,7 @@ struct netcode_encryption_manager_t
     double expire_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     double last_access_time[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     struct netcode_address_t address[NETCODE_MAX_ENCRYPTION_MAPPINGS];
+    int client_index[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     uint8_t send_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
     uint8_t receive_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
 };
@@ -3512,6 +3513,7 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
     int i;
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
+        encryption_manager->client_index[i] = -1;
         encryption_manager->expire_time[i] = -1.0;
         encryption_manager->last_access_time[i] = -1000.0;
         memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
@@ -3552,7 +3554,8 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
 
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; ++i )
     {
-        if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || netcode_encryption_manager_entry_expired( encryption_manager, i, time ) )
+        if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || 
+        	( netcode_encryption_manager_entry_expired( encryption_manager, i, time ) && encryption_manager->client_index[i] == -1 ) )
         {
             encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
@@ -3590,7 +3593,7 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                 int index = i - 1;
                 while ( index >= 0 )
                 {
-                    if ( !netcode_encryption_manager_entry_expired( encryption_manager, index, time ) )
+                    if ( !netcode_encryption_manager_entry_expired( encryption_manager, index, time ) || encryption_manager->client_index[index] != -1 )
                     {
                         break;
                     }
@@ -4070,6 +4073,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->client_connected[client_index] );
     netcode_assert( !server->client_loopback[client_index] );
+    netcode_assert( server->encryption_manager.client_index[server->client_encryption_index[client_index]] == client_index );
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected client %d\n", client_index );
 
@@ -4105,6 +4109,8 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     netcode_packet_queue_clear( &server->client_packet_queue[client_index] );
 
     netcode_replay_protection_reset( &server->client_replay_protection[client_index] );
+
+    server->encryption_manager.client_index[server->client_encryption_index[client_index]] = -1;
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
 
@@ -4346,6 +4352,7 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     netcode_assert( address );
     netcode_assert( encryption_index != -1 );
     netcode_assert( user_data );
+    netcode_assert( server->encryption_manager.client_index[encryption_index] == -1 );
 
     server->num_connected_clients++;
 
@@ -4354,6 +4361,8 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     netcode_assert( server->client_connected[client_index] == 0 );
 
     netcode_encryption_manager_set_expire_time( &server->encryption_manager, encryption_index, -1.0 );
+    
+    server->encryption_manager.client_index[encryption_index] = client_index;
 
     server->client_connected[client_index] = 1;
     server->client_timeout[client_index] = timeout_seconds;
@@ -4753,7 +4762,6 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "server timed out client %d\n", i );
             netcode_server_disconnect_client_internal( server, i, 0 );
-            return;
         }
     }
 }
@@ -8946,3 +8954,4 @@ void netcode_test()
 }
 
 #endif // #if NETCODE_ENABLE_TESTS
+
