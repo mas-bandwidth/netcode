@@ -111,7 +111,7 @@ void netcode_printf( int level, NETCODE_CONST char * format, ... )
     va_list args;
     va_start( args, format );
     char buffer[4*1024];
-    vsprintf( buffer, format, args );
+    vsnprintf( buffer, sizeof(buffer), format, args );
     printf_function( "%s", buffer );
     va_end( args );
 }
@@ -7265,7 +7265,7 @@ void test_client_server_multiple_clients()
         for ( j = 0; j < max_clients[i]; ++j )
         {
             char client_address[NETCODE_MAX_ADDRESS_STRING_LENGTH];
-            sprintf( client_address, "[::]:%d", 50000 + j );
+            snprintf( client_address, sizeof(client_address), "[::]:%d", 50000 + j );
 
             struct netcode_client_config_t client_config;
             netcode_default_client_config( &client_config );
