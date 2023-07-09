@@ -56,11 +56,9 @@ Thanks for your contributions to netcode!
 
 # Author
 
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler).
+The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler). He's a veteral game developer with netcode he wrote being used in many games, including Titanfall and Apex Legends!
 
 Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
-
-Glenn is now the founder and CEO of Network Next. Network Next is a radically new way to link networks together. A new internet where networks compete on performance and price to carry your traffic. Check it out at https://networknext.com
 
 # Sponsors
 
@@ -73,6 +71,7 @@ Glenn is now the founder and CEO of Network Next. Network Next is a radically ne
 * **Silver Sponsors**
     * [Moon Studios](http://www.oriblindforest.com/#!moon-3/)
     * [The Network Protocol Company](http://www.thenetworkprotocolcompany.com)
+    * [Mas Bandwidth LLC](http://mas-bandwidth.com)
     
 * **Bronze Sponsors**
     * [Kite & Lightning](http://kiteandlightning.la/)
