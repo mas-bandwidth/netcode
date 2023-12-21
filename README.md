@@ -57,7 +57,7 @@ Thanks for your contributions to netcode!
 
 # Author
 
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler). He's a veteral game developer with netcode he wrote being used in many games, including Titanfall and Apex Legends!
+The author of this library is Glenn Fiedler.
 
 Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
 
