@@ -10,7 +10,6 @@ end
 solution "netcode"
     kind "ConsoleApp"
     language "C"
-    platforms { "x64" }
     configurations { "Debug", "Release" }
     if os.istarget "windows" then
         includedirs { ".", "./windows" }
@@ -74,7 +73,7 @@ else
         trigger     = "test",
         description = "Build and run all unit tests",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 test" then
                 os.execute "./bin/test"
             end
@@ -86,7 +85,7 @@ else
         trigger     = "soak",
         description = "Build and run soak test",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 soak" then
                 os.execute "./bin/soak"
             end
@@ -98,7 +97,7 @@ else
         trigger     = "profile",
         description = "Build and run profile tet",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 profile" then
                 os.execute "./bin/profile"
             end
@@ -110,7 +109,7 @@ else
         trigger     = "client",
         description = "Build and run the client",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 client" then
                 os.execute "./bin/client"
             end
@@ -122,7 +121,7 @@ else
         trigger     = "server",
         description = "Build and run the server",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 server" then
                 os.execute "./bin/server"
             end
@@ -134,7 +133,7 @@ else
         trigger     = "client_server",
         description = "Build and run the client/server testbed",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 client_server" then
                 os.execute "./bin/client_server"
             end
@@ -165,7 +164,7 @@ else
         trigger     = "stress",
         description = "Launch 256 client instances to stress test the server",
         execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake2"
+            os.execute "test ! -e Makefile && premake5 gmake"
             if os.execute "make -j32 client" then
                 for i = 0, 255 do
                     os.execute "./bin/client &"
@@ -188,7 +187,7 @@ else
         trigger     = "scan-build",
         description = "Run clang scan-build over the project",
         execute = function ()
-            os.execute "premake5 clean && premake5 gmake2 && scan-build make all -j32"
+            os.execute "premake5 clean && premake5 gmake && scan-build make all -j32"
         end
     }
 
