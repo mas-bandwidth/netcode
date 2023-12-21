@@ -23,17 +23,15 @@ solution "netcode"
     warnings "Extra"
     staticruntime "On"
     floatingpoint "Fast"
-    configuration "Debug"
+    filter "configurations:Debug"
         symbols "On"
         links { debug_libs }
         defines { "NETCODE_DEBUG" }
-    configuration "Release"
+    filter "configurations:Release"
         symbols "Off"
         optimize "Speed"
         defines { "NETCODE_RELEASE" }
         links { release_libs }
-    configuration { "gmake2" }
-        linkoptions { "-lm" }    
 
 project "test"
     files { "test.cpp" }
@@ -66,8 +64,6 @@ if os.ishost "windows" then
             os.execute "start netcode.sln"
         end
     }
-
-    -- todo: create shortcuts here too for windows for consistency
 
 else
 
