@@ -171,24 +171,24 @@ _crypto_stream_chacha20_pick_best_implementation(void)
 #if defined(HAVE_AVX2INTRIN_H) && defined(HAVE_EMMINTRIN_H) && \
     defined(HAVE_TMMINTRIN_H) && defined(HAVE_SMMINTRIN_H)
     if (sodium_runtime_has_avx2()) {
-        #if NEXT_CRYPTO_LOGS
+        #if NETCODE_CRYPTO_LOGS
         printf( "chacha20 -> avx2\n" );
-        #endif // #if NEXT_CRYPTO_LOGS
+        #endif // #if NETCODE_CRYPTO_LOGS
         implementation = &crypto_stream_chacha20_dolbeau_avx2_implementation;
         return 0;
     }
 #endif
 #if defined(HAVE_EMMINTRIN_H) && defined(HAVE_TMMINTRIN_H)
     if (sodium_runtime_has_ssse3()) {
-        #if NEXT_CRYPTO_LOGS
+        #if NETCODE_CRYPTO_LOGS
         printf( "chacha20 -> ssse3\n" );
-        #endif // #if NEXT_CRYPTO_LOGS
+        #endif // #if NETCODE_CRYPTO_LOGS
         implementation = &crypto_stream_chacha20_dolbeau_ssse3_implementation;
         return 0;
     }
 #endif
-    #if NEXT_CRYPTO_LOGS
+    #if NETCODE_CRYPTO_LOGS
     printf( "chacha20 -> ref\n" );
-    #endif // #if NEXT_CRYPTO_LOGS
+    #endif // #if NETCODE_CRYPTO_LOGS
     return 0;
 }

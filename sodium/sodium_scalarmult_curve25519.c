@@ -54,15 +54,15 @@ _crypto_scalarmult_curve25519_pick_best_implementation(void)
 
 #ifdef HAVE_AVX_ASM
     if (sodium_runtime_has_avx()) {
-        #if NEXT_CRYPTO_LOGS
+        #if NETCODE_CRYPTO_LOGS
         printf( "curve25519 -> avx\n" );
-        #endif // #if NEXT_CRYPTO_LOGS
+        #endif // #if NETCODE_CRYPTO_LOGS
         implementation = &crypto_scalarmult_curve25519_sandy2x_implementation;
         return 0;
     }
 #endif
-    #if NEXT_CRYPTO_LOGS
+    #if NETCODE_CRYPTO_LOGS
     printf( "curve25519 -> ref\n" );
-    #endif // #if NEXT_CRYPTO_LOGS
+    #endif // #if NETCODE_CRYPTO_LOGS
     return 0;
 }

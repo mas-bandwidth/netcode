@@ -1,4 +1,4 @@
-#ifdef NEXT_X64
+#ifdef NETCODE_X64
 
 .text
 .p2align 5

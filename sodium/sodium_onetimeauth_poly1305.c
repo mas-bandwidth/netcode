@@ -83,15 +83,15 @@ _crypto_onetimeauth_poly1305_pick_best_implementation(void)
     implementation = &crypto_onetimeauth_poly1305_donna_implementation;
 #if defined(HAVE_TI_MODE) && defined(HAVE_EMMINTRIN_H)
     if (sodium_runtime_has_sse2()) {
-        #if NEXT_CRYPTO_LOGS
+        #if NETCODE_CRYPTO_LOGS
         printf( "poly1305 -> sse3\n" );
-        #endif // #if NEXT_CRYPTO_LOGS
+        #endif // #if NETCODE_CRYPTO_LOGS
         implementation = &crypto_onetimeauth_poly1305_sse2_implementation;
         return 0;
     }
 #endif
-    #if NEXT_CRYPTO_LOGS
+    #if NETCODE_CRYPTO_LOGS
     printf( "poly1305 -> ref\n" );
-    #endif // #if NEXT_CRYPTO_LOGS
+    #endif // #if NETCODE_CRYPTO_LOGS
     return 0;
 }

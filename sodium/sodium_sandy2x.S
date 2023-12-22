@@ -1,5 +1,5 @@
 
-#ifdef NEXT_AVX
+#ifdef NETCODE_AVX
 
 #define IN_SANDY2X
 

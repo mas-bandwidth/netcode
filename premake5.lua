@@ -1,54 +1,57 @@
 
-if os.istarget "windows" then
-    debug_libs = { "sodium-debug" }
-    release_libs = { "sodium-release" }
-else
-    debug_libs = { "sodium" }
-    release_libs = debug_libs
-end
-
 solution "netcode"
     kind "ConsoleApp"
     language "C"
     configurations { "Debug", "Release" }
-    if os.istarget "windows" then
-        includedirs { ".", "./windows" }
-        libdirs { "./windows" }
-    else
-        includedirs { ".", "/usr/local/include" }       -- for clang scan-build only. for some reason it needs this to work =p
-        targetdir "bin/"  
-    end
+    includedirs { "sodium" }
     rtti "Off"
     warnings "Extra"
     staticruntime "On"
     floatingpoint "Fast"
     filter "configurations:Debug"
         symbols "On"
-        links { debug_libs }
         defines { "NETCODE_DEBUG" }
     filter "configurations:Release"
         symbols "Off"
         optimize "Speed"
         defines { "NETCODE_RELEASE" }
-        links { release_libs }
+
+project "sodium"
+    kind "StaticLib"
+    files {
+        "sodium/**.c",
+        "sodium/**.h",
+    }
+    filter { "system:not windows", "platforms:*x64 or *avx or *avx2" }
+        files {
+            "sodium/**.S"
+        }
+    filter { "action:gmake" }
+        buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
 
 project "test"
     files { "test.cpp" }
+    links { "sodium" }
 
 project "soak"
     files { "soak.c", "netcode.c" }
+    links { "sodium" }
 
 project "profile"
     files { "profile.c", "netcode.c" }
+    links { "sodium" }
 
 project "client"
     files { "client.c", "netcode.c" }
+    links { "sodium" }
 
 project "server"
     files { "server.c", "netcode.c" }
+    links { "sodium" }
 
 project "client_server"
     files { "client_server.c", "netcode.c" }
+    links { "sodium" }
 
 if os.ishost "windows" then
 
