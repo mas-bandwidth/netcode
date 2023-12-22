@@ -7211,7 +7211,7 @@ void test_client_server_keep_alive()
 
     // pump the client and server long enough that they would timeout without keep alive packets
 
-    int num_iterations = (int) ceil( 1.25f * TEST_TIMEOUT_SECONDS / delta_time );
+    int num_iterations = (int) ( 1.25f * TEST_TIMEOUT_SECONDS / delta_time ) + 1;
 
     int i;
     for ( i = 0; i < num_iterations; ++i )
