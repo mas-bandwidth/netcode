@@ -51,7 +51,8 @@ These people are awesome:
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation
 * [Jérôme Leclercq](https://github.com/SirLynix) - Support for random connect token nonce
 * [Randy Gaul](https://github.com/RandyGaul) - Discovered vulnerability in replay protection
-* [Benny Chen](https://github.com/bennychen) - Typescript Implementation, Rust implementation
+* [Benny Chen](https://github.com/bennychen) - Typescript Implementation
+* [Benny Nazimov](https://github.com/benny-n) - Rust implementation
 
 Thanks for your contributions to netcode!
 
