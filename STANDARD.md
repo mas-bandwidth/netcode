@@ -1,18 +1,18 @@
-# netcode.io 1.02
+# netcode 1.02
 
-**netcode.io** is a simple protocol for creating secure client/server connections over UDP.
+**netcode** is a simple protocol for creating secure client/server connections over UDP.
 
 This document describes the standard for this protocol so people can create their own implementations.
 
 ## Architecture
 
-There are three main components in a netcode.io-based architecture:
+There are three main components in the netcode architecture:
 
-1. The web backend
+1. The backend
 2. Dedicated servers
 3. Clients
 
-The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode.io protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running in data centers or the cloud.
+The web backend is a typical web server, for example nginx, which authenticates clients and provides a REST API. Clients are endpoints running the netcode protocol that want to connect to dedicated server instances. Dedicated servers are instances of the server-side portion of the game or application running in data centers or the cloud.
 
 The sequence of operations for a client connect are:
 
@@ -25,7 +25,7 @@ The sequence of operations for a client connect are:
 
 ## General Conventions
 
-**netcode.io** is a binary protocol. 
+**netcode** is a binary protocol. 
 
 All data is written in little-endian byte order unless otherwise specified.
 
@@ -155,7 +155,7 @@ This is referred to as the _encrypted challenge token data_.
 
 ## Packets
 
-**netcode.io** has the following packets:
+**netcode** has the following packets:
 
 * _connection request packet_ (0)
 * _connection denied packet_ (1)
@@ -283,7 +283,7 @@ The following steps are taken when reading an encrypted packet, in this exact or
 
 Replay protection stops an attacker from recording a valid packet and replaying it back at a later time in an attempt to break the protocol.
 
-To enable replay protection, netcode.io does the following:
+To enable replay protection, netcode does the following:
 
 * Encrypted packets are sent with 64 bit sequence numbers that start at zero and increase with each packet sent.
 
@@ -370,7 +370,7 @@ This length of time should be determined by subtracting the create timestamp of 
 
 ### Connected
 
-While _connected_ the client buffers _connection payload packets_ received from the server so their payload data can be delivered to the client application as netcode.io packets.
+While _connected_ the client buffers _connection payload packets_ received from the server so their payload data can be delivered to the client application as netcode packets.
 
 While _connected_ the client application may send _connection payload packets_ to the server. In the absence of _connection payload packets_ sent by the client application, the client generates and sends _connection keep-alive packets_ to the server at some rate, like 10HZ.
 
@@ -491,7 +491,7 @@ These packets include:
 * _connection payload packet_
 * _connection disconnect packet_
 
-The server buffers _connection payload packets_ received from connected clients client so their payload data can be delivered to the server application as netcode.io packets.
+The server buffers _connection payload packets_ received from connected clients client so their payload data can be delivered to the server application as netcode packets.
 
 The server application may also send _connection payload packets_ to connected clients.
 

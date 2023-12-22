@@ -23,7 +23,7 @@ netcode is stable and production ready.
 
 Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
 
-For a complete technical specification, read the [netcode 1.02 standard](https://github.com/networkprotocol/netcode.io/blob/master/STANDARD.md).
+For a complete technical specification, read the [netcode 1.02 standard](STANDARD.md).
 
 # Source Code
 
@@ -31,7 +31,7 @@ This repository holds the reference implementation of netcode in C.
 
 This is the primary implementation of netcode, and is always up to date with the latest features.
 
-Other netcode.io repositories include:
+Other netcode implementations include:
 
 * [netcode C# implementation](https://github.com/KillaMaaki/Netcode.IO.NET)
 * [netcode Golang implementation](https://github.com/wirepair/netcode)

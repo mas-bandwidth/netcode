@@ -1,5 +1,5 @@
 /*
-    netcode.io reference implementation
+    netcode reference implementation
 
     Copyright © 2017 - 2023, Mas Bandwidth LLC
 
@@ -82,7 +82,7 @@ static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETC
     exit( 1 );
 }
 
-static int log_level = 0;
+static int log_level;
 static int (*printf_function)( NETCODE_CONST char *, ... ) = ( int (*)( NETCODE_CONST char *, ... ) ) printf;
 void (*netcode_assert_function)( NETCODE_CONST char *, NETCODE_CONST char *, NETCODE_CONST char * file, int line ) = netcode_default_assert_handler;
 
@@ -174,7 +174,7 @@ void netcode_default_free_function( void * context, void * pointer )
 
 #else
 
-    #error netcode.io - unknown platform!
+    #error netcode - unknown platform!
 
 #endif
 
@@ -840,8 +840,30 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     {
         int error = WSAGetLastError();
 
-        if ( error == WSAEWOULDBLOCK || error == WSAECONNRESET )
+        if ( error == WSAEWOULDBLOCK )
             return 0;
+
+        /*
+            IMPORTANT: This happens on windows because a previous sendto on this socket went to an address + port
+            belonging to a socket that was shut down forcefully (eg. OS closed the socket). 
+
+            You can trigger this behavior by commenting out the client signal handler in client.c and then
+            repeatedly connecting to the server.
+
+            What happens is that we get the ICMP port unreacable message back, and that triggers the WSACONNRESET
+            on the next sendto. This behavior is windows specific.
+
+            If we just return 0, we will stop receiving packets for this frame, and this will streeeeeetch out packets
+            and cause problems where clients can't connect or receive packets because each time we see the WSACONNRESET we
+            stop processing packets for that frame.
+
+            The solution is to just ignore the WSACONNRESET error, and call recvfrom again...
+        */
+        
+        if ( error == WSAECONNRESET )
+        {
+            return netcode_socket_receive_packet( socket, from, packet_data, max_packet_size );
+        }
 
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
 

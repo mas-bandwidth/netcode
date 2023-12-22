@@ -57,7 +57,7 @@ if os.ishost "windows" then
     newaction
     {
         trigger     = "solution",
-        description = "Create and open the netcode.io solution",
+        description = "Create and open the netcode solution",
         execute = function ()
             os.execute "premake5 vs2019"
             os.execute "start netcode.sln"
@@ -143,10 +143,10 @@ else
     newaction
     {
         trigger     = "docker",
-        description = "Build and run a netcode.io server inside a docker container",
+        description = "Build and run a netcode server inside a docker container",
         execute = function ()
             os.execute "docker run --rm --privileged alpine hwclock -s" -- workaround for clock getting out of sync on macos. see https://docs.docker.com/docker-for-mac/troubleshoot/#issues
-            os.execute "rm -rf docker/netcode.io && mkdir -p docker/netcode.io && cp *.h docker/netcode.io && cp *.c docker/netcode.io && cp *.cpp docker/netcode.io && cp premake5.lua docker/netcode.io && cd docker && docker build -t \"networkprotocol:netcode.io-server\" . && rm -rf netcode.io && docker run -ti -p 40000:40000/udp networkprotocol:netcode.io-server"
+            os.execute "rm -rf docker/netcode && mkdir -p docker/netcode && cp *.h docker/netcode && cp *.c docker/netcode && cp *.cpp docker/netcode && cp premake5.lua docker/netcode && cd docker && docker build -t \"networkprotocol:netcode-server\" . && rm -rf netcode && docker run -ti -p 40000:40000/udp networkprotocol:netcode-server"
         end
     }
 
@@ -155,7 +155,7 @@ else
         trigger     = "valgrind",
         description = "Run valgrind over tests inside docker",
         execute = function ()
-            os.execute "rm -rf valgrind/netcode.io && mkdir -p valgrind/netcode.io && cp *.h valgrind/netcode.io && cp *.c valgrind/netcode.io && cp *.cpp valgrind/netcode.io && cp premake5.lua valgrind/netcode.io && cd valgrind && docker build -t \"networkprotocol:netcode.io-valgrind\" . && rm -rf netcode.io && docker run -ti networkprotocol:netcode.io-valgrind"
+            os.execute "rm -rf valgrind/netcode && mkdir -p valgrind/netcode && cp *.h valgrind/netcode && cp *.c valgrind/netcode && cp *.cpp valgrind/netcode && cp premake5.lua valgrind/netcode && cd valgrind && docker build -t \"networkprotocol:netcode-valgrind\" . && rm -rf netcode && docker run -ti networkprotocol:netcode-valgrind"
         end
     }
 
@@ -240,8 +240,8 @@ newaction
             "cov-int",
             "docs",
             "xml",
-            "docker/netcode.io",
-            "valgrind/netcode.io"
+            "docker/netcode",
+            "valgrind/netcode"
         }
 
         for i,v in ipairs( directories_to_delete ) do

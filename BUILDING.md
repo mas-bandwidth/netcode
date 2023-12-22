@@ -1,5 +1,5 @@
-How to build netcode.io
-=======================
+How to build netcode
+====================
 
 ## Building on Windows
 
@@ -7,7 +7,7 @@ Download [premake 5](https://premake.github.io/download.html) and copy the **pre
 
 You need Visual Studio to build the source code. If you don't have Visual Studio 2019 you can [download the community edition for free](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16).
 
-Once you have Visual Studio installed, go to the command line under the netcode.io/c directory and type:
+Once you have Visual Studio installed, go to the command line under the netcode directory and type:
 
     premake5 solution
 
@@ -27,9 +27,9 @@ If you don't have Brew, you can install it from <http://brew.sh>.
 
 On Linux, depending on your particular distribution there may be prebuilt packages for libsodium, or you may have to build from source from here [libsodium](https://github.com/jedisct1/libsodium/releases).
 
-Now go to the command line under the netcode.io/c directory and enter:
+Now go to the command line under the netcode directory and enter:
 
-    premake5 gmake2
+    premake5 gmake
 
 Which creates makefiles which you can use to build the source via:
 
@@ -39,13 +39,13 @@ Alternatively, you can use the following shortcuts to build and run test program
 
     premake5 test           // build and run unit tests
 
-    premake5 server         // build run a netcode.io server on localhost on UDP port 40000
+    premake5 server         // build run a netcode server on localhost on UDP port 40000
 
-    premake5 client         // build and run a netcode.io client that connects to the server running on localhost 
+    premake5 client         // build and run a netcode client that connects to the server running on localhost 
 
-    premake5 stress         // connect 256 netcode.io clients to a running server as a stress test
+    premake5 stress         // connect 256 netcode clients to a running server as a stress test
    
-If you have questions please create an issue at http://www.netcode.io and I'll do my best to help you out.
+If you have questions please create an issue at https://github.com/networkprotocol/netcode and I'll do my best to help you out.
 
 cheers
 

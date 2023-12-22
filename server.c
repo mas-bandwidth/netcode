@@ -1,5 +1,5 @@
 /*
-    netcode.io reference implementation
+    netcode reference implementation
 
     Copyright © 2017 - 2023, Mas Bandwidth LLC
 
@@ -49,11 +49,11 @@ int main( int argc, char ** argv )
 
     if ( netcode_init() != NETCODE_OK )
     {
-        printf( "error: failed to initialize netcode.io\n" );
+        printf( "error: failed to initialize netcode\n" );
         return 1;
     }
 
-    netcode_log_level( NETCODE_LOG_LEVEL_INFO );
+    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG ); // todo INFO );
 
     double time = 0.0;
     double delta_time = 1.0 / 60.0;
