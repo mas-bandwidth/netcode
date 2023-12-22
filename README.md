@@ -51,13 +51,14 @@ These people are awesome:
 * [Alan Stagner](https://github.com/KillaMaaki) - Unity integration, C# implementation
 * [Jérôme Leclercq](https://github.com/SirLynix) - Support for random connect token nonce
 * [Randy Gaul](https://github.com/RandyGaul) - Discovered vulnerability in replay protection
-* [Benny Chen](https://github.com/bennychen) - Typescript Implementation, Rust implementation
+* [Benny Chen](https://github.com/bennychen) - Typescript Implementation
+* [Benny Nazimov](https://github.com/benny-n) - Rust implementation
 
 Thanks for your contributions to netcode!
 
 # Author
 
-The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glennfiedler). He's a veteral game developer with netcode he wrote being used in many games, including Titanfall and Apex Legends!
+The author of this library is Glenn Fiedler.
 
 Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
 
