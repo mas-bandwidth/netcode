@@ -64,5 +64,5 @@ jobs:
     # Run the tests with Powershell syntax
     - name: Test (vs2019)
       if: runner.os == 'Windows'
-      run: "& ./bin/${{ matrix.configuration }}/test.exe"
+      run: "& ./bin/test.exe"
     
