@@ -3,9 +3,9 @@ How to build netcode
 
 ## Building on Windows
 
-Download [premake 5](https://premake.github.io/download.html) and copy the **premake5** executable somewhere in your path. Please make sure you have at least premake5 alpha 13.
+Download [premake 5](https://premake.github.io/download.html) and copy the **premake5** executable somewhere in your path.
 
-You need Visual Studio to build the source code. If you don't have Visual Studio 2019 you can [download the community edition for free](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16).
+You need Visual Studio to build the source code. If you don't have Visual Studio you can [download the community edition for free](https://visualstudio.microsoft.com/downloads/).
 
 Once you have Visual Studio installed, go to the command line under the netcode directory and type:
 
@@ -17,15 +17,7 @@ Now you can build the library and run individual test programs as you would for 
 
 ## Building on MacOS and Linux
 
-First, download and install [premake 5](https://premake.github.io/download.html). Please make sure you have at least premake5 alpha 13.
-
-Next, install libsodium.
-
-On MacOS X, this can be done most easily with `brew install libsodium`. 
-
-If you don't have Brew, you can install it from <http://brew.sh>.
-
-On Linux, depending on your particular distribution there may be prebuilt packages for libsodium, or you may have to build from source from here [libsodium](https://github.com/jedisct1/libsodium/releases).
+First, download and install [premake 5](https://premake.github.io/download.html).
 
 Now go to the command line under the netcode directory and enter:
 
@@ -33,7 +25,13 @@ Now go to the command line under the netcode directory and enter:
 
 Which creates makefiles which you can use to build the source via:
 
-    make all
+    make
+
+Then you can run binaries like this:
+
+    ./bin/test
+    ./bin/client
+    ./bin/server
 
 Alternatively, you can use the following shortcuts to build and run test programs directly:
 
@@ -42,8 +40,6 @@ Alternatively, you can use the following shortcuts to build and run test program
     premake5 server         // build run a netcode server on localhost on UDP port 40000
 
     premake5 client         // build and run a netcode client that connects to the server running on localhost 
-
-    premake5 stress         // connect 256 netcode clients to a running server as a stress test
    
 If you have questions please create an issue at https://github.com/networkprotocol/netcode and I'll do my best to help you out.
 

@@ -78,32 +78,8 @@ else
         description = "Build and run all unit tests",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 test" then
+            if os.execute "make -j test" then
                 os.execute "./bin/test"
-            end
-        end
-    }
-
-    newaction
-    {
-        trigger     = "soak",
-        description = "Build and run soak test",
-        execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 soak" then
-                os.execute "./bin/soak"
-            end
-        end
-    }
-
-    newaction
-    {
-        trigger     = "profile",
-        description = "Build and run profile tet",
-        execute = function ()
-            os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 profile" then
-                os.execute "./bin/profile"
             end
         end
     }
@@ -114,7 +90,7 @@ else
         description = "Build and run the client",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client" then
+            if os.execute "make -j client" then
                 os.execute "./bin/client"
             end
         end
@@ -126,7 +102,7 @@ else
         description = "Build and run the server",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 server" then
+            if os.execute "make -j server" then
                 os.execute "./bin/server"
             end
         end
@@ -138,7 +114,7 @@ else
         description = "Build and run the client/server testbed",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client_server" then
+            if os.execute "make -j client_server" then
                 os.execute "./bin/client_server"
             end
         end
@@ -146,20 +122,25 @@ else
 
     newaction
     {
-        trigger     = "docker",
-        description = "Build and run a netcode server inside a docker container",
+        trigger     = "soak",
+        description = "Build and run soak test",
         execute = function ()
-            os.execute "docker run --rm --privileged alpine hwclock -s" -- workaround for clock getting out of sync on macos. see https://docs.docker.com/docker-for-mac/troubleshoot/#issues
-            os.execute "rm -rf docker/netcode && mkdir -p docker/netcode && cp *.h docker/netcode && cp *.c docker/netcode && cp *.cpp docker/netcode && cp premake5.lua docker/netcode && cd docker && docker build -t \"networkprotocol:netcode-server\" . && rm -rf netcode && docker run -ti -p 40000:40000/udp networkprotocol:netcode-server"
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j soak" then
+                os.execute "./bin/soak"
+            end
         end
     }
 
     newaction
     {
-        trigger     = "valgrind",
-        description = "Run valgrind over tests inside docker",
+        trigger     = "profile",
+        description = "Build and run profile",
         execute = function ()
-            os.execute "rm -rf valgrind/netcode && mkdir -p valgrind/netcode && cp *.h valgrind/netcode && cp *.c valgrind/netcode && cp *.cpp valgrind/netcode && cp premake5.lua valgrind/netcode && cd valgrind && docker build -t \"networkprotocol:netcode-valgrind\" . && rm -rf netcode && docker run -ti networkprotocol:netcode-valgrind"
+            os.execute "test ! -e Makefile && premake5 gmake"
+            if os.execute "make -j profile" then
+                os.execute "./bin/profile"
+            end
         end
     }
 
@@ -169,29 +150,11 @@ else
         description = "Launch 256 client instances to stress test the server",
         execute = function ()
             os.execute "test ! -e Makefile && premake5 gmake"
-            if os.execute "make -j32 client" then
+            if os.execute "make -j client" then
                 for i = 0, 255 do
                     os.execute "./bin/client &"
                 end
             end
-        end
-    }
-
-    newaction
-    {
-        trigger     = "cppcheck",
-        description = "Run cppcheck over the source code",
-        execute = function ()
-            os.execute "cppcheck netcode.c"
-        end
-    }
-
-    newaction
-    {
-        trigger     = "scan-build",
-        description = "Run clang scan-build over the project",
-        execute = function ()
-            os.execute "premake5 clean && premake5 gmake && scan-build make all -j32"
         end
     }
 
