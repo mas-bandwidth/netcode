@@ -848,10 +848,10 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
             belonging to a socket that was shut down forcefully (eg. OS closed the socket). 
 
             You can trigger this behavior by commenting out the client signal handler in client.c and then
-            repeatedly connecting to the server.
+            repeatedly connecting to the server, breaking with CTRL-C over and over.
 
             What happens is that we get the ICMP port unreacable message back, and that triggers the WSACONNRESET
-            on the next sendto. This behavior is windows specific.
+            on the next recvfrom. This behavior is windows specific.
 
             If we just return 0, we will stop receiving packets for this frame, and this will streeeeeetch out packets
             and cause problems where clients can't connect or receive packets because each time we see the WSACONNRESET we
@@ -859,7 +859,7 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
 
             The solution is to just ignore the WSACONNRESET error, and call recvfrom again...
         */
-        
+
         if ( error == WSAECONNRESET )
         {
             return netcode_socket_receive_packet( socket, from, packet_data, max_packet_size );
