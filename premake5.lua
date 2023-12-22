@@ -4,6 +4,7 @@ solution "netcode"
     language "C"
     configurations { "Debug", "Release" }
     includedirs { "sodium" }
+    targetdir "bin/"
     rtti "Off"
     warnings "Extra"
     staticruntime "On"
