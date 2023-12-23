@@ -72,11 +72,11 @@ Other open source libraries by the same author include: [yojimbo](http://libyoji
     
 * **Silver Sponsors**
     * [Moon Studios](http://www.oriblindforest.com/#!moon-3/)
-    * [The Network Protocol Company](http://www.thenetworkprotocolcompany.com)
+    * The Network Protocol Company
     * [Mas Bandwidth LLC](http://mas-bandwidth.com)
     
 * **Bronze Sponsors**
-    * [Kite & Lightning](http://kiteandlightning.la/)
+    * Kite & Lightning
     * [Data Realms](http://datarealms.com)
  
 And by individual supporters on Patreon. Thank you. You made this possible!
