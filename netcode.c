@@ -652,6 +652,16 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
+    // IMPORTANT: tell windows we don't want to receive any connection reset messages
+    // for this socket, otherwise recvfrom errors out when client sockets disconnect hard
+    // in response to ICMP messages.
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+    BOOL bNewBehavior = FALSE;
+    DWORD dwBytesReturned = 0;
+    WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL );
+#endif
+
     // force IPv6 only if necessary
 
     if ( address->type == NETCODE_ADDRESS_IPV6 )
@@ -842,28 +852,6 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
 
         if ( error == WSAEWOULDBLOCK )
             return 0;
-
-        /*
-            IMPORTANT: This happens on windows because a previous sendto on this socket went to an address + port
-            belonging to a socket that was shut down forcefully (eg. OS closed the socket). 
-
-            You can trigger this behavior by commenting out the client signal handler in client.c and then
-            repeatedly connecting to the server, breaking with CTRL-C over and over.
-
-            What happens is that we get the ICMP port unreacable message back, and that triggers the WSACONNRESET
-            on the next recvfrom. This behavior is windows specific.
-
-            If we just return 0, we will stop receiving packets for this frame, and this will streeeeeetch out packets
-            and cause problems where clients can't connect or receive packets because each time we see the WSACONNRESET we
-            stop processing packets for that frame.
-
-            The solution is to just ignore the WSACONNRESET error, and call recvfrom again...
-        */
-
-        if ( error == WSAECONNRESET )
-        {
-            return netcode_socket_receive_packet( socket, from, packet_data, max_packet_size );
-        }
 
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
 
