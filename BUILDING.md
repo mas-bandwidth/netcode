@@ -9,9 +9,9 @@ You need Visual Studio to build the source code. If you don't have Visual Studio
 
 Once you have Visual Studio installed, go to the command line under the netcode directory and type:
 
-    premake5 solution
+    premake5 vs2019
 
-This creates netcode.sln and opens it in Visual Studio for you.
+Open the generated netcode.sln file.
 
 Now you can build the library and run individual test programs as you would for any other Visual Studio solution.
 
@@ -30,18 +30,10 @@ Which creates makefiles which you can use to build the source via:
 Then you can run binaries like this:
 
     ./bin/test
-    ./bin/client
     ./bin/server
+    ./bin/client
 
-Alternatively, you can use the following shortcuts to build and run test programs directly:
-
-    premake5 test           // build and run unit tests
-
-    premake5 server         // build run a netcode server on localhost on UDP port 40000
-
-    premake5 client         // build and run a netcode client that connects to the server running on localhost 
-   
-If you have questions please create an issue at https://github.com/networkprotocol/netcode and I'll do my best to help you out.
+If you have questions please create an issue at https://github.com/mas-bandwidth/netcode and I'll do my best to help you out.
 
 cheers
 
