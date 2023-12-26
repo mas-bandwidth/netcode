@@ -17,42 +17,63 @@ solution "netcode"
         optimize "Speed"
         defines { "NETCODE_RELEASE" }
 
-project "sodium"
+project "sodium-builtin"
     kind "StaticLib"
-    files {
-        "sodium/**.c",
-        "sodium/**.h",
-    }
-    filter { "system:not windows", "platforms:*x64 or *avx or *avx2" }
-        files {
-            "sodium/**.S"
-        }
-    filter { "action:gmake" }
-        buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
+    language "C"
+    files { "sodium/dummy.c" }
+    filter "system:windows"
+            files {
+                "sodium/**.c",
+                "sodium/**.h",
+            }
+        filter { "system:not windows", "platforms:*x64 or *avx or *avx2" }
+            files {
+                "sodium/**.S"
+            }
+        filter { "action:gmake*" }
+            buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
 
 project "test"
     files { "test.cpp" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 project "soak"
     files { "soak.c", "netcode.c" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 project "profile"
     files { "profile.c", "netcode.c" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 project "client"
     files { "client.c", "netcode.c" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 project "server"
     files { "server.c", "netcode.c" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 project "client_server"
     files { "client_server.c", "netcode.c" }
-    links { "sodium" }
+    filter "system:windows"
+        links { "sodium-builtin" }
+    filter "system:not windows"
+        links { "sodium" }
 
 newaction
 {
