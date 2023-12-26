@@ -35,7 +35,7 @@ Now go to the command line under the netcode directory and enter:
 
 Which creates makefiles which you can use to build the source via:
 
-    make
+    make -j
 
 Then you can run binaries like this:
 
