@@ -19,6 +19,16 @@ Now you can build the library and run individual test programs as you would for 
 
 First, download and install [premake 5](https://premake.github.io/download.html).
 
+Next, install libsodium.
+
+Linux:
+
+    sudo apt install libsodium-dev
+
+Mac:
+
+    brew install libsodium
+
 Now go to the command line under the netcode directory and enter:
 
     premake5 gmake
