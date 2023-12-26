@@ -583,7 +583,7 @@ void netcode_term()
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 typedef uint64_t netcode_socket_handle_t;
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-typedef int netcode_socket_handle_t;
+typedef size_t netcode_socket_handle_t;
 #endif // #if NETCODE_PLATFORM == NETCODe_PLATFORM_WINDOWS
 
 struct netcode_socket_t
@@ -591,7 +591,6 @@ struct netcode_socket_t
     struct netcode_address_t address;
     netcode_socket_handle_t handle;
 };
-
 
 struct netcode_socket_holder_t
 {
