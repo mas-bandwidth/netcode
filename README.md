@@ -73,7 +73,6 @@ Other open source libraries by the same author include: [yojimbo](http://libyoji
 * **Silver Sponsors**
     * [Moon Studios](http://www.oriblindforest.com/#!moon-3/)
     * The Network Protocol Company
-    * [Mas Bandwidth LLC](http://mas-bandwidth.com)
     
 * **Bronze Sponsors**
     * Kite & Lightning
