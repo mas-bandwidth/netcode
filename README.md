@@ -22,9 +22,11 @@ netcode is stable and production ready.
 
 # Usage
 
-To use netcode, first generate a random 32 byte private key. Keep this key safe and do not share it with anybody.
+Start by generating a random 32 byte private key and back it up somewhere safe. Do not share your private key with _anybody_. 
 
-For example:
+Especially, _do not_ include your private key in your client executable!
+
+Here is a test private key:
 
 ```c
 static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea, 
@@ -33,7 +35,7 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
                                                   0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1 };
 ```
 
-Next, create a server using this private key:
+Now, create a server using the private key:
 
 ```c
 char * server_address = "127.0.0.1:40000";
@@ -46,15 +48,33 @@ struct netcode_server_t * server = netcode_server_create( server_address, &serve
 if ( !server )
 {
     printf( "error: failed to create server\n" );
-    exit( 1 );
+    return 1;
 }
 ```
 
-Then start the server with the number of client slots you want:
+Start the server with the number of client slots you want.
+
+For example, this code starts a server with a maximum of 16 connected clients:
 
 ```c
-netcode_server_start( server, NETCODE_MAX_CLIENTS );
+netcode_server_start( server, 16 );
 ```
+
+Now that you want to connect a client, your client should hit a REST API to your backend system. 
+
+Your backend should generate and pass down a _connect token_ to the client, which the client will use to connect to the server:
+
+```c
+netcode_client_connect( client, connect_token );
+```
+
+Using a connect token like this secures your server so that only clients authorized with your backend can connect to your server.
+
+Once the client connects to the server, the client is assigned a client index in the range [0,maxClients-1] on the server and the client may exchange encrypted and signed packets with the server.
+
+When the client has finished it 
+
+For more details please see [client.c](client.c) and [server.c](server.c).
 
 # Specification
 
@@ -100,3 +120,4 @@ If you find this software useful, [please consider sponsoring it](https://github
 # License
 
 [BSD 3-Clause license](https://opensource.org/licenses/BSD-3-Clause).
+
