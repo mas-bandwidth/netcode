@@ -72,36 +72,6 @@ Using a connect token like this secures your server so that only clients authori
 
 Once the client connects to the server, the client is assigned a client index and can exchange encrypted and signed packets with the server.
 
-```c
-    while ( !quit )
-    {
-        netcode_client_update( client, time );
-
-        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-        {
-            netcode_client_send_packet( client, packet_data, packet_bytes );
-        }
-
-        while ( 1 )             
-        {
-            int packet_bytes;
-            uint64_t packet_sequence;
-            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
-            if ( !packet )
-                break;
-            // process packet
-            netcode_client_free_packet( client, packet );
-        }
-
-        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-            break;
-
-        netcode_sleep( delta_time );
-
-        time += delta_time;
-    }
-```
-
 For more details please see [client.c](client.c) and [server.c](server.c).
 
 # Specification
