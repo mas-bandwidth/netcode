@@ -72,7 +72,7 @@ Using a connect token like this secures your server so that only clients authori
 
 Once the client connects to the server, the client is assigned a client index and can exchange encrypted and signed packets with the server.
 
-For more details please see [client.c](client.c) and [server.c](server.c).
+For more details please see [client.c](client.c) and [server.c](server.c)
 
 # Source Code
 
