@@ -68,11 +68,39 @@ Your backend should generate and pass down a _connect token_ to the client, whic
 netcode_client_connect( client, connect_token );
 ```
 
-Using a connect token like this secures your server so that only clients authorized with your backend can connect to your server.
+Using a connect token like this secures your server so that only clients authorized with your backend can connect.
 
-Once the client connects to the server, the client is assigned a client index in the range [0,maxClients-1] on the server and the client may exchange encrypted and signed packets with the server.
+Once the client connects to the server, the client is assigned a client index and can exchange encrypted and signed packets with the server.
 
-When the client has finished it 
+```c
+    while ( !quit )
+    {
+        netcode_client_update( client, time );
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+        {
+            netcode_client_send_packet( client, packet_data, packet_bytes );
+        }
+
+        while ( 1 )             
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            void * packet = netcode_client_receive_packet( client, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            // process packet
+            netcode_client_free_packet( client, packet );
+        }
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        netcode_sleep( delta_time );
+
+        time += delta_time;
+    }
+```
 
 For more details please see [client.c](client.c) and [server.c](server.c).
 
