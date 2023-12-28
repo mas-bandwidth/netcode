@@ -2,7 +2,7 @@
 
 # netcode
 
-**netcode** is a secure connection based client/server protocol built on top of UDP. 
+**netcode** is a secure connection-based client/server protocol built on top of UDP. 
 
 It has the following features:
 
