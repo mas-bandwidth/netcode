@@ -2,34 +2,67 @@
 
 # netcode
 
-**netcode** is a simple connection based client/server protocol built on top of UDP. 
+**netcode** is a secure connection based client/server protocol built on top of UDP. 
 
 It has the following features:
 
-* Encrypted and signed packets
 * Secure client connection with connect tokens
-* Connection based protocol built on top of UDP
+* Client slot system where each client is assigned a client index on connect
+* Encrypted and signed packets between client and server
 
 and protects your game server from:
 
 * Zombie clients
+* Packet sniffing
 * Man in the middle
 * DDoS amplification
 * Packet replay attacks
 
 netcode is stable and production ready.
 
-# How does it work?
+# Usage
 
-Please refer to the second half of this whitepaper: [Why can't I send UDP packets from a browser?](http://gafferongames.com/post/why_cant_i_send_udp_packets_from_a_browser/) 
+To use netcode, first generate a random 32 byte private key. Keep this key safe and do not share it with anybody.
+
+For example:
+
+```c
+static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea, 
+                                                  0x9a, 0x65, 0x62, 0xf6, 0x6f, 0x2b, 0x30, 0xe4, 
+                                                  0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
+                                                  0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1 };
+```
+
+Next, create a server using this private key:
+
+```c
+char * server_address = "127.0.0.1:40000";
+
+struct netcode_server_config_t server_config;
+netcode_default_server_config( &server_config );
+memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+struct netcode_server_t * server = netcode_server_create( server_address, &server_config, time );
+if ( !server )
+{
+    printf( "error: failed to create server\n" );
+    exit( 1 );
+}
+```
+
+Then start the server with the number of client slots you want:
+
+```c
+netcode_server_start( server, NETCODE_MAX_CLIENTS );
+```
+
+# Specification
 
 For a complete technical specification, read the [netcode 1.02 standard](STANDARD.md).
 
 # Source Code
 
-This repository holds the reference implementation of netcode in C.
-
-This is the primary implementation of netcode, and is always up to date with the latest features.
+This repository holds the implementation of netcode in C.
 
 Other netcode implementations include:
 
@@ -60,25 +93,9 @@ Thanks for your contributions to netcode!
 
 The author of this library is Glenn Fiedler.
 
-Other open source libraries by the same author include: [yojimbo](http://libyojimbo.com) and [reliable](https://github.com/networkprotocol/reliable.io)
+Other open source libraries by the same author include: [reliable](https://github.com/mas-bandwidth/reliable), [serialize](https://github.com/mas-bandwidth/serialize), and [yojimbo](https://github.com/mas-bandwidth/yojimbo).
 
-# Sponsors
-
-**netcode** was generously sponsored by:
-
-* **Gold Sponsors**
-    * [Remedy Entertainment](http://www.remedygames.com/)
-    * [Cloud Imperium Games](https://cloudimperiumgames.com)
-    
-* **Silver Sponsors**
-    * [Moon Studios](http://www.oriblindforest.com/#!moon-3/)
-    * The Network Protocol Company
-    
-* **Bronze Sponsors**
-    * Kite & Lightning
-    * [Data Realms](http://datarealms.com)
- 
-And by individual supporters on Patreon. Thank you. You made this possible!
+If you find this software useful, [please consider sponsoring it](https://github.com/sponsors/mas-bandwidth).
 
 # License
 
