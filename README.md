@@ -10,7 +10,7 @@ It has the following features:
 * Secure client connection with connect tokens
 * Connection based protocol built on top of UDP
 
-and protects your game server from the following attacks:
+and protects your game server from:
 
 * Zombie clients
 * Man in the middle
