@@ -74,10 +74,6 @@ Once the client connects to the server, the client is assigned a client index an
 
 For more details please see [client.c](client.c) and [server.c](server.c).
 
-# Specification
-
-For a complete technical specification, read the [netcode 1.02 standard](STANDARD.md).
-
 # Source Code
 
 This repository holds the implementation of netcode in C.
@@ -91,6 +87,8 @@ Other netcode implementations include:
 * [netcode for Unity](https://github.com/KillaMaaki/Unity-Netcode.IO)
 * [netcode for UE4](https://github.com/RedpointGames/netcode.io-UE4)
 * [netcode for Typescript](https://github.com/bennychen/netcode.io-typescript)
+
+If you'd like to create your own implementation of netcode, please read the [netcode 1.02 standard](STANDARD.md).
 
 # Contributors
 
