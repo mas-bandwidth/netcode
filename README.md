@@ -8,7 +8,7 @@ It has the following features:
 
 * Secure client connection with connect tokens
 * Client slot system where each client is assigned a client index on connect
-* Encrypted and signed packets between client and server
+* Encrypted and signed packets
 
 and protects your game server from:
 
