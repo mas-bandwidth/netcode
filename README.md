@@ -58,7 +58,7 @@ Then start the server with the number of client slots you want:
 netcode_server_start( server, 16 );
 ```
 
-To connect a client, your client should hit a REST API to your backend system that returns a _connect token_.
+To connect a client, your client should hit a REST API to your backend that returns a _connect token_.
 
 Using a connect token secures your server so that only clients authorized with your backend can connect:
 
