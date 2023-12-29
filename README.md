@@ -35,7 +35,7 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
                                                   0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1 };
 ```
 
-Now, create a server using the private key:
+Create a server with the private key:
 
 ```c
 char * server_address = "127.0.0.1:40000";
@@ -52,7 +52,7 @@ if ( !server )
 }
 ```
 
-Start the server with the number of client slots you want.
+Then start the server with the number of client slots you want.
 
 For example, this code starts a server with a maximum of 16 connected clients:
 
@@ -60,15 +60,13 @@ For example, this code starts a server with a maximum of 16 connected clients:
 netcode_server_start( server, 16 );
 ```
 
-Now that you want to connect a client, your client should hit a REST API to your backend system. 
+When you want to connect a client, your client should hit a REST API to your backend system that returns a _connect token_.
 
-Your backend should generate and pass down a _connect token_ to the client, which the client will use to connect to the server:
+Using a connect token like this secures your server so that only clients authorized with your backend can connect to your server.
 
 ```c
 netcode_client_connect( client, connect_token );
 ```
-
-Using a connect token like this secures your server so that only clients authorized with your backend can connect.
 
 Once the client connects to the server, the client is assigned a client index and can exchange encrypted and signed packets with the server.
 
