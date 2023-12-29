@@ -62,7 +62,7 @@ netcode_server_start( server, 16 );
 
 When you want to connect a client, your client should hit a REST API to your backend system that returns a _connect token_.
 
-Using a connect token like this secures your server so that only clients authorized with your backend can connect to your server.
+Using a connect token secures your server so that only clients authorized with your backend can connect to your server.
 
 ```c
 netcode_client_connect( client, connect_token );
