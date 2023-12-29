@@ -22,7 +22,7 @@ netcode is stable and production ready.
 
 # Usage
 
-Start by generating a random 32 byte private key and back it up somewhere safe. Do not share your private key with _anybody_. 
+Generating a random 32 byte private key and back it up somewhere safe. Do not share your private key with _anybody_. 
 
 Especially, **do not include your private key in your client executable!**
 
