@@ -52,7 +52,7 @@ if ( !server )
 }
 ```
 
-Then start the server with the number of client slots you want.
+Then start the server with the number of client slots you want:
 
 ```c
 netcode_server_start( server, 16 );
