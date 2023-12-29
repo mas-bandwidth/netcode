@@ -54,8 +54,6 @@ if ( !server )
 
 Then start the server with the number of client slots you want.
 
-For example, this code starts a server with a maximum of 16 connected clients:
-
 ```c
 netcode_server_start( server, 16 );
 ```
