@@ -22,7 +22,7 @@ netcode is stable and production ready.
 
 # Usage
 
-Generating a random 32 byte private key and back it up somewhere safe. Do not share your private key with _anybody_. 
+Start by a random 32 byte private key. Do not share your private key with _anybody_. 
 
 Especially, **do not include your private key in your client executable!**
 
@@ -107,7 +107,7 @@ The author of this library is Glenn Fiedler.
 
 Other open source libraries by the same author include: [reliable](https://github.com/mas-bandwidth/reliable), [serialize](https://github.com/mas-bandwidth/serialize), and [yojimbo](https://github.com/mas-bandwidth/yojimbo).
 
-If you find this software useful, [please consider sponsoring it](https://github.com/sponsors/mas-bandwidth).
+If you find this software useful, [please consider sponsoring it](https://github.com/sponsors/mas-bandwidth). Thanks!
 
 # License
 
