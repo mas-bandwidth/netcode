@@ -61,7 +61,7 @@
 #define NETCODE_PACKET_SEND_RATE 10.0
 #define NETCODE_NUM_DISCONNECT_PACKETS 10
 
-#define NETCODE_ADDRESS_MAP_BUCKETS 256
+#define NETCODE_ADDRESS_MAP_BUCKETS NETCODE_MAX_CLIENTS
 
 #ifndef NETCODE_ENABLE_TESTS
 #define NETCODE_ENABLE_TESTS 0
@@ -3768,7 +3768,7 @@ struct netcode_address_map_element_t
 struct netcode_address_map_bucket_t
 {
     /// Size of this bucket
-    size_t size;
+    int size;
 
     /// All the elements of this bucket.
     /// When an element is remove, it will be swaped with the last
@@ -3781,7 +3781,7 @@ struct netcode_address_map_bucket_t
 struct netcode_address_map_t
 {
     /// Size of map (Total size of all buckets)
-    size_t size;
+    int size;
 
     /// Buckets
     struct netcode_address_map_bucket_t buckets[NETCODE_ADDRESS_MAP_BUCKETS];
@@ -3889,15 +3889,12 @@ static struct netcode_address_map_element_t * netcode_address_map_bucket_find(
 }
 
 
-/// Get the client from address key
+/// Get the client index from address key
 /// @param map The map
 /// @param address The address key
-/// @param client_index The output client index to store into
-/// @return If the address key is found, this function will return 1 and store
-/// the output into client_index. Otherwise, returns 0 if not found.
+/// @return Returns client index if the key exists in map or -1 if not found
 static int netcode_address_map_get( struct netcode_address_map_t * map,
-                                    struct netcode_address_t * address,
-                                    int * client_index )
+                                    struct netcode_address_t * address )
 {
     // Get the bucket by hash, loop overall the elements in bucket, compare the
     // address.
@@ -3909,12 +3906,10 @@ static int netcode_address_map_get( struct netcode_address_map_t * map,
     if ( !element )
     {
         // There's no element assocated with address key
-        return 0;
+        return -1;
     }
 
-    // Store the result
-    *client_index = element->client_index;
-    return 1;
+    return element->client_index;
 }
 
 
@@ -4421,13 +4416,7 @@ int netcode_server_find_client_index_by_address( struct netcode_server_t * serve
     if ( address->type == 0 )
         return -1;
 
-    int client_index;
-    if ( netcode_address_map_get( &server->client_address_map, address, &client_index ) )
-    {
-        return client_index;
-    }
-
-    return -1;
+    return netcode_address_map_get( &server->client_address_map, address );
 }
 
 void netcode_server_process_connection_request_packet( struct netcode_server_t * server, 
@@ -9115,6 +9104,55 @@ void test_loopback()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+void test_address_map()
+{
+    const char * str_address_1 = "107.77.207.77:40000";
+    const char * str_address_2 = "127.0.0.1:23650";
+    const char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
+    const char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
+
+    struct netcode_address_map_t map;
+    struct netcode_address_t address_set;
+    struct netcode_address_t address_get;
+    struct netcode_address_t address_del;
+
+    netcode_address_map_reset( &map );
+
+    // Set ipv4
+    netcode_parse_address( str_address_1, &address_set );
+    check( netcode_address_map_set( &map, &address_set, 0 ) == 1 );
+
+    // Set ipv6
+    netcode_parse_address( str_address_3, &address_set );
+    check( netcode_address_map_set( &map, &address_set, 1 ) == 1 );
+
+    // Get ipv4
+    netcode_parse_address( str_address_1, &address_get );
+    check( netcode_address_map_get( &map, &address_get) == 0 );
+
+    // Get ipv6
+    netcode_parse_address( str_address_3, &address_get );
+    check( netcode_address_map_get( &map, &address_get) == 1 );
+
+    // Get non-existent ipv4
+    netcode_parse_address( str_address_2, &address_get );
+    check( netcode_address_map_get( &map, &address_get ) == -1);
+
+    // Get non-existent ipv6
+    netcode_parse_address( str_address_4, &address_get );
+    check( netcode_address_map_get( &map, &address_get ) == -1);
+
+    // Try to delete key, after that, the key should be disappear
+    netcode_parse_address( str_address_1, &address_del );
+    netcode_parse_address( str_address_1, &address_get );
+    check( netcode_address_map_del( &map, &address_del ) == 1 );
+    check( netcode_address_map_get( &map, &address_get ) == -1 );
+
+    // Try to delete non-existent key
+    netcode_parse_address( str_address_2, &address_del );
+    check ( netcode_address_map_del( &map, &address_del ) == 0 );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -9161,6 +9199,7 @@ void netcode_test()
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
+        RUN_TEST( test_address_map );
     }
 }
 
