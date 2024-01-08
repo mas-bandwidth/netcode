@@ -9111,46 +9111,48 @@ void test_address_map()
     const char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
     const char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
 
-    struct netcode_address_map_t map;
+    struct netcode_address_map_t * map = (struct netcode_address_map_t *) malloc( sizeof( struct netcode_address_map_t ) );
     struct netcode_address_t address_set;
     struct netcode_address_t address_get;
     struct netcode_address_t address_del;
 
-    netcode_address_map_reset( &map );
+    netcode_address_map_reset( map );
 
     // Set ipv4
     netcode_parse_address( str_address_1, &address_set );
-    check( netcode_address_map_set( &map, &address_set, 0 ) == 1 );
+    check( netcode_address_map_set( map, &address_set, 0 ) == 1 );
 
     // Set ipv6
     netcode_parse_address( str_address_3, &address_set );
-    check( netcode_address_map_set( &map, &address_set, 1 ) == 1 );
+    check( netcode_address_map_set( map, &address_set, 1 ) == 1 );
 
     // Get ipv4
     netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_get( &map, &address_get) == 0 );
+    check( netcode_address_map_get( map, &address_get) == 0 );
 
     // Get ipv6
     netcode_parse_address( str_address_3, &address_get );
-    check( netcode_address_map_get( &map, &address_get) == 1 );
+    check( netcode_address_map_get( map, &address_get) == 1 );
 
     // Get non-existent ipv4
     netcode_parse_address( str_address_2, &address_get );
-    check( netcode_address_map_get( &map, &address_get ) == -1);
+    check( netcode_address_map_get( map, &address_get ) == -1);
 
     // Get non-existent ipv6
     netcode_parse_address( str_address_4, &address_get );
-    check( netcode_address_map_get( &map, &address_get ) == -1);
+    check( netcode_address_map_get( map, &address_get ) == -1);
 
     // Try to delete key, after that, the key should be disappear
     netcode_parse_address( str_address_1, &address_del );
     netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_del( &map, &address_del ) == 1 );
-    check( netcode_address_map_get( &map, &address_get ) == -1 );
+    check( netcode_address_map_del( map, &address_del ) == 1 );
+    check( netcode_address_map_get( map, &address_get ) == -1 );
 
     // Try to delete non-existent key
     netcode_parse_address( str_address_2, &address_del );
-    check ( netcode_address_map_del( &map, &address_del ) == 0 );
+    check ( netcode_address_map_del( map, &address_del ) == 0 );
+
+    free( map );
 }
 
 #define RUN_TEST( test_function )                                           \
