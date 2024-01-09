@@ -1,4 +1,4 @@
- /*
+/*
     netcode
 
     Copyright © 2017 - 2024, Mas Bandwidth LLC
@@ -9154,7 +9154,7 @@ void test_address_map()
     netcode_parse_address( str_address_4, &address_get );
     check( netcode_address_map_get( map, &address_get ) == -1);
 
-    // Try to delete key, after that, the key should be disappear
+    // Try to delete key, after that, the key should disappear
     netcode_parse_address( str_address_1, &address_delete );
     netcode_parse_address( str_address_1, &address_get );
     check( netcode_address_map_delete( map, &address_delete ) == 1 );
