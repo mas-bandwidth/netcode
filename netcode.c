@@ -3774,10 +3774,83 @@ struct netcode_address_map_t
     struct netcode_address_map_bucket_t buckets[NETCODE_ADDRESS_MAP_BUCKETS];
 };
 
+static void netcode_address_map_reset( struct netcode_address_map_t * map );
+
+struct netcode_address_map_t * netcode_address_map_create( void * allocator_context, 
+                                                           void * (*allocate_function)(void*,size_t), 
+                                                           void (*free_function)(void*,void*) )
+{
+    if ( allocate_function == NULL )
+    {
+        allocate_function = netcode_default_allocate_function;
+    }
+
+    if ( free_function == NULL )
+    {
+        free_function = netcode_default_free_function;
+    }
+
+    struct netcode_address_map_t * map = (struct netcode_address_map_t*) 
+        allocate_function( allocator_context, sizeof( struct netcode_address_map_t ) );
+
+    netcode_assert( map );
+
+    netcode_address_map_reset( map );
+
+    map->allocator_context = allocator_context;
+    map->allocate_function = allocate_function;
+    map->free_function = free_function;
+
+    return map;
+}
+
+void netcode_address_map_destroy( struct netcode_address_map_t * map )
+{
+    netcode_assert( map );
+    netcode_assert( map->free_function );
+    map->free_function( map->allocator_context, map );
+}
+
+typedef uint64_t netcode_fnv_t;
+
+void netcode_fnv_init( netcode_fnv_t * fnv )
+{
+    *fnv = 0xCBF29CE484222325;
+}
+
+void netcode_fnv_write( netcode_fnv_t * fnv, const uint8_t * data, size_t size )
+{
+    for ( size_t i = 0; i < size; i++ )
+    {
+        (*fnv) ^= data[i];
+        (*fnv) *= 0x00000100000001B3;
+    }
+}
+
+uint64_t netcode_fnv_finalize( netcode_fnv_t * fnv )
+{
+    return *fnv;
+}
+
+uint64_t netcode_hash_string( const char * string )
+{
+    netcode_fnv_t fnv;
+    netcode_fnv_init( &fnv );
+    netcode_fnv_write( &fnv, (uint8_t *)( string ), strlen( string ) );
+    return netcode_fnv_finalize( &fnv );
+}
+
+uint64_t netcode_hash_data( const uint8_t * data, size_t size )
+{
+    netcode_fnv_t fnv;
+    netcode_fnv_init( &fnv );
+    netcode_fnv_write( &fnv, (uint8_t *)( data ), size );
+    return netcode_fnv_finalize( &fnv );
+}
+
 static int netcode_address_hash( struct netcode_address_t * address )
 {
-    // todo: this is a really bad hash. let's make it better
-    return address->port % NETCODE_ADDRESS_MAP_BUCKETS;
+    return netcode_hash_data( (const uint8_t*) address, sizeof(struct netcode_address_t) ) % NETCODE_ADDRESS_MAP_BUCKETS;
 }
 
 static void netcode_address_map_element_reset( struct netcode_address_map_element_t * element )
@@ -3793,7 +3866,7 @@ static void netcode_address_map_bucket_reset( struct netcode_address_map_bucket_
     for ( i = 0; i < NETCODE_MAX_CLIENTS; i++ )
     {
         struct netcode_address_map_element_t * element = bucket->elements + i;
-        netcode_address_map_element_reset(element);
+        netcode_address_map_element_reset( element );
     }
 }
 
@@ -3881,43 +3954,6 @@ static int netcode_address_map_delete( struct netcode_address_map_t * map,
     --map->size;
 
     return 1;
-}
-
-// todo: while this method is defined, it is not used anywhere
-struct netcode_address_map_t * netcode_address_map_create( void * allocator_context, 
-                                                           void * (*allocate_function)(void*,size_t), 
-                                                           void (*free_function)(void*,void*) )
-{
-    if ( allocate_function == NULL )
-    {
-        allocate_function = netcode_default_allocate_function;
-    }
-
-    if ( free_function == NULL )
-    {
-        free_function = netcode_default_free_function;
-    }
-
-    struct netcode_address_map_t * map = (struct netcode_address_map_t*) 
-        allocate_function( allocator_context, sizeof( struct netcode_address_map_t ) );
-
-    netcode_assert( map );
-
-    netcode_address_map_reset( map );
-
-    map->allocator_context = allocator_context;
-    map->allocate_function = allocate_function;
-    map->free_function = free_function;
-
-    return map;
-}
-
-// todo: this method is defined but not used anywhere
-void netcode_address_map_destroy( struct netcode_address_map_t * map )
-{
-    netcode_assert( map );
-    netcode_assert( map->free_function );
-    map->free_function( map->allocator_context, map );
 }
 
 // ----------------------------------------------------------------
@@ -9086,11 +9122,11 @@ void test_address_map()
     const char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
     const char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
 
-    // todo: test should use the create methods w. allocator
-    struct netcode_address_map_t * map = (struct netcode_address_map_t *) malloc( sizeof( struct netcode_address_map_t ) );
+    struct netcode_address_map_t * map = netcode_address_map_create( NULL, NULL, NULL );
+
     struct netcode_address_t address_set;
     struct netcode_address_t address_get;
-    struct netcode_address_t address_del;
+    struct netcode_address_t address_delete;
 
     netcode_address_map_reset( map );
 
@@ -9119,17 +9155,16 @@ void test_address_map()
     check( netcode_address_map_get( map, &address_get ) == -1);
 
     // Try to delete key, after that, the key should be disappear
-    netcode_parse_address( str_address_1, &address_del );
+    netcode_parse_address( str_address_1, &address_delete );
     netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_delete( map, &address_del ) == 1 );
+    check( netcode_address_map_delete( map, &address_delete ) == 1 );
     check( netcode_address_map_get( map, &address_get ) == -1 );
 
     // Try to delete non-existent key
-    netcode_parse_address( str_address_2, &address_del );
-    check ( netcode_address_map_delete( map, &address_del ) == 0 );
+    netcode_parse_address( str_address_2, &address_delete );
+    check ( netcode_address_map_delete( map, &address_delete ) == 0 );
 
-    // todo: should use netcode_address_map_destroy
-    free( map );
+    netcode_address_map_destroy( map );
 }
 
 #define RUN_TEST( test_function )                                           \
@@ -9183,4 +9218,3 @@ void netcode_test()
 }
 
 #endif // #if NETCODE_ENABLE_TESTS
-
