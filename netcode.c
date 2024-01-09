@@ -360,6 +360,7 @@ void netcode_default_free_function( void * context, void * pointer )
                 return -1;
         }
     }
+
 #endif
 
 // ----------------------------------------------------------------
