@@ -1,4 +1,4 @@
-/*
+ /*
     netcode
 
     Copyright © 2017 - 2024, Mas Bandwidth LLC
@@ -3831,7 +3831,7 @@ static int netcode_address_map_set( struct netcode_address_map_t * map,
 
 static struct netcode_address_map_element_t * netcode_address_map_bucket_find(
     struct netcode_address_map_bucket_t * bucket,
-    struct netcode_address_t * address)
+    struct netcode_address_t * address )
 {
     int i;
     for ( i = 0; i < bucket->size; i++ )
@@ -3861,8 +3861,8 @@ static int netcode_address_map_get( struct netcode_address_map_t * map,
     return element->client_index;
 }
 
-static int netcode_address_map_del( struct netcode_address_map_t * map,
-                                    struct netcode_address_t * address )
+static int netcode_address_map_delete( struct netcode_address_map_t * map,
+                                       struct netcode_address_t * address )
 {
     int bucket_index = netcode_address_hash( address );
     struct netcode_address_map_bucket_t * bucket = map->buckets + bucket_index;
@@ -3883,6 +3883,7 @@ static int netcode_address_map_del( struct netcode_address_map_t * map,
     return 1;
 }
 
+// todo: while this method is defined, it is not used anywhere
 struct netcode_address_map_t * netcode_address_map_create( void * allocator_context, 
                                                            void * (*allocate_function)(void*,size_t), 
                                                            void (*free_function)(void*,void*) )
@@ -3911,6 +3912,7 @@ struct netcode_address_map_t * netcode_address_map_create( void * allocator_cont
     return map;
 }
 
+// todo: this method is defined but not used anywhere
 void netcode_address_map_destroy( struct netcode_address_map_t * map )
 {
     netcode_assert( map );
@@ -4296,7 +4298,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->client_sequence[client_index] = 0;
     server->client_last_packet_send_time[client_index] = 0.0;
     server->client_last_packet_receive_time[client_index] = 0.0;
-    netcode_address_map_del( &server->client_address_map, &server->client_address[client_index] );
+    netcode_address_map_delete( &server->client_address_map, &server->client_address[client_index] );
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
     memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
@@ -5182,7 +5184,7 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     server->client_sequence[client_index] = 0;
     server->client_last_packet_send_time[client_index] = 0.0;
     server->client_last_packet_receive_time[client_index] = 0.0;
-    netcode_address_map_del( &server->client_address_map, &server->client_address[client_index] );
+    netcode_address_map_delete( &server->client_address_map, &server->client_address[client_index] );
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
     memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
@@ -9119,13 +9121,14 @@ void test_address_map()
     // Try to delete key, after that, the key should be disappear
     netcode_parse_address( str_address_1, &address_del );
     netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_del( map, &address_del ) == 1 );
+    check( netcode_address_map_delete( map, &address_del ) == 1 );
     check( netcode_address_map_get( map, &address_get ) == -1 );
 
     // Try to delete non-existent key
     netcode_parse_address( str_address_2, &address_del );
-    check ( netcode_address_map_del( map, &address_del ) == 0 );
+    check ( netcode_address_map_delete( map, &address_del ) == 0 );
 
+    // todo: should use netcode_address_map_destroy
     free( map );
 }
 
