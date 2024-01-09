@@ -1,5 +1,5 @@
 /*
-    netcode reference implementation
+    netcode
 
     Copyright © 2017 - 2024, Mas Bandwidth LLC
 
