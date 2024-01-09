@@ -3785,6 +3785,11 @@ struct netcode_address_map_t
 
     /// Buckets
     struct netcode_address_map_bucket_t buckets[NETCODE_ADDRESS_MAP_BUCKETS];
+    
+    /// Allocator
+    void * allocator_context;
+    void * (*allocate_function)(void*,size_t);
+    void (*free_function)(void*,void*);
 };
 
 
@@ -3942,6 +3947,43 @@ static int netcode_address_map_del( struct netcode_address_map_t * map,
     --map->size;
 
     return 1;
+}
+
+
+struct netcode_address_map_t * netcode_address_map_create( void * allocator_context, 
+                                                           void * (*allocate_function)(void*,size_t), 
+                                                           void (*free_function)(void*,void*) )
+{
+    if ( allocate_function == NULL )
+    {
+        allocate_function = netcode_default_allocate_function;
+    }
+
+    if ( free_function == NULL )
+    {
+        free_function = netcode_default_free_function;
+    }
+
+    struct netcode_address_map_t * map = (struct netcode_address_map_t*) 
+        allocate_function( allocator_context, sizeof( struct netcode_address_map_t ) );
+
+    netcode_assert( map );
+
+    netcode_address_map_reset( map );
+
+    map->allocator_context = allocator_context;
+    map->allocate_function = allocate_function;
+    map->free_function = free_function;
+
+    return map;
+}
+
+
+void netcode_address_map_destroy( struct netcode_address_map_t * map )
+{
+    netcode_assert( map );
+    netcode_assert( map->free_function );
+    map->free_function( map->allocator_context, map );
 }
 
 
