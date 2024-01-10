@@ -4,7 +4,7 @@
 
 **netcode** is a secure connection-based client/server protocol built on top of UDP.
 
-![image](https://github.com/mas-bandwidth/netcode/assets/696656/2ae3e795-2591-41c4-aec8-eaf0b44e9f17)
+![image](https://github.com/mas-bandwidth/netcode/assets/696656/034909bd-95c5-460a-8516-f24fca4410a1)
 
 It has the following features:
 
