@@ -476,7 +476,10 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
     BOOL bNewBehavior = FALSE;
     DWORD dwBytesReturned = 0;
-    WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL );
+    if ( WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL ) != 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to disable UDP port unreachable messages on socket\n" );
+    }
 #endif
 
     // force IPv6 only if necessary
