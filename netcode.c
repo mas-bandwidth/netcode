@@ -425,7 +425,7 @@ struct netcode_socket_holder_t
 #define NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED                   6
 #define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
-#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           7
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           9
 
 void netcode_socket_destroy( struct netcode_socket_t * socket )
 {
