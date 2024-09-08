@@ -1561,7 +1561,7 @@ void * netcode_read_packet( uint8_t * buffer,
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_CONNECT_TOKEN_NONCE_BYTES + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, buffer_length );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_CONNECT_TOKEN_NONCE_BYTES + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, buffer_length );
             return NULL;
         }
 
