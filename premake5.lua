@@ -18,20 +18,19 @@ solution "netcode"
         optimize "Speed"
         defines { "NETCODE_RELEASE" }
 
+project "sodium"
     kind "StaticLib"
     language "C"
-    files { "sodium/dummy.c" }
-    filter "system:windows"
-            files {
-                "sodium/**.c",
-                "sodium/**.h",
-            }
-        filter { "system:not windows", "platforms:*x64 or *avx or *avx2" }
-            files {
-                "sodium/**.S"
-            }
-        filter { "action:gmake*" }
-            buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
+    files {
+        "sodium/**.c",
+        "sodium/**.h",
+    }
+    filter { "system:not windows", "platforms:*x64 or *avx or *avx2" }
+        files {
+            "sodium/**.S"
+        }
+    filter { "action:gmake*" }
+        buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
 
 project "test"
     files { "test.cpp" }
