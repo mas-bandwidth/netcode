@@ -27,7 +27,7 @@ jobs:
     # Install libsodium from brew
     - name: Setup (MacOS)
       if: runner.os == 'MacOS'
-      run: brew install libsodium
+      run: brew reinstall libsodium
 
     # Build with premake + make
     - name: Build (gmake)
