@@ -2,17 +2,19 @@
 
 # netcode
 
-**netcode** is a secure connection-based client/server protocol built on top of UDP.
+**netcode** is a secure client/server protocol built on top of UDP.
 
-![connections](https://github.com/mas-bandwidth/netcode/assets/696656/20d3d933-228f-4119-b136-7e9dae43ff33)
+It's intended for use by real-time multiplayer games, which need a connection oriented protocol but without the head of line blocking of TCP.
 
-It has the following features:
+![connetion 2](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
+
+netcode has the following features:
 
 * Secure client connection with connect tokens
 * Client slot system where each client is assigned a client index on connect
 * Encrypted and signed packets
 
-and protects your game server from:
+It protects your game server from:
 
 * Zombie clients
 * Packet sniffing
