@@ -425,7 +425,7 @@ struct netcode_socket_holder_t
 #define NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED                   6
 #define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
-#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           7
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           9
 #define NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED  10
 
 void netcode_socket_destroy( struct netcode_socket_t * socket )
@@ -1567,7 +1567,7 @@ void * netcode_read_packet( uint8_t * buffer,
 
         if ( buffer_length != 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_CONNECT_TOKEN_NONCE_BYTES + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + 8 + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, buffer_length );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. bad packet length (expected %d, got %d)\n", 1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_CONNECT_TOKEN_NONCE_BYTES + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, buffer_length );
             return NULL;
         }
 
