@@ -18,7 +18,6 @@ solution "netcode"
         optimize "Speed"
         defines { "NETCODE_RELEASE" }
 
-project "sodium-builtin"
     kind "StaticLib"
     language "C"
     files { "sodium/dummy.c" }
@@ -36,45 +35,27 @@ project "sodium-builtin"
 
 project "test"
     files { "test.cpp" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    links { "sodium" }
 
 project "soak"
     files { "soak.c", "netcode.c" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    links { "sodium" }
 
 project "profile"
-    files { "profile.c", "netcode.c" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    files { "profile.c", "netcode.c" }    
+    links { "sodium" }
 
 project "client"
     files { "client.c", "netcode.c" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    links { "sodium" }
 
 project "server"
     files { "server.c", "netcode.c" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    links { "sodium" }
 
 project "client_server"
     files { "client_server.c", "netcode.c" }
-    filter "system:windows"
-        links { "sodium-builtin" }
-    filter "system:not windows"
-        links { "sodium" }
+    links { "sodium" }
 
 newaction
 {
