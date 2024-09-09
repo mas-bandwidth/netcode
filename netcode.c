@@ -426,6 +426,7 @@ struct netcode_socket_holder_t
 #define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           7
+#define NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED  10
 
 void netcode_socket_destroy( struct netcode_socket_t * socket )
 {
@@ -478,7 +479,9 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     DWORD dwBytesReturned = 0;
     if ( WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL ) != 0 )
     {
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to disable UDP port unreachable messages on socket\n" );
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to disable UDP CONNRESET (port unreachable) message reporting on socket\n" );
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED;
     }
 #endif
 
