@@ -4,7 +4,7 @@
 
 **netcode** is a secure client/server protocol built on top of UDP.
 
-It's built for use by real-time multiplayer games, which need a connection oriented protocol but without the head of line blocking of TCP.
+It's intended for use by real-time multiplayer games, which need a connection oriented protocol but without the head of line blocking of TCP.
 
 ![connetion 2](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
 
