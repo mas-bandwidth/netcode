@@ -741,6 +741,9 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
 
     if ( to->type == NETCODE_ADDRESS_IPV6 )
     {
+        // todo
+        printf( "ipv6\n" );
+
         struct sockaddr_in6 socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin6_family = AF_INET6;
@@ -762,6 +765,9 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
     }
     else if ( to->type == NETCODE_ADDRESS_IPV4 )
     {
+        // todo
+        printf( "ipv4\n" );
+
         struct sockaddr_in socket_address;
         memset( &socket_address, 0, sizeof( socket_address ) );
         socket_address.sin_family = AF_INET;
