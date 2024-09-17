@@ -2873,8 +2873,8 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     }
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-    netcode_socket_set_qos( client->socket_holder.ipv4, &client->server_address );
-    netcode_socket_set_qos( client->socket_holder.ipv6, &client->server_address );    
+    netcode_socket_set_qos( &client->socket_holder.ipv4, &client->server_address );
+    netcode_socket_set_qos( &client->socket_holder.ipv6, &client->server_address );
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
@@ -3247,7 +3247,8 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
         client->connect_token.num_server_addresses );
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-    netcode_socket_set_qos( client->socket, &client->server_address );
+    netcode_socket_set_qos( &client->socket_holder.ipv4, &client->server_address );
+    netcode_socket_set_qos( &client->socket_holder.ipv6, &client->server_address );
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
