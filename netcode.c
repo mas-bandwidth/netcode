@@ -745,7 +745,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
         }
         socket_address.sin6_port = htons( to->port );
 
-        sockaddr_storage addr;
+        struct sockaddr_storage addr;
         memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
 
         if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, &addr ) != 0 )
@@ -766,7 +766,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
                                          ( ( (uint32_t) to->data.ipv4[3] ) << 24 );
         socket_address.sin_port = htons( to->port );
 
-        sockaddr_storage addr;
+        struct sockaddr_storage addr;
         memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
 
         if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, &addr ) != 0 )
