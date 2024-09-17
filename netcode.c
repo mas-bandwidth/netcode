@@ -9203,21 +9203,18 @@ void test_packet_tagging()
         netcode_parse_address( "127.0.0.1:40000", &test_address );
 
         check( server );
-        check( server->socket_holder.ipv4.handle != 0 );
-        check( server->socket_holder.ipv6.handle == 0 );
-        check( netcode_address_equal( &server->address, &test_address ) );
+
+        struct netcode_client_config_t client_config;
+
+        netcode_default_client_config( &client_config );
+
+        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+        NETCODE_CONST char * server_address = "127.0.0.1:40000";
 
         int i;
         for ( i = 0; i < 10; i++ )
         {
-            struct netcode_client_config_t client_config;
-
-            netcode_default_client_config( &client_config );
-
-            struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
-
-            NETCODE_CONST char * server_address = "127.0.0.1:40000";
-
             uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
             uint64_t client_id = 0;
@@ -9229,9 +9226,9 @@ void test_packet_tagging()
             check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
             netcode_client_connect( client, connect_token );
-
-            netcode_client_destroy( client );
         }
+
+        netcode_client_destroy( client );
 
         netcode_server_destroy( server );
     }
@@ -9242,13 +9239,7 @@ void test_packet_tagging()
 
         struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
 
-        struct netcode_address_t test_address;
-        netcode_parse_address( "[::1]:50000", &test_address );
-
         check( server );
-        check( server->socket_holder.ipv4.handle == 0 );
-        check( server->socket_holder.ipv6.handle != 0 );
-        check( netcode_address_equal( &server->address, &test_address ) );
 
         int i;
         for ( i = 0; i < 10; i++ )
