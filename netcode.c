@@ -736,6 +736,9 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
     if ( !netcode_packet_tagging_enabled )
         return;
 
+    if ( socket->handle == 0 )
+        return;
+
     if ( to->type == NETCODE_ADDRESS_IPV6 )
     {
         struct sockaddr_in6 socket_address;
@@ -2870,7 +2873,8 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     }
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-    netcode_socket_set_qos( client->socket, &client->server_address );
+    netcode_socket_set_qos( client->socket_holder.ipv4, &client->server_address );
+    netcode_socket_set_qos( client->socket_holder.ipv6, &client->server_address );    
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
@@ -4138,14 +4142,18 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
 
     int i;
     for ( i = 0; i < NETCODE_MAX_CLIENTS; i++ )
+    {
         server->client_encryption_index[i] = -1;
+    }
 
     netcode_connect_token_entries_reset( server->connect_token_entries );
 
     netcode_encryption_manager_reset( &server->encryption_manager );
 
     for ( i = 0; i < NETCODE_MAX_CLIENTS; i++ )
+    {
         netcode_replay_protection_reset( &server->client_replay_protection[i] );
+    }
 
     memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
 
