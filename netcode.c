@@ -9204,6 +9204,7 @@ void netcode_test()
         RUN_TEST( test_connection_denied_packet );
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
+        RUN_TEST( test_connection_keep_alive_packet );
         RUN_TEST( test_connection_payload_packet );
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
