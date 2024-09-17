@@ -461,39 +461,6 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     }
 }
 
-#if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <ws2ipdef.h>
-#include <wininet.h>
-#include <iphlpapi.h>
-#include <qos2.h>
-
-#pragma comment( lib, "Qwave.lib" )
-
-static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
-{
-    QOS_VERSION QosVersion = { 1 , 0 };
-    HANDLE qosHandle;
-    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
-    {
-        // todo
-        printf( "QOSCreateHandler failed\n" );
-        return GetLastError();
-    }
-    if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
-    {
-         // todo
-        printf( "QOSAddSocketToFlow failed\n" );
-        return GetLastError();
-    }
-    return 0;
-}
-
-#endif // #if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
     netcode_assert( s );
@@ -719,44 +686,8 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    if ( netcode_packet_tagging_enabled )
-    {
-        struct sockaddr_in sin4;
-        struct sockaddr_in6 sin6;
-        struct sockaddr * addr = NULL;
-
-        if ( address->type == NETCODE_ADDRESS_IPV6 )
-        {
-            addr = (struct sockaddr*) &sin6;
-            socklen_t len = sizeof( sin6 );
-            if ( getsockname( s->handle, addr, &len ) == -1 )
-            {
-                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
-                netcode_socket_destroy( s );
-                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
-            }
-            address->port = ntohs( sin6.sin6_port );
-        }
-        else
-        {
-            addr = (struct sockaddr*) &sin4;
-            socklen_t len = sizeof( sin4 );
-            if ( getsockname( s->handle, addr, &len ) == -1 )
-            {
-                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
-                netcode_socket_destroy( s );
-                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
-            }
-            address->port = ntohs( sin4.sin_port );
-        }
-
-        if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, addr ) != 0 )
-        {
-            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging\n" );
-            netcode_socket_destroy( s );
-            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
-        }
-    }
+    // IMPORTANT: Tagging on Windows is QOS based and requires the destination address
+    // consequently, it's only suitable for clients, and needs to be done elsewhere.
 
 #endif
 
@@ -764,6 +695,84 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     return NETCODE_SOCKET_ERROR_NONE;
 }
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <ws2ipdef.h>
+#include <wininet.h>
+#include <iphlpapi.h>
+#include <qos2.h>
+
+#pragma comment( lib, "Qwave.lib" )
+
+static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
+{
+    QOS_VERSION QosVersion = { 1 , 0 };
+    HANDLE qosHandle;
+    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
+    {
+        // todo
+        printf( "QOSCreateHandler failed\n" );
+        return GetLastError();
+    }
+    if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
+    {
+        // todo
+        int error = GetLastError();
+        printf( "QOSAddSocketToFlow failed: %d\n", error );
+        return error;
+    }
+    return 0;
+}
+
+void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_address_t * to )
+{
+    netcode_assert( socket );
+    netcode_assert( to );
+
+    if ( to->type == NETCODE_ADDRESS_IPV6 )
+    {
+        struct sockaddr_in6 socket_address;
+        memset( &socket_address, 0, sizeof( socket_address ) );
+        socket_address.sin6_family = AF_INET6;
+        int i;
+        for ( i = 0; i < 8; i++ )
+        {
+            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->data.ipv6[i] );
+        }
+        socket_address.sin6_port = htons( to->port );
+
+        if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, &socket_address ) != 0 )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+        }
+    }
+    else if ( to->type == NETCODE_ADDRESS_IPV4 )
+    {
+        struct sockaddr_in socket_address;
+        memset( &socket_address, 0, sizeof( socket_address ) );
+        socket_address.sin_family = AF_INET;
+        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) )        | 
+                                         ( ( (uint32_t) to->data.ipv4[1] ) << 8 )   | 
+                                         ( ( (uint32_t) to->data.ipv4[2] ) << 16 )  | 
+                                         ( ( (uint32_t) to->data.ipv4[3] ) << 24 );
+        socket_address.sin_port = htons( to->port );
+
+        if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, &socket_address ) != 0 )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+        }
+    }
+}
+
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
 void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcode_address_t * to, void * packet_data, int packet_bytes )
 {
@@ -9151,8 +9160,6 @@ void test_packet_tagging()
 
     netcode_enable_packet_tagging();
 
-    // todo
-    printf( "ipv4\n" );
     {
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
@@ -9170,8 +9177,6 @@ void test_packet_tagging()
         netcode_server_destroy( server );
     }
 
-    // todo
-    printf( "ipv6\n" );
     {
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
