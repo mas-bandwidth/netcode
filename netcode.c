@@ -479,10 +479,14 @@ static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE traffic
     HANDLE qosHandle;
     if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
     {
+        // todo
+        printf( "QOSCreateHandler failed\n" );
         return GetLastError();
     }
     if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
     {
+         // todo
+        printf( "QOSAddSocketToFlow failed\n" );
         return GetLastError();
     }
     return 0;
@@ -9141,9 +9145,10 @@ void test_address_map()
 
 void test_packet_tagging()
 {
-    // IMPORTANT: It's off by default because it doesn't play well with some older home routers
+    // IMPORTANT: Packet tagging is off by default because it doesn't play well with some older home routers
     // See https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging
     // Turning it on can really improve network performance (much lower jitter) when played on Wi-Fi 6 routers
+
     netcode_enable_packet_tagging();
 
     {
