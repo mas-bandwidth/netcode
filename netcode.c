@@ -748,7 +748,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
         struct sockaddr_storage addr;
         memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
 
-        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (sockaddr*)&addr ) != 0 )
+        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
             netcode_socket_destroy( s );
@@ -769,7 +769,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
         struct sockaddr_storage addr;
         memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
 
-        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (sockaddr*)&addr ) != 0 )
+        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
             netcode_socket_destroy( s );
