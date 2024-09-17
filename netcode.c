@@ -439,6 +439,7 @@ struct netcode_socket_holder_t
 #define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
 #define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           9
+#define NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED  10
 
 void netcode_socket_destroy( struct netcode_socket_t * socket )
 {
@@ -485,14 +486,20 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
     // IMPORTANT: tell windows we don't want to receive any connection reset messages for this socket
-    // If we don't do this, clients disconnecting hard will error out the server with ICMP disconnected packets
-    // causing long periods where the server doesn't receive any packets from clients.
+    // If we don't do this, clients disconnecting hard will cause recvfrom on the server to repeatedly error out 
+    // due to ICMP disconnected packets, causing long periods where the server doesn't receive any packets from clients.
+
     #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
     BOOL bNewBehavior = FALSE;
     DWORD dwBytesReturned = 0;
-    WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL );
+    if ( WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL ) != 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to disable UDP CONNRESET (port unreachable) message reporting on socket\n" );
+        netcode_socket_destroy( s );
+        return NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED;
+    }
 
-#endif
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
     // force IPv6 only if necessary
 

@@ -10,17 +10,18 @@ It's intended for use by real-time multiplayer games, which need a connection or
 
 netcode has the following features:
 
-* Secure client connection with connect tokens
-* Client slot system where each client is assigned a client index on connect
-* Encrypted and signed packets
+* Secure client connection with connect tokens.
+* Client slot system. Servers have n slots for clients. Client are assigned an index when they connect to the server and are quickly denied connection if all slots are taken.
+* Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
+* Encrypted and signed packets.
 
 It protects your game server from:
 
 * Zombie clients
 * Packet sniffing
-* Man in the middle
-* DDoS amplification
 * Packet replay attacks
+* Man in the middle attacks
+* Being used in DDoS amplification attacks
 
 netcode is stable and production ready.
 
@@ -107,7 +108,7 @@ Thanks for your contributions to netcode!
 
 # Author
 
-The author of this library is Glenn Fiedler.
+The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glenn-fiedler-11b735302/).
 
 Other open source libraries by the same author include: [reliable](https://github.com/mas-bandwidth/reliable), [serialize](https://github.com/mas-bandwidth/serialize), and [yojimbo](https://github.com/mas-bandwidth/yojimbo).
 
@@ -116,4 +117,3 @@ If you find this software useful, [please consider sponsoring it](https://github
 # License
 
 [BSD 3-Clause license](https://opensource.org/licenses/BSD-3-Clause).
-
