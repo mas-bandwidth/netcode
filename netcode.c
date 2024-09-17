@@ -723,7 +723,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
-            addr = (sockaddr*) &sin6;
+            addr = (struct sockaddr*) &sin6;
             socklen_t len = sizeof( sin6 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
             {
@@ -735,7 +735,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         }
         else
         {
-            addr = (sockaddr*) &sin4;
+            addr = (struct sockaddr*) &sin4;
             socklen_t len = sizeof( sin4 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
             {
