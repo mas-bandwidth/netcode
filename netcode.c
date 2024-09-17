@@ -733,6 +733,9 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
     netcode_assert( socket );
     netcode_assert( to );
 
+    if ( !netcode_packet_tagging_enabled )
+        return;
+
     if ( to->type == NETCODE_ADDRESS_IPV6 )
     {
         struct sockaddr_in6 socket_address;
@@ -9176,7 +9179,8 @@ void test_packet_tagging()
 {
     // IMPORTANT: Packet tagging is off by default because it doesn't play well with some older home routers
     // See https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging
-    // Turning it on can really improve network performance (much lower jitter) when played on Wi-Fi 6 routers
+    // However, I really recommend providing players with a way to turn it on, since it can significantly reduce
+    // jitter playing over Wi-Fi.
 
     netcode_enable_packet_tagging();
 
