@@ -160,6 +160,7 @@ void netcode_default_free_function( void * context, void * pointer )
     #define NOMINMAX
     #define _WINSOCK_DEPRECATED_NO_WARNINGS
     #include <winsock2.h>
+    #include <ws2def.h>
     #include <ws2tcpip.h>
     #include <ws2ipdef.h>
     #include <iphlpapi.h>
