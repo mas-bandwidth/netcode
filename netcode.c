@@ -717,9 +717,9 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     if ( netcode_packet_tagging_enabled )
     {
-        sockaddr_in sin4;
-        sockaddr_in6 sin6;
-        sockaddr * addr = NULL;
+        struct sockaddr_in sin4;
+        struct sockaddr_in6 sin6;
+        struct sockaddr * addr = NULL;
 
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
