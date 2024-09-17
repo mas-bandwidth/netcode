@@ -461,6 +461,42 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     }
 }
 
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
+
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <ws2ipdef.h>
+#include <wininet.h>
+#include <iphlpapi.h>
+#include <qos2.h>
+
+#pragma comment( lib, "Qwave.lib" )
+
+static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
+{
+    QOS_VERSION QosVersion = { 1 , 0 };
+    HANDLE qosHandle;
+    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
+    {
+        // todo
+        printf( "QOSCreateHandler failed\n" );
+        return GetLastError();
+    }
+    // todo
+    (void) addr;
+    if ( QOSAddSocketToFlow( qosHandle, socket, NULL/*addr*/, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
+    {
+        // todo
+        int error = GetLastError();
+        printf( "QOSAddSocketToFlow failed: %d\n", error );
+        return error;
+    }
+    return 0;
+}
+
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
+
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
     netcode_assert( s );
@@ -686,8 +722,39 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    // IMPORTANT: Tagging on Windows is QoS based and requires the destination address
-    // consequently, it's only suitable for use clients, and is done in netcode_client_connect!
+    if ( netcode_packet_tagging_enabled )
+    {
+        struct sockaddr_in sin4;
+        struct sockaddr_in6 sin6;
+        struct sockaddr * addr = NULL;
+
+        if ( address->type == NEXT_ADDRESS_IPV6 )
+        {
+            addr = (struct sockaddr*) &sin6;
+            socklen_t len = sizeof( sin6 );
+            if ( getsockname( s->handle, addr, &len ) == -1 )
+            {
+                netcode_printf( NEXT_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
+                netcode_socket_destroy( s );
+                return NULL;
+            }
+            address->port = next_platform_ntohs( sin6.sin6_port );
+        }
+        else
+        {
+            addr = (struct sockaddr*) &sin4;
+            socklen_t len = sizeof( sin4 );
+            if ( getsockname( s->handle, addr, &len ) == -1 )
+            {
+                netcode_printf( NEXT_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
+                netcode_socket_destroy( s );
+                return NULL;
+            }
+            address->port = ntohs( sin4.sin_port );
+        }
+
+        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, addr );
+    }
 
 #endif
 
@@ -695,102 +762,6 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     return NETCODE_SOCKET_ERROR_NONE;
 }
-
-#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <ws2ipdef.h>
-#include <wininet.h>
-#include <iphlpapi.h>
-#include <qos2.h>
-
-#pragma comment( lib, "Qwave.lib" )
-
-static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
-{
-    QOS_VERSION QosVersion = { 1 , 0 };
-    HANDLE qosHandle;
-    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
-    {
-        // todo
-        printf( "QOSCreateHandler failed\n" );
-        return GetLastError();
-    }
-    // todo
-    (void) addr;
-    if ( QOSAddSocketToFlow( qosHandle, socket, NULL/*addr*/, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
-    {
-        // todo
-        int error = GetLastError();
-        printf( "QOSAddSocketToFlow failed: %d\n", error );
-        return error;
-    }
-    return 0;
-}
-
-void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_address_t * to )
-{
-    netcode_assert( socket );
-    netcode_assert( to );
-
-    if ( !netcode_packet_tagging_enabled )
-        return;
-
-    if ( socket->handle == 0 )
-        return;
-
-    if ( to->type == NETCODE_ADDRESS_IPV6 )
-    {
-        // todo
-        printf( "ipv6\n" );
-
-        struct sockaddr_in6 socket_address;
-        memset( &socket_address, 0, sizeof( socket_address ) );
-        socket_address.sin6_family = AF_INET6;
-        int i;
-        for ( i = 0; i < 8; i++ )
-        {
-            ( (uint16_t*) &socket_address.sin6_addr ) [i] = htons( to->data.ipv6[i] );
-        }
-        socket_address.sin6_port = htons( to->port );
-
-        struct sockaddr_storage addr;
-        memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
-
-        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
-        {
-            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to set qos (ipv6)\n" );
-            return;
-        }
-    }
-    else if ( to->type == NETCODE_ADDRESS_IPV4 )
-    {
-        // todo
-        printf( "ipv4\n" );
-
-        struct sockaddr_in socket_address;
-        memset( &socket_address, 0, sizeof( socket_address ) );
-        socket_address.sin_family = AF_INET;
-        socket_address.sin_addr.s_addr = ( ( (uint32_t) to->data.ipv4[0] ) )        | 
-                                         ( ( (uint32_t) to->data.ipv4[1] ) << 8 )   | 
-                                         ( ( (uint32_t) to->data.ipv4[2] ) << 16 )  | 
-                                         ( ( (uint32_t) to->data.ipv4[3] ) << 24 );
-        socket_address.sin_port = htons( to->port );
-
-        struct sockaddr_storage addr;
-        memcpy( (char*) &addr, (char*) &socket_address, sizeof(socket_address) );
-
-        if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
-        {
-            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to set qos (ipv4)\n" );
-            return;
-        }
-    }
-}
-
-#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
 void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcode_address_t * to, void * packet_data, int packet_bytes )
 {
@@ -2880,11 +2851,6 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
             netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
     }
 
-#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-    netcode_socket_set_qos( &client->socket_holder.ipv4, &client->server_address );
-    netcode_socket_set_qos( &client->socket_holder.ipv6, &client->server_address );
-#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
 
@@ -3253,11 +3219,6 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
         netcode_address_to_string( &client->server_address, server_address_string ), 
         client->server_address_index + 1, 
         client->connect_token.num_server_addresses );
-
-#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
-    netcode_socket_set_qos( &client->socket_holder.ipv4, &client->server_address );
-    netcode_socket_set_qos( &client->socket_holder.ipv6, &client->server_address );
-#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
