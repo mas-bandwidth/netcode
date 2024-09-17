@@ -12,7 +12,7 @@ netcode has the following features:
 
 * Secure client connection with connect tokens.
 * Client slot system. Servers have n slots for clients. Client are assigned an index when they connect to the server. Clients are quickly denied connection if all slots are already taken.
-* Immediate clean disconnect on client or server side of connection, plus timeouts for hard disconnects.
+* Immediate clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets.
 
 It protects your game server from:
