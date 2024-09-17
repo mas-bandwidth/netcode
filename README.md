@@ -11,7 +11,7 @@ It's intended for use by real-time multiplayer games, which need a connection or
 netcode has the following features:
 
 * Secure client connection with connect tokens.
-* Client slot system. Servers have n slots for clients. Client are assigned an index when they connect to the server. Clients are denied connection if the slots are already full.
+* Client slot system. Servers have n slots for clients. Client are assigned an index when they connect to the server. Clients are quickly denied connection if all slots are already taken.
 * Immediate clean disconnect on client or server side of connection, plus timeouts for hard disconnects.
 * Encrypted and signed packets.
 
