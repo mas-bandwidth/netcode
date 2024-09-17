@@ -462,6 +462,8 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
 
 #if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
+#include <qos2.h>
+
 #pragma comment( lib, "Qwave.lib" )
 
 static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
