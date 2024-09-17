@@ -107,7 +107,7 @@ Thanks for your contributions to netcode!
 
 # Author
 
-The author of this library is Glenn Fiedler.
+The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glenn-fiedler-11b735302/).
 
 Other open source libraries by the same author include: [reliable](https://github.com/mas-bandwidth/reliable), [serialize](https://github.com/mas-bandwidth/serialize), and [yojimbo](https://github.com/mas-bandwidth/yojimbo).
 
