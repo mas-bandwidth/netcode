@@ -686,8 +686,8 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    // IMPORTANT: Tagging on Windows is QOS based and requires the destination address
-    // consequently, it's only suitable for clients, and needs to be done elsewhere.
+    // IMPORTANT: Tagging on Windows is QoS based and requires the destination address
+    // consequently, it's only suitable for use clients, and is done in netcode_client_connect!
 
 #endif
 
@@ -696,7 +696,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     return NETCODE_SOCKET_ERROR_NONE;
 }
 
-#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
 #include <windows.h>
 #include <winsock2.h>
@@ -776,7 +776,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
     }
 }
 
-#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
 void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcode_address_t * to, void * packet_data, int packet_bytes )
 {
@@ -2855,8 +2855,20 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s [%d/%d]\n", 
-        netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
+    if ( client->connect_token.num_server_addresses == 1 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s\n", 
+            netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
+    }
+    else
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to server %s [%d/%d]\n", 
+            netcode_address_to_string( &client->server_address, server_address_string ), client->server_address_index + 1, client->connect_token.num_server_addresses );
+    }
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
+    netcode_socket_set_qos( client->socket, &client->server_address );
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     memcpy( client->context.read_packet_key, client->connect_token.server_to_client_key, NETCODE_KEY_BYTES );
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
@@ -3226,6 +3238,10 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
         netcode_address_to_string( &client->server_address, server_address_string ), 
         client->server_address_index + 1, 
         client->connect_token.num_server_addresses );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
+    netcode_socket_set_qos( client->socket, &client->server_address );
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS && NETCODE_PACKET_TAGGING
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
