@@ -9151,6 +9151,8 @@ void test_packet_tagging()
 
     netcode_enable_packet_tagging();
 
+    // todo
+    printf( "ipv4\n" );
     {
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
@@ -9168,6 +9170,8 @@ void test_packet_tagging()
         netcode_server_destroy( server );
     }
 
+    // todo
+    printf( "ipv6\n" );
     {
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
