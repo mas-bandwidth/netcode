@@ -750,7 +750,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
 
         if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_WARN, "warning: failed to set qos (ipv6)\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to set qos (ipv6)\n" );
             return;
         }
     }
@@ -770,7 +770,7 @@ void netcode_socket_set_qos( struct netcode_socket_t * socket, struct netcode_ad
 
         if ( netcode_set_socket_codepoint( socket->handle, QOSTrafficTypeAudioVideo, 0, (struct sockaddr*)&addr ) != 0 )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_WARN, "warning: failed to set qos (ipv4)\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "warning: failed to set qos (ipv4)\n" );
             return;
         }
     }
