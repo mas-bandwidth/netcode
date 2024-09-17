@@ -639,7 +639,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
             int tos = 46;
-            if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
+            if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_TCLASS, (NETCODE_CONST char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
                 netcode_socket_destroy( s );
@@ -649,7 +649,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         else
         {
             int tos = 46;
-            if ( setsockopt( s->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
+            if ( setsockopt( s->handle, IPPROTO_IP, IP_TOS, (NETCODE_CONST char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
                 netcode_socket_destroy( s );
@@ -665,7 +665,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
             int tos = 46;
-            if ( setsockopt( socket->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
+            if ( setsockopt( socket->handle, IPPROTO_IPV6, IPV6_TCLASS, (NETCODE_CONST char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
                 netcode_socket_destroy( s );
@@ -675,7 +675,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         else
         {
             int tos = 46;
-            if ( setsockopt( socket->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
+            if ( setsockopt( socket->handle, IPPROTO_IP, IP_TOS, (NETCODE_CONST char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
                 netcode_socket_destroy( s );
@@ -3829,7 +3829,7 @@ void netcode_fnv_init( netcode_fnv_t * fnv )
     *fnv = 0xCBF29CE484222325;
 }
 
-void netcode_fnv_write( netcode_fnv_t * fnv, const uint8_t * data, size_t size )
+void netcode_fnv_write( netcode_fnv_t * fnv, NETCODE_CONST uint8_t * data, size_t size )
 {
     for ( size_t i = 0; i < size; i++ )
     {
@@ -3843,7 +3843,7 @@ uint64_t netcode_fnv_finalize( netcode_fnv_t * fnv )
     return *fnv;
 }
 
-uint64_t netcode_hash_string( const char * string )
+uint64_t netcode_hash_string( NETCODE_CONST char * string )
 {
     netcode_fnv_t fnv;
     netcode_fnv_init( &fnv );
@@ -3851,7 +3851,7 @@ uint64_t netcode_hash_string( const char * string )
     return netcode_fnv_finalize( &fnv );
 }
 
-uint64_t netcode_hash_data( const uint8_t * data, size_t size )
+uint64_t netcode_hash_data( NETCODE_CONST uint8_t * data, size_t size )
 {
     netcode_fnv_t fnv;
     netcode_fnv_init( &fnv );
@@ -3861,7 +3861,7 @@ uint64_t netcode_hash_data( const uint8_t * data, size_t size )
 
 static int netcode_address_hash( struct netcode_address_t * address )
 {
-    return netcode_hash_data( (const uint8_t*) address, sizeof(struct netcode_address_t) ) % NETCODE_ADDRESS_MAP_BUCKETS;
+    return netcode_hash_data( (NETCODE_CONST uint8_t*) address, sizeof(struct netcode_address_t) ) % NETCODE_ADDRESS_MAP_BUCKETS;
 }
 
 static void netcode_address_map_element_reset( struct netcode_address_map_element_t * element )
@@ -9132,10 +9132,10 @@ void test_loopback()
 
 void test_address_map()
 {
-    const char * str_address_1 = "107.77.207.77:40000";
-    const char * str_address_2 = "127.0.0.1:23650";
-    const char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
-    const char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
+    NETCODE_CONST char * str_address_1 = "107.77.207.77:40000";
+    NETCODE_CONST char * str_address_2 = "127.0.0.1:23650";
+    NETCODE_CONST char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
+    NETCODE_CONST char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
 
     struct netcode_address_map_t * map = netcode_address_map_create( NULL, NULL, NULL );
 
@@ -9207,6 +9207,32 @@ void test_packet_tagging()
         check( server->socket_holder.ipv6.handle == 0 );
         check( netcode_address_equal( &server->address, &test_address ) );
 
+        int i;
+        for ( i = 0; i < 10; i++ )
+        {
+            struct netcode_client_config_t client_config;
+
+            netcode_default_client_config( &client_config );
+
+            struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+            NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
+            uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+            uint64_t client_id = 0;
+            netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+            uint8_t user_data[NETCODE_USER_DATA_BYTES];
+            netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+            check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+            netcode_client_connect( client, connect_token );
+
+            netcode_client_destroy( client );
+        }
+
         netcode_server_destroy( server );
     }
 
@@ -9214,7 +9240,7 @@ void test_packet_tagging()
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
 
-        struct netcode_server_t * server = netcode_server_create( "[::1]:50000", &server_config, 0.0 );
+        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
 
         struct netcode_address_t test_address;
         netcode_parse_address( "[::1]:50000", &test_address );
@@ -9223,6 +9249,32 @@ void test_packet_tagging()
         check( server->socket_holder.ipv4.handle == 0 );
         check( server->socket_holder.ipv6.handle != 0 );
         check( netcode_address_equal( &server->address, &test_address ) );
+
+        int i;
+        for ( i = 0; i < 10; i++ )
+        {
+            struct netcode_client_config_t client_config;
+
+            netcode_default_client_config( &client_config );
+
+            struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+            NETCODE_CONST char * server_address = "[::1]:40000";
+
+            uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+            uint64_t client_id = 0;
+            netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+            uint8_t user_data[NETCODE_USER_DATA_BYTES];
+            netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+            check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+            netcode_client_connect( client, connect_token );
+
+            netcode_client_destroy( client );
+        }
 
         netcode_server_destroy( server );
     }
