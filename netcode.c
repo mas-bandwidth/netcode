@@ -429,17 +429,18 @@ struct netcode_socket_holder_t
     struct netcode_socket_t ipv6;
 };
 
-#define NETCODE_SOCKET_ERROR_NONE                               0
-#define NETCODE_SOCKET_ERROR_CREATE_FAILED                      1
-#define NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED            2
-#define NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED           3
-#define NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED              4
-#define NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED              5
-#define NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED                   6
-#define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                   7
-#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED           8
-#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED           9
-#define NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED  10
+#define NETCODE_SOCKET_ERROR_NONE                                    0
+#define NETCODE_SOCKET_ERROR_CREATE_FAILED                           1
+#define NETCODE_SOCKET_ERROR_SET_NON_BLOCKING_FAILED                 2
+#define NETCODE_SOCKET_ERROR_SOCKOPT_IPV6_ONLY_FAILED                3
+#define NETCODE_SOCKET_ERROR_SOCKOPT_RCVBUF_FAILED                   4
+#define NETCODE_SOCKET_ERROR_SOCKOPT_SNDBUF_FAILED                   5
+#define NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED                        6
+#define NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED                        7
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV4_FAILED                8
+#define NETCODE_SOCKET_ERROR_GET_SOCKNAME_IPV6_FAILED                9
+#define NETCODE_SOCKET_ERROR_DISABLE_UDP_PORT_CONNRESET_FAILED      10
+#define NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED           11
 
 void netcode_socket_destroy( struct netcode_socket_t * socket )
 {
@@ -640,6 +641,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
         else
@@ -647,14 +649,35 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             int tos = 46;
             if ( setsockopt( s->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
-                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "failed to enable packet tagging (ipv4)" );
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
     }
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_LINUX
 
-    // todo: linux implementation
+    if ( netcode_packet_tagging_enabled )
+    {
+        if ( address->type == NETCODE_ADDRESS_IPV6 )
+        {
+            int tos = 46;
+            if ( setsockopt( socket->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+            }
+        }
+        else
+        {
+            int tos = 46;
+            if ( setsockopt( socket->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+            }
+        }
+    }
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
@@ -3438,7 +3461,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
     for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; i++ )
     {
         if ( encryption_manager->address[i].type == NETCODE_ADDRESS_NONE || 
-        	( netcode_encryption_manager_entry_expired( encryption_manager, i, time ) && encryption_manager->client_index[i] == -1 ) )
+            ( netcode_encryption_manager_entry_expired( encryption_manager, i, time ) && encryption_manager->client_index[i] == -1 ) )
         {
             encryption_manager->timeout[i] = timeout;
             encryption_manager->address[i] = *address;
