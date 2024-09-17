@@ -718,6 +718,8 @@ static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE traffic
         printf( "QOSCreateHandler failed\n" );
         return GetLastError();
     }
+    // todo
+    (void) addr;
     if ( QOSAddSocketToFlow( qosHandle, socket, NULL/*addr*/, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
     {
         // todo
