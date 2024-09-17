@@ -460,6 +460,27 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     }
 }
 
+#if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+#pragma comment( lib, "Qwave.lib" )
+
+static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
+{
+    QOS_VERSION QosVersion = { 1 , 0 };
+    HANDLE qosHandle;
+    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
+    {
+        return GetLastError();
+    }
+    if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
+    {
+        return GetLastError();
+    }
+    return 0;
+}
+
+#endif // #if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
 int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t * address, int send_buffer_size, int receive_buffer_size )
 {
     netcode_assert( s );
@@ -641,6 +662,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+                netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
@@ -650,6 +672,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             if ( setsockopt( s->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
+                netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
@@ -665,6 +688,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             if ( setsockopt( socket->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+                netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
@@ -674,6 +698,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             if ( setsockopt( socket->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv4)\n" );
+                netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
         }
@@ -681,7 +706,44 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    // todo: windows implementation
+    if ( netcode_packet_tagging_enabled )
+    {
+        sockaddr_in sin4;
+        sockaddr_in6 sin6;
+        sockaddr * addr = NULL;
+
+        if ( address->type == NETCODE_ADDRESS_IPV6 )
+        {
+            addr = (sockaddr*) &sin6;
+            socklen_t len = sizeof( sin6 );
+            if ( getsockname( s->handle, addr, &len ) == -1 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
+                netcode_socket_destroy( s );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+            }
+            address->port = ntohs( sin6.sin6_port );
+        }
+        else
+        {
+            addr = (sockaddr*) &sin4;
+            socklen_t len = sizeof( sin4 );
+            if ( getsockname( s->handle, addr, &len ) == -1 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
+                netcode_socket_destroy( s );
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+            }
+            address->port = ntohs( sin4.sin_port );
+        }
+
+        if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, addr ) != 0 )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+        }
+    }
 
 #endif
 
