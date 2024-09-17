@@ -462,10 +462,10 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
 
 #if NETCODE_PACKET_TAGGING && NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <ws2ipdef.h>
-#include <malloc.h>
 #include <wininet.h>
 #include <iphlpapi.h>
 #include <qos2.h>
