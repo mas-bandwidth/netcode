@@ -73,6 +73,19 @@
 
 // ------------------------------------------------------------------
 
+#if NETCODE_PACKET_TAGGING
+
+static int netcode_packet_tagging_enabled = 0;
+
+void netcode_enable_packet_tagging()
+{
+    netcode_packet_tagging_enabled = 1;
+}
+
+#endif // #if NETCODE_PACKET_TAGGING
+
+// ------------------------------------------------------------------
+
 static void netcode_default_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
 {
     printf( "assert failed: ( %s ), function %s, file %s, line %d\n", condition, function, file, line );
@@ -469,14 +482,16 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
-    // IMPORTANT: tell windows we don't want to receive any connection reset messages
-    // for this socket, otherwise recvfrom errors out when client sockets disconnect hard
-    // in response to ICMP messages.
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    // IMPORTANT: tell windows we don't want to receive any connection reset messages for this socket
+    // If we don't do this, clients disconnecting hard will error out the server with ICMP disconnected packets
+    // causing long periods where the server doesn't receive any packets from clients.
     #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
     BOOL bNewBehavior = FALSE;
     DWORD dwBytesReturned = 0;
     WSAIoctl( s->handle, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL );
+
 #endif
 
     // force IPv6 only if necessary
@@ -603,6 +618,44 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     #error unsupported platform
 
 #endif
+
+#if NETCODE_PACKET_TAGGING
+
+    // tag packets as low latency
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC
+
+    if ( netcode_packet_tagging_enabled )
+    {
+        if ( address->type == NETCODE_ADDRESS_IPV6 )
+        {
+            int tos = 46;
+            if ( setsockopt( s->handle, IPPROTO_IPV6, IPV6_TCLASS, (const char *)&tos, sizeof(tos) ) != 0 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging (ipv6)\n" );
+            }
+        }
+        else
+        {
+            int tos = 46;
+            if ( setsockopt( s->handle, IPPROTO_IP, IP_TOS, (const char *)&tos, sizeof(tos) ) != 0 )
+            {
+                netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "failed to enable packet tagging (ipv4)" );
+            }
+        }
+    }
+
+#elif NETCODE_PLATFORM == NETCODE_PLATFORM_LINUX
+
+    // todo: linux implementation
+
+#elif NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    // todo: windows implementation
+
+#endif
+
+#endif // #if NETCODE_PACKET_TAGGING
 
     return NETCODE_SOCKET_ERROR_NONE;
 }
@@ -8983,6 +9036,52 @@ void test_address_map()
     netcode_address_map_destroy( map );
 }
 
+#if NETCODE_PACKET_TAGGING
+
+void test_packet_tagging()
+{
+    // IMPORTANT: It's off by default because it doesn't play well with some older home routers
+    // See https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging
+    // Turning it on can really improve network performance (much lower jitter) when played on Wi-Fi 6 routers
+    netcode_enable_packet_tagging();
+
+    {
+        struct netcode_server_config_t server_config;
+        netcode_default_server_config( &server_config );
+
+        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+        struct netcode_address_t test_address;
+        netcode_parse_address( "127.0.0.1:40000", &test_address );
+
+        check( server );
+        check( server->socket_holder.ipv4.handle != 0 );
+        check( server->socket_holder.ipv6.handle == 0 );
+        check( netcode_address_equal( &server->address, &test_address ) );
+
+        netcode_server_destroy( server );
+    }
+
+    {
+        struct netcode_server_config_t server_config;
+        netcode_default_server_config( &server_config );
+
+        struct netcode_server_t * server = netcode_server_create( "[::1]:50000", &server_config, 0.0 );
+
+        struct netcode_address_t test_address;
+        netcode_parse_address( "[::1]:50000", &test_address );
+
+        check( server );
+        check( server->socket_holder.ipv4.handle == 0 );
+        check( server->socket_holder.ipv6.handle != 0 );
+        check( netcode_address_equal( &server->address, &test_address ) );
+
+        netcode_server_destroy( server );
+    }
+}
+
+#endif // #if NETCODE_PACKET_TAGGING
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -9030,6 +9129,9 @@ void netcode_test()
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
         RUN_TEST( test_address_map );
+#if NETCODE_PACKET_TAGGING
+        RUN_TEST( test_packet_tagging );
+#endif // #if NETCODE_PACKET_TAGGING
     }
 }
 

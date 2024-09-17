@@ -112,6 +112,14 @@ int netcode_init();
 
 void netcode_term();
 
+#ifndef NETCODE_PACKET_TAGGING
+#define NETCODE_PACKET_TAGGING 1
+#endif // #ifndef NETCODE_PACKET_TAGGING
+
+#if NETCODE_PACKET_TAGGING
+void netcode_enable_packet_tagging();
+#endif // #if NETCODE_PACKET_TAGGING
+
 struct netcode_address_t
 {
     union { uint8_t ipv4[4]; uint16_t ipv6[8]; } data;
