@@ -738,7 +738,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
                 netcode_socket_destroy( s );
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
-            address->port = next_platform_ntohs( sin6.sin6_port );
+            address->port = ntohs( sin6.sin6_port );
         }
         else
         {
