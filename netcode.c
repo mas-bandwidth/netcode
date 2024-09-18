@@ -740,7 +740,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             }
             address->port = ntohs( sin6.sin6_port );
             */
-            addr->ss_family = AF_INET6;
+            addr.ss_family = AF_INET6;
         }
         else
         {
@@ -755,10 +755,10 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             }
             address->port = ntohs( sin4.sin_port );
             */
-            addr->ss_family = AF_INET;
+            addr.ss_family = AF_INET;
         }
 
-        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, addr );
+        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, &addr );
     }
 
 #endif
