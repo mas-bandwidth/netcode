@@ -719,38 +719,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     {
         struct sockaddr_storage addr;
         memset( &addr, 0, sizeof(addr) );
-
-        if ( address->type == NETCODE_ADDRESS_IPV6 )
-        {
-            /*
-            addr = (struct sockaddr*) &sin6;
-            socklen_t len = sizeof( sin6 );
-            if ( getsockname( s->handle, addr, &len ) == -1 )
-            {
-                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
-                netcode_socket_destroy( s );
-                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
-            }
-            address->port = ntohs( sin6.sin6_port );
-            */
-            addr.ss_family = AF_INET6;
-        }
-        else
-        {
-            /*
-            addr = (struct sockaddr*) &sin4;
-            socklen_t len = sizeof( sin4 );
-            if ( getsockname( s->handle, addr, &len ) == -1 )
-            {
-                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
-                netcode_socket_destroy( s );
-                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
-            }
-            address->port = ntohs( sin4.sin_port );
-            */
-            addr.ss_family = AF_INET;
-        }
-
+        addr.ss_family = ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET;
         netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, (PSOCKADDR) &addr );
     }
 
@@ -3180,7 +3149,7 @@ void netcode_client_send_packets( struct netcode_client_t * client )
             if ( client->last_packet_send_time + ( 1.0 / NETCODE_PACKET_SEND_RATE ) >= client->time )
                 return;
 
-            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent connection keep-alive packet to server\n" );
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client sent connection keep alive packet to server\n" );
 
             struct netcode_connection_keep_alive_packet_t packet;
             packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
@@ -3729,66 +3698,6 @@ int netcode_connect_token_entries_find_or_add( struct netcode_connect_token_entr
     return 0;
 }
 
-// ----------------------------------------------------------------
-
-struct netcode_address_map_element_t
-{
-    int client_index;
-    struct netcode_address_t address;
-};
-
-struct netcode_address_map_bucket_t
-{
-    int size;
-    struct netcode_address_map_element_t elements[NETCODE_MAX_CLIENTS];
-};
-
-struct netcode_address_map_t
-{
-    void * allocator_context;
-    void * (*allocate_function)(void*,size_t);
-    void (*free_function)(void*,void*);
-    int size;
-    struct netcode_address_map_bucket_t buckets[NETCODE_ADDRESS_MAP_BUCKETS];
-};
-
-static void netcode_address_map_reset( struct netcode_address_map_t * map );
-
-struct netcode_address_map_t * netcode_address_map_create( void * allocator_context, 
-                                                           void * (*allocate_function)(void*,size_t), 
-                                                           void (*free_function)(void*,void*) )
-{
-    if ( allocate_function == NULL )
-    {
-        allocate_function = netcode_default_allocate_function;
-    }
-
-    if ( free_function == NULL )
-    {
-        free_function = netcode_default_free_function;
-    }
-
-    struct netcode_address_map_t * map = (struct netcode_address_map_t*) 
-        allocate_function( allocator_context, sizeof( struct netcode_address_map_t ) );
-
-    netcode_assert( map );
-
-    netcode_address_map_reset( map );
-
-    map->allocator_context = allocator_context;
-    map->allocate_function = allocate_function;
-    map->free_function = free_function;
-
-    return map;
-}
-
-void netcode_address_map_destroy( struct netcode_address_map_t * map )
-{
-    netcode_assert( map );
-    netcode_assert( map->free_function );
-    map->free_function( map->allocator_context, map );
-}
-
 typedef uint64_t netcode_fnv_t;
 
 void netcode_fnv_init( netcode_fnv_t * fnv )
@@ -3824,114 +3733,6 @@ uint64_t netcode_hash_data( NETCODE_CONST uint8_t * data, size_t size )
     netcode_fnv_init( &fnv );
     netcode_fnv_write( &fnv, (uint8_t *)( data ), size );
     return netcode_fnv_finalize( &fnv );
-}
-
-static int netcode_address_hash( struct netcode_address_t * address )
-{
-    return netcode_hash_data( (NETCODE_CONST uint8_t*) address, sizeof(struct netcode_address_t) ) % NETCODE_ADDRESS_MAP_BUCKETS;
-}
-
-static void netcode_address_map_element_reset( struct netcode_address_map_element_t * element )
-{
-    element->client_index = -1;
-    memset( &element->address, 0, sizeof( element->address ) );
-}
-
-static void netcode_address_map_bucket_reset( struct netcode_address_map_bucket_t * bucket )
-{
-    int i;
-    bucket->size = 0;
-    for ( i = 0; i < NETCODE_MAX_CLIENTS; i++ )
-    {
-        struct netcode_address_map_element_t * element = bucket->elements + i;
-        netcode_address_map_element_reset( element );
-    }
-}
-
-static void netcode_address_map_reset( struct netcode_address_map_t * map )
-{
-    int i;
-    map->size = 0;
-    for ( i = 0; i < NETCODE_ADDRESS_MAP_BUCKETS; i++ )
-    {
-        struct netcode_address_map_bucket_t * bucket = map->buckets + i;
-        netcode_address_map_bucket_reset(bucket);
-    }
-}
-
-static int netcode_address_map_set( struct netcode_address_map_t * map,
-                                    struct netcode_address_t * address,
-                                    int client_index )
-{
-    int bucket_index = netcode_address_hash( address );
-    struct netcode_address_map_bucket_t * bucket = map->buckets + bucket_index;
-    if ( bucket->size == NETCODE_MAX_CLIENTS )
-    {
-        return 0;
-    }
-
-    struct netcode_address_map_element_t * element = bucket->elements + bucket->size;
-    element->client_index = client_index;
-    element->address = *address;
-
-    ++bucket->size;
-    ++map->size;
-
-    return 1;
-}
-
-static struct netcode_address_map_element_t * netcode_address_map_bucket_find(
-    struct netcode_address_map_bucket_t * bucket,
-    struct netcode_address_t * address )
-{
-    int i;
-    for ( i = 0; i < bucket->size; i++ )
-    {
-        struct netcode_address_map_element_t * element = bucket->elements + i;
-        if ( netcode_address_equal( address, &element->address ) )
-        {
-            return element;
-        }
-    }
-
-    return NULL;
-}
-
-static int netcode_address_map_get( struct netcode_address_map_t * map,
-                                    struct netcode_address_t * address )
-{
-    int bucket_index = netcode_address_hash( address );
-    struct netcode_address_map_bucket_t * bucket = map->buckets + bucket_index;
-    struct netcode_address_map_element_t * element = netcode_address_map_bucket_find( bucket, address );
-    
-    if ( !element )
-    {
-        return -1;
-    }
-
-    return element->client_index;
-}
-
-static int netcode_address_map_delete( struct netcode_address_map_t * map,
-                                       struct netcode_address_t * address )
-{
-    int bucket_index = netcode_address_hash( address );
-    struct netcode_address_map_bucket_t * bucket = map->buckets + bucket_index;
-    struct netcode_address_map_element_t * element = netcode_address_map_bucket_find( bucket, address );
-
-    if ( !element )
-    {
-        return 0;
-    }
-
-    struct netcode_address_map_element_t * last = bucket->elements + (bucket->size - 1);
-    *element = *last;
-    netcode_address_map_element_reset(last);
-
-    --bucket->size;
-    --map->size;
-
-    return 1;
 }
 
 // ----------------------------------------------------------------
@@ -3980,7 +3781,6 @@ struct netcode_server_t
     struct netcode_replay_protection_t client_replay_protection[NETCODE_MAX_CLIENTS];
     struct netcode_packet_queue_t client_packet_queue[NETCODE_MAX_CLIENTS];
     struct netcode_address_t client_address[NETCODE_MAX_CLIENTS];
-    struct netcode_address_map_t client_address_map;
     struct netcode_connect_token_entry_t connect_token_entries[NETCODE_MAX_CONNECT_TOKEN_ENTRIES];
     struct netcode_encryption_manager_t encryption_manager;
     uint8_t * receive_packet_data[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
@@ -4077,6 +3877,8 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
         return NULL;
     }
 
+    memset( server, 0, sizeof(struct netcode_server_t) );
+
     if ( !config->network_simulator )
     {
         netcode_printf( NETCODE_LOG_LEVEL_INFO, "server listening on %s\n", server_address1_string );
@@ -4090,23 +3892,8 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
     server->socket_holder.ipv4 = socket_ipv4;
     server->socket_holder.ipv6 = socket_ipv6;
     server->address = server_address1;
-    server->flags = 0;
     server->time = time;
-    server->running = 0;
-    server->max_clients = 0;
-    server->num_connected_clients = 0;
     server->global_sequence = 1ULL << 63;
-
-    memset( server->client_connected, 0, sizeof( server->client_connected ) );
-    memset( server->client_loopback, 0, sizeof( server->client_loopback ) );
-    memset( server->client_confirmed, 0, sizeof( server->client_confirmed ) );
-    memset( server->client_id, 0, sizeof( server->client_id ) );
-    memset( server->client_sequence, 0, sizeof( server->client_sequence ) );
-    memset( server->client_last_packet_send_time, 0, sizeof( server->client_last_packet_send_time ) );
-    memset( server->client_last_packet_receive_time, 0, sizeof( server->client_last_packet_receive_time ) );
-    memset( server->client_address, 0, sizeof( server->client_address ) );
-    netcode_address_map_reset( &server->client_address_map );
-    memset( server->client_user_data, 0, sizeof( server->client_user_data ) );
 
     int i;
     for ( i = 0; i < NETCODE_MAX_CLIENTS; i++ )
@@ -4122,8 +3909,6 @@ struct netcode_server_t * netcode_server_create_overload( NETCODE_CONST char * s
     {
         netcode_replay_protection_reset( &server->client_replay_protection[i] );
     }
-
-    memset( &server->client_packet_queue, 0, sizeof( server->client_packet_queue ) );
 
     return server;
 }
@@ -4154,7 +3939,9 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     netcode_assert( max_clients <= NETCODE_MAX_CLIENTS );
 
     if ( server->running )
+    {
         netcode_server_stop( server );
+    }
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server started with %d client slots\n", max_clients );
 
@@ -4316,7 +4103,6 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->client_sequence[client_index] = 0;
     server->client_last_packet_send_time[client_index] = 0.0;
     server->client_last_packet_receive_time[client_index] = 0.0;
-    netcode_address_map_delete( &server->client_address_map, &server->client_address[client_index] );
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
     memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
@@ -4406,10 +4192,14 @@ int netcode_server_find_client_index_by_address( struct netcode_server_t * serve
     netcode_assert( server );
     netcode_assert( address );
 
-    if ( address->type == 0 )
-        return -1;
+    int i;
+    for ( i = 0; i < server->max_clients; i++ )
+    {   
+        if ( server->client_connected[i] && netcode_address_equal( &server->client_address[i], address ) )
+            return i;
+    }
 
-    return netcode_address_map_get( &server->client_address_map, address );
+    return -1;
 }
 
 void netcode_server_process_connection_request_packet( struct netcode_server_t * server, 
@@ -4560,7 +4350,10 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
     server->client_address[client_index] = *address;
-    netcode_address_map_set( &server->client_address_map, address, client_index );
+    
+    netcode_assert( netcode_server_find_client_index_by_id( server, client_id ) == client_index );
+    netcode_assert( netcode_server_find_client_index_by_address( server, address ) == client_index );
+
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
     memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
@@ -4948,8 +4741,21 @@ void netcode_server_check_for_timeouts( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; i++ )
     {
-        if ( server->client_connected[i] && server->client_timeout[i] > 0 && !server->client_loopback[i] &&
-             ( server->client_last_packet_receive_time[i] + server->client_timeout[i] <= server->time ) )
+        if ( !server->client_connected[i] )
+            continue;
+
+        if ( server->client_timeout[i] <= 0 )
+            continue;
+
+        if ( server->client_loopback[i] )
+            continue;
+
+        if ( ( server->time - server->client_last_packet_receive_time[i] ) >= 1.0f )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server has not received a packet from client %d for %.2f seconds\n", i, server->time - server->client_last_packet_receive_time[i] );
+        }
+
+        if ( server->client_last_packet_receive_time[i] + server->client_timeout[i] <= server->time )
         {
             netcode_printf( NETCODE_LOG_LEVEL_INFO, "server timed out client %d\n", i );
             netcode_server_disconnect_client_internal( server, i, 0 );
@@ -5148,7 +4954,6 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     server->client_id[client_index] = client_id;
     server->client_sequence[client_index] = 0;
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
-    netcode_address_map_set( &server->client_address_map, &server->client_address[client_index], client_index );
     server->client_last_packet_send_time[client_index] = server->time;
     server->client_last_packet_receive_time[client_index] = server->time;
 
@@ -5202,7 +5007,6 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     server->client_sequence[client_index] = 0;
     server->client_last_packet_send_time[client_index] = 0.0;
     server->client_last_packet_receive_time[client_index] = 0.0;
-    netcode_address_map_delete( &server->client_address_map, &server->client_address[client_index] );
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
     memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
@@ -8714,58 +8518,6 @@ void test_loopback()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-void test_address_map()
-{
-    NETCODE_CONST char * str_address_1 = "107.77.207.77:40000";
-    NETCODE_CONST char * str_address_2 = "127.0.0.1:23650";
-    NETCODE_CONST char * str_address_3 = "fe80::202:b3ff:fe1e:8329";
-    NETCODE_CONST char * str_address_4 = "fe80::202:b3ff:fe1e:8330";
-
-    struct netcode_address_map_t * map = netcode_address_map_create( NULL, NULL, NULL );
-
-    struct netcode_address_t address_set;
-    struct netcode_address_t address_get;
-    struct netcode_address_t address_delete;
-
-    netcode_address_map_reset( map );
-
-    // Set ipv4
-    netcode_parse_address( str_address_1, &address_set );
-    check( netcode_address_map_set( map, &address_set, 0 ) == 1 );
-
-    // Set ipv6
-    netcode_parse_address( str_address_3, &address_set );
-    check( netcode_address_map_set( map, &address_set, 1 ) == 1 );
-
-    // Get ipv4
-    netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_get( map, &address_get) == 0 );
-
-    // Get ipv6
-    netcode_parse_address( str_address_3, &address_get );
-    check( netcode_address_map_get( map, &address_get) == 1 );
-
-    // Get non-existent ipv4
-    netcode_parse_address( str_address_2, &address_get );
-    check( netcode_address_map_get( map, &address_get ) == -1);
-
-    // Get non-existent ipv6
-    netcode_parse_address( str_address_4, &address_get );
-    check( netcode_address_map_get( map, &address_get ) == -1);
-
-    // Try to delete key, after that, the key should disappear
-    netcode_parse_address( str_address_1, &address_delete );
-    netcode_parse_address( str_address_1, &address_get );
-    check( netcode_address_map_delete( map, &address_delete ) == 1 );
-    check( netcode_address_map_get( map, &address_get ) == -1 );
-
-    // Try to delete non-existent key
-    netcode_parse_address( str_address_2, &address_delete );
-    check ( netcode_address_map_delete( map, &address_delete ) == 0 );
-
-    netcode_address_map_destroy( map );
-}
-
 #if NETCODE_PACKET_TAGGING
 
 void test_packet_tagging()
@@ -8895,7 +8647,6 @@ void netcode_test()
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
-        RUN_TEST( test_address_map );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
