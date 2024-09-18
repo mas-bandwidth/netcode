@@ -485,7 +485,7 @@ static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE traffic
     }
     // todo
     (void) addr;
-    if ( QOSAddSocketToFlow( qosHandle, socket, NULL/*addr*/, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
+    if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
     {
         // todo
         int error = GetLastError();
@@ -9194,6 +9194,9 @@ void test_packet_tagging()
 
             check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
+            // todo
+            printf( "ipv4\n" );
+
             netcode_client_connect( client, connect_token );
         }
 
@@ -9210,17 +9213,17 @@ void test_packet_tagging()
 
         check( server );
 
+        struct netcode_client_config_t client_config;
+
+        netcode_default_client_config( &client_config );
+
+        struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+        NETCODE_CONST char * server_address = "[::1]:40000";
+
         int i;
         for ( i = 0; i < 10; i++ )
         {
-            struct netcode_client_config_t client_config;
-
-            netcode_default_client_config( &client_config );
-
-            struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
-
-            NETCODE_CONST char * server_address = "[::1]:40000";
-
             uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
             uint64_t client_id = 0;
@@ -9231,10 +9234,13 @@ void test_packet_tagging()
 
             check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
-            netcode_client_connect( client, connect_token );
+            // todo
+            printf( "ipv6\n" );
 
-            netcode_client_destroy( client );
+            netcode_client_connect( client, connect_token );
         }
+
+        netcode_client_destroy( client );
 
         netcode_server_destroy( server );
     }
