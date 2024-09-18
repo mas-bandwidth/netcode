@@ -728,13 +728,13 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         struct sockaddr_in6 sin6;
         struct sockaddr * addr = NULL;
 
-        if ( address->type == NEXT_ADDRESS_IPV6 )
+        if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
             addr = (struct sockaddr*) &sin6;
             socklen_t len = sizeof( sin6 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
             {
-                netcode_printf( NEXT_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
                 netcode_socket_destroy( s );
                 return NULL;
             }
@@ -746,7 +746,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             socklen_t len = sizeof( sin4 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
             {
-                netcode_printf( NEXT_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
+                netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
                 netcode_socket_destroy( s );
                 return NULL;
             }
