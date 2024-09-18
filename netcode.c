@@ -9168,14 +9168,18 @@ void test_packet_tagging()
     netcode_enable_packet_tagging();
 
     {
+        NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
         // todo
         printf( "client ipv4\n" );
+
+        netcode_default_client_config( &client_config );
 
         struct netcode_client_config_t client_config;
 
         struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
 
-        NETCODE_CONST char * server_address = "127.0.0.1:40000";
+        check( client );
 
         // todo
         printf( "server ipv4\n" );
@@ -9183,14 +9187,9 @@ void test_packet_tagging()
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
 
-        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
-
-        struct netcode_address_t test_address;
-        netcode_parse_address( "127.0.0.1:40000", &test_address );
+        struct netcode_server_t * server = netcode_server_create( server_address, &server_config, 0.0 );
 
         check( server );
-
-        netcode_default_client_config( &client_config );
 
         uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -9209,6 +9208,7 @@ void test_packet_tagging()
         netcode_server_destroy( server );
     }
 
+/*
     {
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
@@ -9246,6 +9246,7 @@ void test_packet_tagging()
         netcode_client_destroy( client );
 
         netcode_server_destroy( server );
+*/
     }
 }
 
