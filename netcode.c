@@ -724,12 +724,12 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     if ( netcode_packet_tagging_enabled )
     {
-        struct sockaddr_in sin4;
-        struct sockaddr_in6 sin6;
-        struct sockaddr * addr = NULL;
+        struct sockaddr_storage addr;
+        memset( addr, 0, sizeof(addr), )
 
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
+            /*
             addr = (struct sockaddr*) &sin6;
             socklen_t len = sizeof( sin6 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
@@ -739,9 +739,12 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
             address->port = ntohs( sin6.sin6_port );
+            */
+            addr->ss_family = AF_INET6;
         }
         else
         {
+            /*
             addr = (struct sockaddr*) &sin4;
             socklen_t len = sizeof( sin4 );
             if ( getsockname( s->handle, addr, &len ) == -1 )
@@ -751,6 +754,8 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
                 return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
             address->port = ntohs( sin4.sin_port );
+            */
+            addr->ss_family = AF_INET;
         }
 
         netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, addr );
@@ -9199,9 +9204,6 @@ void test_packet_tagging()
             netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
 
             check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-            // todo
-            printf( "ipv4\n" );
 
             netcode_client_connect( client, connect_token );
         }
