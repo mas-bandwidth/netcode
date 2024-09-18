@@ -6862,458 +6862,75 @@ void test_client_server_connect()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+void client_server_socket_connect( NETCODE_CONST char * client_address, NETCODE_CONST char * client_address2, NETCODE_CONST char * server_address, NETCODE_CONST char * server_address2 )
+{
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+
+    struct netcode_client_t * client = netcode_client_create_overload( client_address, client_address2, &client_config, time );
+
+    check( client );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create_overload( server_address, server_address2, &server_config, time );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+}
+
 void test_client_server_ipv4_socket_connect()
 {
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create( "0.0.0.0:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "127.0.0.1:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create( "0.0.0.0:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create_overload( "127.0.0.1:40000", "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "127.0.0.1:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create_overload( "0.0.0.0:50000", "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "127.0.0.1:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create_overload( "0.0.0.0:50000", "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create_overload( "127.0.0.1:40000", "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "127.0.0.1:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
+    client_server_socket_connect("0.0.0.0:50000", NULL        , "127.0.0.1:40000", NULL         );
+    client_server_socket_connect("0.0.0.0:50000", NULL        , "127.0.0.1:40000", "[::1]:40000");
+    client_server_socket_connect("0.0.0.0:50000", "[::]:50000", "127.0.0.1:40000", NULL         );
+    client_server_socket_connect("0.0.0.0:50000", "[::]:50000", "127.0.0.1:40000", "[::1]:40000");
 }
 
 void test_client_server_ipv6_socket_connect()
 {
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "[::1]:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-    
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create_overload( "127.0.0.1:40000", "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "[::1]:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-    
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create_overload( "0.0.0.0:50000", "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "[::1]:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
-    
-    {
-        double time = 0.0;
-        double delta_time = 1.0 / 10.0;
-
-        struct netcode_client_config_t client_config;
-        netcode_default_client_config( &client_config );
-
-        struct netcode_client_t * client = netcode_client_create_overload( "0.0.0.0:50000", "[::]:50000", &client_config, time );
-
-        check( client );
-
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-        server_config.protocol_id = TEST_PROTOCOL_ID;
-        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
-
-        struct netcode_server_t * server = netcode_server_create_overload( "127.0.0.1:40000", "[::1]:40000", &server_config, time );
-
-        check( server );
-
-        netcode_server_start( server, 1 );
-
-        NETCODE_CONST char * server_address = "[::1]:40000";
-
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        while ( 1 )
-        {
-            netcode_client_update( client, time );
-
-            netcode_server_update( server, time );
-
-            if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
-                break;
-
-            if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
-                break;
-
-            time += delta_time;
-        }
-
-        netcode_server_destroy( server );
-
-        netcode_client_destroy( client );
-    }
+    client_server_socket_connect("[::]:50000"   , NULL        , "[::1]:40000", NULL             );
+    client_server_socket_connect("[::]:50000"   , NULL        , "[::1]:40000", "127.0.0.1:40000");
+    client_server_socket_connect("0.0.0.0:50000", "[::]:50000", "[::1]:40000", NULL             );
+    client_server_socket_connect("0.0.0.0:50000", "[::]:50000", "[::1]:40000", "127.0.0.1:40000");
 }
 
 void test_client_server_keep_alive()
