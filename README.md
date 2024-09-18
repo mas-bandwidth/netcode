@@ -10,7 +10,7 @@ It's intended for use by real-time multiplayer games, which need a connection or
 
 netcode has the following features:
 
-* Secure client connection with connect tokens. Only the clients that you authorize can connect to your server. This is perfect for a game where you perform matchmaking in a web backend and then send clients to play on a particular server.
+* Secure client connection with connect tokens. Only clients you authorize can connect to your server. This is _perfect_ for a game where you perform matchmaking in a web backend and then send clients to play on a server.
 * Client slot system. Servers have n slots for clients. Client are assigned an index [0,MaxSlots) when they connect to the server and are quickly denied connection if all slots are taken.
 * Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the client/server connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
