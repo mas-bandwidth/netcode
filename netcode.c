@@ -725,7 +725,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     if ( netcode_packet_tagging_enabled )
     {
         struct sockaddr_storage addr;
-        memset( addr, 0, sizeof(addr), )
+        memset( addr, 0, sizeof(addr) );
 
         if ( address->type == NETCODE_ADDRESS_IPV6 )
         {
