@@ -758,7 +758,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             addr.ss_family = AF_INET;
         }
 
-        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, &addr );
+        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, (PSOCKADDR) &addr );
     }
 
 #endif
