@@ -13,15 +13,8 @@ netcode has the following features:
 * Secure client connection with connect tokens. Only the clients that you authorize can connect to your server.
 * Client slot system. Servers have n slots for clients. Client are assigned an index when they connect to the server and are quickly denied connection if all slots are taken.
 * Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
-* Encrypted and signed packets.
-
-It protects your game server from:
-
-* Zombie clients
-* Packet sniffing
-* Packet replay attacks
-* Man in the middle attacks
-* Being used in DDoS amplification attacks
+* Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the client connection.
+* Many security features including robust protection against maliciously crafted packets, packet replay attacks and DDoS amplification attacks.
 
 netcode is stable and production ready.
 
