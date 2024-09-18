@@ -736,7 +736,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv6)\n" );
                 netcode_socket_destroy( s );
-                return NULL;
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
             address->port = next_platform_ntohs( sin6.sin6_port );
         }
@@ -748,7 +748,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
             {
                 netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to get socket address (ipv4)\n" );
                 netcode_socket_destroy( s );
-                return NULL;
+                return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
             }
             address->port = ntohs( sin4.sin_port );
         }
