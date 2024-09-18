@@ -479,18 +479,11 @@ static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE traffic
     HANDLE qosHandle;
     if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
     {
-        // todo
-        printf( "QOSCreateHandler failed\n" );
         return GetLastError();
     }
-    // todo
-    (void) addr;
     if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
     {
-        // todo
-        int error = GetLastError();
-        printf( "QOSAddSocketToFlow failed: %d\n", error );
-        return error;
+        return GetLastError();
     }
     return 0;
 }
@@ -9170,8 +9163,12 @@ void test_packet_tagging()
     {
         NETCODE_CONST char * server_address = "127.0.0.1:40000";
 
-        // todo
-        printf( "client ipv4\n" );
+        struct netcode_server_config_t server_config;
+        netcode_default_server_config( &server_config );
+
+        struct netcode_server_t * server = netcode_server_create( server_address, &server_config, 0.0 );
+
+        check( server );
 
         struct netcode_client_config_t client_config;
         netcode_default_client_config( &client_config );
@@ -9180,8 +9177,25 @@ void test_packet_tagging()
 
         check( client );
 
-        // todo
-        printf( "server ipv4\n" );
+        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+        uint64_t client_id = 0;
+        netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+        uint8_t user_data[NETCODE_USER_DATA_BYTES];
+        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+        netcode_client_connect( client, connect_token );
+
+        netcode_client_destroy( client );
+
+        netcode_server_destroy( server );
+    }
+
+    {
+        NETCODE_CONST char * server_address = "[::1]:40000";
 
         struct netcode_server_config_t server_config;
         netcode_default_server_config( &server_config );
@@ -9190,45 +9204,12 @@ void test_packet_tagging()
 
         check( server );
 
-        uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
-
-        uint64_t client_id = 0;
-        netcode_random_bytes( (uint8_t*) &client_id, 8 );
-
-        uint8_t user_data[NETCODE_USER_DATA_BYTES];
-        netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
-
-        check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
-
-        netcode_client_connect( client, connect_token );
-
-        netcode_client_destroy( client );
-
-        netcode_server_destroy( server );
-    }
-
-/*
-    {
-        struct netcode_server_config_t server_config;
-        netcode_default_server_config( &server_config );
-
-        // todo
-        printf( "server ipv6\n" );
-
-        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
-
-        check( server );
-
         struct netcode_client_config_t client_config;
-
         netcode_default_client_config( &client_config );
-
-        // todo
-        printf( "client ipv6\n" );
 
         struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
 
-        NETCODE_CONST char * server_address = "[::1]:40000";
+        check( client );
 
         uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -9246,7 +9227,6 @@ void test_packet_tagging()
 
         netcode_server_destroy( server );
     }
-*/
 }
 
 #endif // #if NETCODE_PACKET_TAGGING
