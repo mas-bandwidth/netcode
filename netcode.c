@@ -9173,9 +9173,8 @@ void test_packet_tagging()
         // todo
         printf( "client ipv4\n" );
 
-        netcode_default_client_config( &client_config );
-
         struct netcode_client_config_t client_config;
+        netcode_default_client_config( &client_config );
 
         struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
 
@@ -9246,8 +9245,8 @@ void test_packet_tagging()
         netcode_client_destroy( client );
 
         netcode_server_destroy( server );
-*/
     }
+*/
 }
 
 #endif // #if NETCODE_PACKET_TAGGING
