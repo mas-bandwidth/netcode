@@ -15,7 +15,7 @@ netcode has the following features:
 * Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the client/server connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
 * Many security features including robust protection against maliciously crafted packets, packet replay attacks and DDoS amplification attacks.
-* Support for packet tagging which greatly reduces jitter on Wi-Fi routers. Disabled by default because some older routers don't handle it well. Enable by calling *netcode_enable_packet_tagging*.
+* Support for packet tagging which greatly reduces jitter on Wi-Fi routers. Disabled by default because some older routers don't handle it well. Enable by calling **netcode_enable_packet_tagging**.
 
 netcode is stable and production ready.
 
