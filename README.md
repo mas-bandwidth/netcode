@@ -14,7 +14,7 @@ netcode has the following features:
 * Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection if all slots are taken.
 * Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
-* Many security features including robust protection against maliciously crafted packets, packet replay attacks and DDoS amplification attacks.
+* Many security features including robust protection against maliciously crafted packets, packet replay attacks and your server being used in DDoS amplification attacks.
 * Support for packet tagging which can significantly reduce jitter on Wi-Fi routers. Read [this article](https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging) for more details.
 
 netcode is stable and production ready.
