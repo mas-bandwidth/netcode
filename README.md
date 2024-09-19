@@ -11,9 +11,9 @@ It's intended for use by real-time multiplayer games, which need a connection or
 netcode has the following features:
 
 * Secure client connection with connect tokens. Only clients you authorize can connect to your server. This is _perfect_ for a game where you perform matchmaking in a web backend then send clients to a server.
-* Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection when all slots are taken.
+* Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection if all slots are taken.
 * Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
-* Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the client/server connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
+* Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
 * Many security features including robust protection against maliciously crafted packets, packet replay attacks and DDoS amplification attacks.
 * Support for packet tagging which can significantly reduce jitter on Wi-Fi routers. Read [this article](https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging) for more details.
 
