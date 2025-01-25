@@ -82,6 +82,10 @@ void netcode_enable_packet_tagging()
     netcode_packet_tagging_enabled = 1;
 }
 
+#else
+
+void netcode_enable_packet_tagging() {}
+
 #endif // #if NETCODE_PACKET_TAGGING
 
 // ------------------------------------------------------------------
