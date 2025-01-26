@@ -8,17 +8,13 @@
 
 # Design
 
-It's designed for use by real-time multiplayer games. But why do we need a new protocol for this?
+It's designed for use by real-time multiplayer games. _But why do we need a new protocol for this?_
 
-Real-time multiplayer games need to use UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
+Well, leal-time multiplayer games typically UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
 
 netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets like UDP. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server via a noval 'connect token' system.
 
-Building and testing all these features yourself is complex and error prone. If you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point for you.
-
-I hope you find this code useful.
-
-- Glenn
+Building and testing all these features yourself on top of raw UDP is complex and error prone. So if you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
 
 # Features
 
