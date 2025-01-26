@@ -6,6 +6,8 @@
 
 ![connections](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
 
+# Design
+
 It's designed for use by real-time multiplayer games. But why do we need a new protocol for this?
 
 Real-time multiplayer games need to use UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
