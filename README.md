@@ -18,7 +18,7 @@ I hope you find this code useful.
 
 - Glenn
 
-netcode has the following features:
+# Features
 
 * Secure client connection with connect tokens. Only clients you authorize can connect to your server. This is _perfect_ for a game where you perform matchmaking in a web backend and then send clients to connect to a server.
 * Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection if all slots are taken.
