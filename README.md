@@ -16,7 +16,7 @@ Well, real-time multiplayer games typically UDP instead of TCP, because TCP reli
 
 netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets like UDP. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server via a noval 'connect token' system.
 
-Building and testing all these features yourself on top of raw UDP is complex and error prone. So if you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
+Building and testing all these features yourself on top of raw UDP is complex and error prone. So if you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable) or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
 
 # Features
 
