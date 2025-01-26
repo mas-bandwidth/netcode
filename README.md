@@ -8,9 +8,11 @@
 
 # Design
 
-It's designed for use by real-time multiplayer games. _But why do we need a new protocol for this?_
+**netcode** is designed for use by real-time multiplayer games. 
 
-Well, leal-time multiplayer games typically UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
+_But why do we need a new protocol for this?_
+
+Well, real-time multiplayer games typically UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
 
 netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets like UDP. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server via a noval 'connect token' system.
 
