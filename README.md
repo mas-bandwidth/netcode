@@ -2,19 +2,25 @@
 
 # netcode
 
-**netcode** is a secure client/server protocol built on top of UDP.
+**netcode** is a secure connection-oriented client/server protocol built on top of UDP. 
 
-It's intended for use by real-time multiplayer games, which need a connection oriented protocol but without the head of line blocking of TCP.
+It's designed for use by real-time multiplayer games. But why do we need a new protocol for this?
 
-![connetion 2](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
+Real-time multiplayer games need to use UDP instead of TCP, because TCP implements reliable-ordered delivery and causes head of line blocking. Effectively, the most recent, more valuable state is held hostage behind the reliable-ordered guarantees of TCP.
+
+netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while allowing clients and servers to exchange unreliable unordered packets (like UDP). It also provides significant security feature such as encrypted and signed packets, and only allows authenticated clients to connect to a server via a 'connect token' system.
+
+Building all these features yourself is complex and error prone. If you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
+
+![connections](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
 
 netcode has the following features:
 
-* Secure client connection with connect tokens. Only clients you authorize can connect to your server. This is _perfect_ for a game where you perform matchmaking in a web backend then send clients to a server.
+* Secure client connection with connect tokens. Only clients you authorize can connect to your server. This is _perfect_ for a game where you perform matchmaking in a web backend and then send clients to connect to a server.
 * Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection if all slots are taken.
-* Fast clean disconnect on client or server side of connection to open up the slot for a new client, plus timeouts for hard disconnects.
+* Fast clean disconnect on client or server side of connection to quickly open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
-* Many security features including robust protection against maliciously crafted packets, packet replay attacks and packet amplification attacks.
+* Many security features including protection protection against maliciously crafted packets, packet replay attacks and packet amplification attacks.
 * Support for packet tagging which can significantly reduce jitter on Wi-Fi routers. Read [this article](https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging) for more details.
 
 netcode is stable and production ready.
