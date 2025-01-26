@@ -8,11 +8,15 @@
 
 It's designed for use by real-time multiplayer games. But why do we need a new protocol for this?
 
-Real-time multiplayer games need to use UDP instead of TCP, because TCP implements reliable-ordered delivery and causes head of line blocking. Effectively, the most recent, more valuable state is held hostage behind the reliable-ordered guarantees of TCP.
+Real-time multiplayer games need to use UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
 
-netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while allowing clients and servers to exchange unreliable unordered packets (like UDP). It also provides significant security feature such as encrypted and signed packets, and only allows authenticated clients to connect to a server via a 'connect token' system.
+netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets like UDP. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server via a noval 'connect token' system.
 
-Building all these features yourself is complex and error prone. If you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
+Building and testing all these features yourself is complex and error prone. If you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable)] or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point for you.
+
+I hope you find this code useful.
+
+- Glenn
 
 netcode has the following features:
 
