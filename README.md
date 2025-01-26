@@ -14,9 +14,9 @@ _But why do we need a new protocol for this?_
 
 Well, real-time multiplayer games typically UDP instead of TCP, because TCP reliable-ordered delivery and causes head of line blocking, effectively holding the most recent, more valuable packets hostage while it waits for older, out of date packets to be resent. When multiplayer games are played over a combination of both latency and packet loss, this causes significant jitter and popping for players in the game.
 
-netcode fixes this by providing the simplest possible connection-oriented approach where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets like UDP. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server via a noval 'connect token' system.
+netcode fixes this by providing the simplest possible connection-oriented approach on top of UDP where the server has n slots for clients, while still allowing clients and servers to exchange unreliable unordered packets. It also provides security feature like encrypted and signed packets, and only allows authenticated clients to connect to a server with a novel 'connect token' system.
 
-Building and testing all these features yourself on top of raw UDP is complex and error prone. So if you are building your own game network protocol from scratch, netcode, perhaps combined with [reliable](https://github.com/mas-bandwidth/reliable) or the higher-level [Yojimbo](https://github.com/mas-bandwidth/yojimbo) could be a really good starting point.
+Building and testing all these features yourself on top of raw UDP is complex and error prone. So if you are thinking of building your own game network protocol from scratch, netcode can be a really good choice. You get client slots, encryption/decryption of packets, connect tokens and other security features already built, and you can exchange unreliable unordered packets between the client and server just like UDP!
 
 # Features
 
