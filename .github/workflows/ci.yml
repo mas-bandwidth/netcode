@@ -76,7 +76,7 @@ jobs:
         msystem: UCRT64
         update: true
         install: >-
-          premake
+          mingw-w64-ucrt-x86_64-premake
           mingw-w64-ucrt-x86_64-gcc
 
     - name: Build (msys2)
