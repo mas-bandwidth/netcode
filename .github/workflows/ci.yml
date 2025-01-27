@@ -67,7 +67,6 @@ jobs:
     - name: Setup premake
       uses: abel0b/setup-premake@v1
 
-    steps:
     # Set up msys2/MingW-w64 toolchain
     - name: Setup (msys2)
       uses: msys2/setup-msys2@v2
