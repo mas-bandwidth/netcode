@@ -76,6 +76,7 @@ jobs:
         msystem: UCRT64
         update: true
         install: >-
+          mingw-w64-ucrt-x86_64-make
           mingw-w64-ucrt-x86_64-premake
           mingw-w64-ucrt-x86_64-gcc
 
