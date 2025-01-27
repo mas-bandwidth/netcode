@@ -64,12 +64,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
-    - name: Setup premake
-      uses: abel0b/setup-premake@v1
 
     # Set up msys2/MingW-w64 toolchain
     - name: Setup (msys2)
       uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          mingw-w64-premake
+          mingw-w64-gcc
 
     - name: Build (msys2)
       shell: msys2 {0}
