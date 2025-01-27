@@ -51,4 +51,31 @@ jobs:
     - name: Test (vs2019)
       if: runner.os == 'Windows'
       run: "& ./bin/test.exe"
-    
+
+  build_and_test_mingw:
+    name: Build & test
+
+    strategy:
+      matrix:
+        os: [windows-latest]
+        configuration: [release, debug]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@master
+    - name: Setup premake
+      uses: abel0b/setup-premake@v1
+
+    steps:
+    # Set up msys2/MingW-w64 toolchain
+    - name: Setup (msys2)
+      uses: msys2/setup-msys2@v2
+
+    - name: Build (msys2)
+      run: |
+        premake5 gmake
+        make config=${{ matrix.configuration }}
+
+    - name: Test (msys2)
+      run: "& ./bin/test.exe"
