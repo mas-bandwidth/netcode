@@ -53,7 +53,7 @@ jobs:
       run: "& ./bin/test.exe"
 
   build_and_test_mingw:
-    name: Build & test
+    name: Build & test (MingW)
 
     strategy:
       matrix:
@@ -74,7 +74,8 @@ jobs:
     - name: Build (msys2)
       run: |
         premake5 gmake
-        make config=${{ matrix.configuration }}
+        make clean
+        make all config=${{ matrix.configuration }}
 
     - name: Test (msys2)
       run: "& ./bin/test.exe"
