@@ -62,6 +62,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    defaults:
+      run:
+        shell: msys2 {0}
+
     steps:
     - uses: actions/checkout@master
 
@@ -69,18 +73,17 @@ jobs:
     - name: Setup (msys2)
       uses: msys2/setup-msys2@v2
       with:
+        msystem: UCRT64
         update: true
         install: >-
-          mingw-w64-premake
-          mingw-w64-gcc
+          premake
+          mingw-w64-ucrt-x86_64-gcc
 
     - name: Build (msys2)
-      shell: msys2 {0}
       run: |
         premake5 gmake
         make clean
         make all config=${{ matrix.configuration }}
 
     - name: Test (msys2)
-      shell: msys2 {0}
-      run: "& ./bin/test.exe"
+      run: "./bin/test.exe"
