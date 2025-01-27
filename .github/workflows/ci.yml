@@ -72,10 +72,12 @@ jobs:
       uses: msys2/setup-msys2@v2
 
     - name: Build (msys2)
+      shell: msys2 {0}
       run: |
         premake5 gmake
         make clean
         make all config=${{ matrix.configuration }}
 
     - name: Test (msys2)
+      shell: msys2 {0}
       run: "& ./bin/test.exe"
