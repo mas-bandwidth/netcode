@@ -83,8 +83,8 @@ jobs:
     - name: Build (msys2)
       run: |
         premake5 gmake
-        mingw-w64-ucrt-x86_64-make clean
-        mingw-w64-ucrt-x86_64-make all config=${{ matrix.configuration }}
+        mingw32-make clean
+        mingw32-make all config=${{ matrix.configuration }}
 
     - name: Test (msys2)
       run: "./bin/test.exe"
