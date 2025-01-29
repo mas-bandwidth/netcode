@@ -23,8 +23,6 @@ Building and testing all these features yourself on top of UDP is complex and er
 * Many security features including protection protection against maliciously crafted packets, packet replay attacks and packet amplification attacks.
 * Support for packet tagging which can significantly reduce jitter on Wi-Fi routers. Read [this article](https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging) for more details.
 
-netcode is stable and production ready.
-
 # Usage
 
 Start by generating a random 32 byte private key. Do not share your private key with _anybody_. 
