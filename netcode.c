@@ -161,7 +161,9 @@ void netcode_default_free_function( void * context, void * pointer )
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
+    #ifndef NOMINMAX
     #define NOMINMAX
+    #endif // #ifndef NOMINMAX
     #define _WINSOCK_DEPRECATED_NO_WARNINGS
     #include <winsock2.h>
     #include <ws2def.h>
@@ -5227,7 +5229,9 @@ double netcode_time()
 
 // windows
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // #ifndef NOMINMAX
 #include <windows.h>
 
 void netcode_sleep( double time )
