@@ -8,11 +8,11 @@
 
 # Design
 
-Real-time multiplayer games typically use UDP instead of TCP, because reliable-ordered delivery holds the most recent packets hostage while it waits for older, out of date packets to be resent. This is undesirable for real-time games because most of the time they need only the most recent data, and can skip over any missing data that wasn't received.
+Real-time multiplayer games typically use UDP instead of TCP, because reliable-ordered delivery holds the most recent packets hostage while waiting for out of date dropped packets to be resent. This is undesirable for real-time games because most of the time they need only the most recent data, and can skip over any missing data that wasn't received.
 
-*netcode* fixes this by providing the simplest possible connection-oriented approach on top of UDP so you can exchange unreliable, unordered packets, while still having the convenience of a connection oriented protocol. In netcode, the server manages n slots for clients to connect to, while also provides security feature like encrypted and signed packets, and a novel 'connect token' system that only allows authenticated clients to connect to your server.
+*netcode* fixes this by providing the simplest possible connection-oriented approach on top of UDP so you can exchange unreliable unordered packets, while still having the convenience of a connection oriented protocol. In netcode, the server manages n slots for clients to connect to, while providing security feature like encrypted and signed packets, protection against packet replay attacks, and a novel 'connect token' system that only allows authenticated clients to connect to your server.
 
-Building and testing all these features yourself on top of UDP is complex and error prone. So if you are thinking of building your own game network protocol from scratch, netcode can be a really good starting point. You get client slots, encryption/decryption of packets, connect tokens and other security features already built, and you can still send unreliable unordered packets between the client and server just like UDP!
+Building and testing all these features yourself on top of UDP is complex and error prone. So if you are thinking of building your own game network protocol from scratch in UDP, netcode can be a really good starting point. You get client slots, encryption/decryption of packets, connect tokens and other security features already built-in, and you can send unreliable unordered packets between the client and server just like UDP!
 
 # Features
 
