@@ -51,4 +51,40 @@ jobs:
     - name: Test (vs2019)
       if: runner.os == 'Windows'
       run: "& ./bin/test.exe"
-    
+
+  build_and_test_mingw:
+    name: Build & test (MingW)
+
+    strategy:
+      matrix:
+        os: [windows-latest]
+        configuration: [release, debug]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@master
+
+    # Set up msys2/MingW-w64 toolchain
+    - name: Setup (msys2)
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: true
+        install: >-
+          mingw-w64-ucrt-x86_64-make
+          mingw-w64-ucrt-x86_64-premake
+          mingw-w64-ucrt-x86_64-gcc
+
+    - name: Build (msys2)
+      run: |
+        premake5 gmake
+        mingw32-make clean
+        mingw32-make all config=${{ matrix.configuration }}
+
+    - name: Test (msys2)
+      run: "./bin/test.exe"

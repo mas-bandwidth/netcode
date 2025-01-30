@@ -113,12 +113,16 @@ int netcode_init();
 void netcode_term();
 
 #ifndef NETCODE_PACKET_TAGGING
+#ifndef __MINGW32__
 #define NETCODE_PACKET_TAGGING 1
+#else
+// At least as of version 14.2.0, the Qwave library is not properly implemented
+// in MingW-w64, so packet tagging is disabled by default.
+#define NETCODE_PACKET_TAGGING 0
+#endif // #ifndef __MINGW32__
 #endif // #ifndef NETCODE_PACKET_TAGGING
 
-#if NETCODE_PACKET_TAGGING
 void netcode_enable_packet_tagging();
-#endif // #if NETCODE_PACKET_TAGGING
 
 struct netcode_address_t
 {

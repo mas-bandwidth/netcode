@@ -35,26 +35,38 @@ project "sodium"
 project "test"
     files { "test.cpp" }
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 project "soak"
     files { "soak.c", "netcode.c" }
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 project "profile"
     files { "profile.c", "netcode.c" }    
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 project "client"
     files { "client.c", "netcode.c" }
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 project "server"
     files { "server.c", "netcode.c" }
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 project "client_server"
     files { "client_server.c", "netcode.c" }
     links { "sodium" }
+    filter { "action:gmake*", "system:windows" }
+        links { "ws2_32", "iphlpapi" }
 
 newaction
 {

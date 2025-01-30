@@ -82,6 +82,10 @@ void netcode_enable_packet_tagging()
     netcode_packet_tagging_enabled = 1;
 }
 
+#else
+
+void netcode_enable_packet_tagging() {}
+
 #endif // #if NETCODE_PACKET_TAGGING
 
 // ------------------------------------------------------------------
@@ -157,22 +161,28 @@ void netcode_default_free_function( void * context, void * pointer )
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
+    #ifndef NOMINMAX
     #define NOMINMAX
+    #endif // #ifndef NOMINMAX
     #define _WINSOCK_DEPRECATED_NO_WARNINGS
     #include <winsock2.h>
     #include <ws2def.h>
     #include <ws2tcpip.h>
     #include <ws2ipdef.h>
     #include <iphlpapi.h>
+    #ifdef _MSC_VER
     #pragma comment( lib, "WS2_32.lib" )
     #pragma comment( lib, "IPHLPAPI.lib" )
+    #endif // #ifdef _MSC_VER
 
     #ifdef SetPort
     #undef SetPort
     #endif // #ifdef SetPort
 
     #include <iphlpapi.h>
+    #ifdef _MSC_VER
     #pragma comment( lib, "IPHLPAPI.lib" )
+    #endif // #ifdef _MSC_VER
     
 #elif NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
 
@@ -478,7 +488,9 @@ typedef UINT32 QOS_FLOWID, *PQOS_FLOWID;
 #endif // #ifdef __MINGW32__
 #include <qos2.h>
 
+#ifdef _MSC_VER
 #pragma comment( lib, "Qwave.lib" )
+#endif // #ifdef _MSC_VER
 
 static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
 {
@@ -5217,7 +5229,9 @@ double netcode_time()
 
 // windows
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // #ifndef NOMINMAX
 #include <windows.h>
 
 void netcode_sleep( double time )
