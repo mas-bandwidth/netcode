@@ -31,6 +31,9 @@ project "sodium"
         }
     filter { "action:gmake*" }
         buildoptions { "-Wno-unused-parameter", "-Wno-unused-function", "-Wno-unknown-pragmas", "-Wno-unused-variable", "-Wno-type-limits" }
+        if os.target() == "windows" then
+            links { "ws2_32", "iphlpapi" }
+        end
 
 project "test"
     files { "test.cpp" }
