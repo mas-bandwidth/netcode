@@ -16,7 +16,7 @@ The problem is that UDP doesn't provide any concept of connection, so you want t
 
 The netcode server manages n slots for clients to connect to, while providing security features like encrypted and signed packets, protection against packet replay attacks, and a novel 'connect token' system that only allows authenticated clients to connect to your server.
 
-Building and testing all these features yourself on top of UDP is complex and error prone, and frankly take a lot of time to do properly, so if you are thinking of building your own game network protocol from scratch, netcode can be a really good starting point and save you a lot of time.
+Building and testing all these features yourself on top of UDP is complex and error prone, and frankly take a lot of time to do properly, so if you are thinking of building your own game network protocol from scratch, netcode can be a good starting point and save you a lot of time.
 
 # Features
 
