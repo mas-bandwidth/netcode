@@ -8,7 +8,7 @@
 
 # Design
 
-Real-time multiplayer games typically use UDP instead of TCP, because reliable-ordered delivery delays the most recent packets while waiting for old packets to be resent, and real-time games typically only need the most recent state.
+Real-time multiplayer games typically use UDP instead of TCP, because they are latency sensitive and typically need the most recent state, and TCP holds the most recent state hostage until it retransmits old data that was dropped due to head of line blocking.
 
 The problem is that UDP doesn't provide any concept of connection, so you want to use UDP you have to to build up your own client connection system, timeouts, sequence numbers and security all by yourself.
 
