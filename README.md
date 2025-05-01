@@ -10,9 +10,7 @@
 
 Real-time multiplayer games typically use UDP instead of TCP, because head of line blocking delays more recent packets while waiting for older dropped packets to be resent. The problem is that if you want to use UDP, it doesn't provide any concept of connection, so you have to build all this yourself, managing client sessions and timeouts yourself, which is a lot of work!
 
-**netcode** fixes this by providing a minimal and secure connection-oriented protocol on top of UDP, so you can quickly get to exchanging unreliable unordered packets for your game and get busy building the rest of your game network protocol on top of the basic client/server connection structure that netcode provides.
-
-So if you're thinking of building your own game network protocol from scratch, netcode can be a really good starting point and save you a lot of time.
+**netcode** fixes this by providing a minimal and secure connection-oriented protocol on top of UDP, so you can quickly get to exchanging unreliable unordered packets for your game and get busy building the rest of your game network protocol.
 
 # Features
 
