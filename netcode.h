@@ -38,7 +38,8 @@
 #error Can only define one of debug & release
 #endif
 
-#if    defined(__386__) || defined(i386)    || defined(__i386__)  \
+#if __LITTLE_ENDIAN__ \
+    || defined(__386__) || defined(i386)    || defined(__i386__)  \
     || defined(__X86)   || defined(_M_IX86)                       \
     || defined(_M_X64)  || defined(__x86_64__)                    \
     || defined(alpha)   || defined(__alpha) || defined(__alpha__) \
