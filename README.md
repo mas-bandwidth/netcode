@@ -1,5 +1,3 @@
-[![Build status](https://github.com/networkprotocol/netcode/workflows/CI/badge.svg)](https://github.com/networkprotocol/netcode/actions?query=workflow%3ACI)
-
 # netcode
 
 **netcode** is a secure client/server protocol for multiplayer games built on top of UDP. 
