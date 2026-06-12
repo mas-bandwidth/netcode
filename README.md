@@ -16,7 +16,7 @@ Real-time multiplayer games typically use UDP instead of TCP, because head of li
 * Client slot system. Servers have n slots for clients. Client are assigned to a slot when they connect to the server and are quickly denied connection if all slots are taken.
 * Fast clean disconnect on client or server side of connection to quickly open up the slot for a new client, plus timeouts for hard disconnects.
 * Encrypted and signed packets. Packets cannot be tampered with or read by parties not involved in the connection. Cryptography is performed by the excellent [sodium library](https://libsodium.gitbook.io/doc).
-* Many security features including protection protection against maliciously crafted packets, packet replay attacks and packet amplification attacks.
+* Many security features including protection against maliciously crafted packets, packet replay attacks and packet amplification attacks.
 * Support for packet tagging which can significantly reduce jitter on Wi-Fi routers. Read [this article](https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/networking/overviews/qos-packet-tagging) for more details.
 
 # Usage
