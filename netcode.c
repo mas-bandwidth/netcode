@@ -3792,6 +3792,7 @@ struct netcode_server_t
     struct netcode_server_config_t config;
     struct netcode_socket_holder_t socket_holder;
     struct netcode_address_t address;
+    struct netcode_address_t address2;
     uint32_t flags;
     double time;
     int running;
@@ -3924,6 +3925,7 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
     server->socket_holder.ipv4 = socket_ipv4;
     server->socket_holder.ipv6 = socket_ipv6;
     server->address = server_address1;
+    server->address2 = server_address2;
     server->time = time;
     server->global_sequence = 1ULL << 63;
 
@@ -4254,6 +4256,10 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     for ( i = 0; i < connect_token_private.num_server_addresses; i++ )
     {
         if ( netcode_address_equal( &server->address, &connect_token_private.server_addresses[i] ) )
+        {
+            found_server_address = 1;
+        }
+        if ( server->address2.type != NETCODE_ADDRESS_NONE && netcode_address_equal( &server->address2, &connect_token_private.server_addresses[i] ) )
         {
             found_server_address = 1;
         }
@@ -6792,7 +6798,7 @@ void test_client_server_connect()
     netcode_network_simulator_destroy( network_simulator );
 }
 
-void client_server_socket_connect( NETCODE_CONST char * client_address, NETCODE_CONST char * client_address2, NETCODE_CONST char * server_address, NETCODE_CONST char * server_address2 )
+void client_server_socket_connect_to( NETCODE_CONST char * client_address, NETCODE_CONST char * client_address2, NETCODE_CONST char * server_address, NETCODE_CONST char * server_address2, NETCODE_CONST char * connect_address )
 {
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
@@ -6823,7 +6829,7 @@ void client_server_socket_connect( NETCODE_CONST char * client_address, NETCODE_
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
-    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+    check( netcode_generate_connect_token( 1, &connect_address, &connect_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -6848,6 +6854,11 @@ void client_server_socket_connect( NETCODE_CONST char * client_address, NETCODE_
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
+}
+
+void client_server_socket_connect( NETCODE_CONST char * client_address, NETCODE_CONST char * client_address2, NETCODE_CONST char * server_address, NETCODE_CONST char * server_address2 )
+{
+    client_server_socket_connect_to( client_address, client_address2, server_address, server_address2, server_address );
 }
 
 void test_client_server_ipv4_socket_connect()
@@ -6875,6 +6886,12 @@ void test_client_server_dual_socket_connect()
     // dual stack client connects to dual stack server over ipv6
 
     client_server_socket_connect("0.0.0.0:50000", "[::]:50000", "[::1]:40000", "127.0.0.1:40000");
+
+    // dual stack client connects to the second address of a dual stack server (ipv6, then ipv4)
+
+    client_server_socket_connect_to("0.0.0.0:50000", "[::]:50000", "127.0.0.1:40000", "[::1]:40000", "[::1]:40000");
+
+    client_server_socket_connect_to("0.0.0.0:50000", "[::]:50000", "[::1]:40000", "127.0.0.1:40000", "127.0.0.1:40000");
 }
 
 void test_client_server_keep_alive()
