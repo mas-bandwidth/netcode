@@ -67,7 +67,7 @@ int main( int argc, char ** argv )
 
     struct netcode_client_config_t client_config;
     netcode_default_client_config( &client_config );
-    struct netcode_client_t * client = netcode_client_create( "0.0.0.0", &client_config, time );
+    struct netcode_client_t * client = netcode_client_create_dual( "0.0.0.0", "::", &client_config, time );
 
     if ( !client )
     {

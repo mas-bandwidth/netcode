@@ -119,7 +119,6 @@ void soak_iteration( double time )
 {
     int i;
 
-    /*
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = PROTOCOL_ID;
@@ -148,7 +147,6 @@ void soak_iteration( double time )
             server[i] = NULL;
         }
     }
-    */
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
     {
@@ -176,7 +174,6 @@ void soak_iteration( double time )
         }
     }
 
-    /*
     for ( i = 0; i < MAX_SERVERS; ++i )
     {
         if ( server[i] != NULL )
@@ -225,7 +222,6 @@ void soak_iteration( double time )
             netcode_server_update( server[i], time );
         }  
     }
-    */
 
     for ( i = 0; i < MAX_CLIENTS; ++i )
     {
