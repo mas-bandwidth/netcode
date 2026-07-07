@@ -4202,6 +4202,17 @@ void netcode_server_stop( struct netcode_server_t * server )
 
     netcode_server_disconnect_all_clients( server );
 
+    // loopback clients are not disconnected above, but they must not survive a server stop
+
+    int i;
+    for ( i = 0; i < server->max_clients; i++ )
+    {
+        if ( server->client_connected[i] && server->client_loopback[i] )
+        {
+            netcode_server_disconnect_loopback_client( server, i );
+        }
+    }
+
     server->running = 0;
     server->max_clients = 0;
     server->num_connected_clients = 0;
@@ -4578,6 +4589,12 @@ void netcode_server_process_packet_internal( struct netcode_server_t * server,
 
 void netcode_server_process_packet( struct netcode_server_t * server, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes )
 {
+    if ( !server->running )
+        return;
+
+    if ( packet_bytes <= 1 )
+        return;
+
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 0, sizeof( allowed_packets ) );
     allowed_packets[NETCODE_CONNECTION_REQUEST_PACKET] = 1;
@@ -4918,16 +4935,17 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
     netcode_assert( server );
     netcode_assert( packet_bytes );
 
+    netcode_assert( client_index >= 0 );
+
     if ( !server->running )
         return NULL;
+
+    netcode_assert( client_index < server->max_clients );
 
     if ( !server->client_connected[client_index] )
         return NULL;
 
-    netcode_assert( client_index >= 0 );
-    netcode_assert( client_index < server->max_clients );
-
-    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) 
+    struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*)
         netcode_packet_queue_pop( &server->client_packet_queue[client_index], packet_sequence );
     
     if ( packet )
