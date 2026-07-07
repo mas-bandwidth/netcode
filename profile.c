@@ -161,7 +161,7 @@ void profile_iteration( double time )
                 {
                     if ( netcode_server_client_connected( server[i], client_index ) )
                     {
-                        netcode_server_send_packet( server[i], 0, packet_data, NETCODE_MAX_PACKET_SIZE );
+                        netcode_server_send_packet( server[i], client_index, packet_data, NETCODE_MAX_PACKET_SIZE );
                     }
                 }
 
