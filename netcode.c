@@ -500,13 +500,20 @@ typedef UINT32 QOS_FLOWID, *PQOS_FLOWID;
 #pragma comment( lib, "Qwave.lib" )
 #endif // #ifdef _MSC_VER
 
-static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr ) 
+static int netcode_set_socket_codepoint( SOCKET socket, QOS_TRAFFIC_TYPE trafficType, QOS_FLOWID flowId, PSOCKADDR addr )
 {
-    QOS_VERSION QosVersion = { 1 , 0 };
-    HANDLE qosHandle;
-    if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
+    // IMPORTANT: closing the QOS handle removes all flows added on it, so we create one handle
+    // on first use and share it across all sockets for the lifetime of the process.
+
+    static HANDLE qosHandle = NULL;
+    if ( qosHandle == NULL )
     {
-        return GetLastError();
+        QOS_VERSION QosVersion = { 1 , 0 };
+        if ( QOSCreateHandle( &QosVersion, &qosHandle ) == FALSE )
+        {
+            qosHandle = NULL;
+            return GetLastError();
+        }
     }
     if ( QOSAddSocketToFlow( qosHandle, socket, addr, trafficType, QOS_NON_ADAPTIVE_FLOW, &flowId ) == FALSE )
     {
@@ -538,6 +545,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to create socket\n" );
+        s->handle = 0;
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
@@ -2687,6 +2695,7 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
     {
         if ( !netcode_client_socket_create( &socket_ipv6, address1.type == NETCODE_ADDRESS_IPV6 ? &address1 : &address2, NETCODE_CLIENT_SOCKET_SNDBUF_SIZE, NETCODE_CLIENT_SOCKET_RCVBUF_SIZE, config ) )
         {
+            netcode_socket_destroy( &socket_ipv4 );
             return NULL;
         }
     }
@@ -3898,6 +3907,7 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
 
         if ( !netcode_server_socket_create( &socket_ipv6, &bind_address_ipv6, NETCODE_SERVER_SOCKET_SNDBUF_SIZE, NETCODE_SERVER_SOCKET_RCVBUF_SIZE, config ) )
         {
+            netcode_socket_destroy( &socket_ipv4 );
             return NULL;
         }
     }
