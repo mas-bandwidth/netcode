@@ -24,6 +24,20 @@ Then you can run binaries like this:
 
 For a debug build, use `-DCMAKE_BUILD_TYPE=Debug` and a separate build directory, e.g. `-B build-debug`.
 
+## Installing, shared libraries, and system libsodium
+
+By default netcode builds as a static library against the vendored libsodium subset, and nothing needs to be installed. For packaging (e.g. homebrew), three options change that:
+
+    cmake -B build -DCMAKE_BUILD_TYPE=Release \
+        -DNETCODE_SYSTEM_SODIUM=ON \
+        -DBUILD_SHARED_LIBS=ON
+    cmake --build build --parallel
+    cmake --install build --prefix /some/prefix
+
+- `NETCODE_SYSTEM_SODIUM=ON` links the system libsodium instead of the vendored copy (they are interchangeable — the vendored subset is a byte-identical slice of upstream).
+- `BUILD_SHARED_LIBS=ON` builds `libnetcode` as a shared library.
+- `cmake --install` installs `netcode.h` and the library (`NETCODE_INSTALL=OFF` disables the install target, e.g. when embedding netcode as a subproject).
+
 ## Sanitizers and fuzzing
 
 To build everything with AddressSanitizer and UndefinedBehaviorSanitizer, configure with `-DNETCODE_SANITIZE=ON` and run the tests as usual:
