@@ -40,3 +40,6 @@ docs
 *.exe
 valgrind/netcode
 docker/netcode
+
+# MacOS
+.DS_Store
