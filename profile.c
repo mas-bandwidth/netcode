@@ -96,7 +96,7 @@ void profile_initialize()
 		#if _MSC_VER > 1600
         sprintf_s( server_address, 256, "127.0.0.1:%d", SERVER_BASE_PORT + i );
 		#else
-        sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+        snprintf( server_address, sizeof( server_address ), "127.0.0.1:%d", SERVER_BASE_PORT + i );
 		#endif
         server[i] = netcode_server_create( server_address, &server_config, 0.0 );
     }
@@ -217,7 +217,7 @@ void profile_iteration( double time )
 						#if _MSC_VER > 1600
                         sprintf_s( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
 						#else
-                        sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + j );
+                        snprintf( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
 						#endif
                         num_server_addresses++;
                     }
