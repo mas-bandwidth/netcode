@@ -39,23 +39,38 @@ ChaCha20, Poly1305, and AEAD implementations are byte-identical across 1.0.17 �
 
 ## Upstream tracking
 
-Vendoring decouples this tree from upstream security updates, so the pinned version
-is watched rather than assumed current. The scheduled `libsodium upstream check` job
-(`.github/workflows/scheduled.yml`) reads the version from `SODIUM_VERSION_STRING` in
-`sodium.h`, compares it to the latest `jedisct1/libsodium` release, and opens a
-tracking issue if a newer release exists. When that fires:
+Vendoring decouples this tree from upstream security updates, so upstream releases are
+watched rather than assumed reviewed. The scheduled `libsodium upstream check` job
+(`.github/workflows/scheduled.yml`) compares the latest `jedisct1/libsodium` release to
+the marker below and **fails** if a newer, unreviewed release exists — it does not open
+issues; this file is the record. To clear it, review the new release and update the
+marker (and the log) here.
 
-1. Read the upstream changelog for changes touching the included slice (ChaCha20,
-   Poly1305, the two AEAD constructions, and their support code — most releases do
-   not).
+    Last reviewed upstream release: 1.0.22
+
+Reviewing a new release means:
+
+1. Read the upstream changelog for changes touching the **included slice** (ChaCha20,
+   Poly1305, the two AEAD constructions, and their support code — most releases touch
+   none of it).
 2. If a relevant fix landed, regenerate the amalgamation per "Structure / regenerating"
-   above and bump `SODIUM_VERSION_STRING`.
-3. Re-run the validation below — in particular `test_crypto_aead_vectors`, which runs
-   in CI on every platform — and confirm the output is still bit-identical to the new
-   upstream for both AEADs.
+   above, bump `SODIUM_VERSION_STRING`, and re-run the validation below — in particular
+   `test_crypto_aead_vectors`, which runs in CI on every platform — confirming the output
+   is still bit-identical to the new upstream for both AEADs.
+3. Update the marker above to the reviewed version and add a line to the log, whether or
+   not the vendored code changed.
 
-If the release only touches code outside the included slice, bumping the pinned
-version string (so the check goes quiet) is enough; note the reason in the commit.
+### Review log
+
+- **1.0.22 (reviewed; vendored still 1.0.20).** 1.0.21 and 1.0.22 are mostly outside the
+  included slice — the ed25519 small-order-point fix, ipcrypt, XOF/SHA-3, ML-KEM768 /
+  X-Wing, and assorted build/platform work do not touch the ChaCha20/Poly1305/AEAD code
+  netcode uses. **One item does:** 1.0.20-stable/1.0.21 added memory fences after MAC
+  verification in the AEAD path (a speculative-access hardening — plaintext must not be
+  read before authentication completes). This appears to touch the ChaCha20-Poly1305
+  decrypt code in this subset and is **pending incorporation** on the next re-vendor;
+  it is a defense-in-depth hardening, not a functional or interop change, so the vendored
+  1.0.20 remains correct and interoperable in the meantime.
 
 ## What is included
 
