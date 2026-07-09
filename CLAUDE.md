@@ -106,15 +106,9 @@ this careful about protocol errors, the API tells the integrator very little abo
 something failed.
 
 **Small sharp edges:**
-- The `NETCODE_ADDRESS_BUFFER_SAFETY` 32-byte margin in `netcode_parse_address`
-  (netcode.c:218) reads as insurance against an off-by-one rather than proof there
-  isn't one. (Port parsing itself is validated now: all-digits, range-checked to
-  65535, rejects rather than truncates.)
 - Global mutable state (log level, printf/assert hooks, `netcode.initialized`, static
   timers, `rand()` in the simulator) means the library is single-threaded by design.
   The header now documents this at the top, but the state is still global.
-- `netcode_client_process_packet` casts its parameters to void and then uses them
-  (netcode.c:2971) — harmless leftovers.
 - The real-socket connect tests advance virtual time while pumping real sockets; they
   sleep 10ms per iteration so OS packet delivery can keep up. Without that yield they
   are timing-sensitive on loaded CI runners (this bit once: macOS Release, run 28993111836).
@@ -122,7 +116,10 @@ something failed.
 (Fixed in July 2026: `atoi` port truncation now rejects invalid ports; the public
 `netcode_assert` macro no longer force-exits, so a custom assert handler may choose to
 continue; zero-byte payload sends are rejected at the API instead of silently vanishing
-at the receiver; thread-safety expectations are documented in netcode.h.)
+at the receiver; thread-safety expectations are documented in netcode.h; the
+`NETCODE_ADDRESS_BUFFER_SAFETY` margin in `netcode_parse_address` is removed — port
+parsing is validated and the indexing is guarded, verified by fuzz_parse_address under
+ASan; the leftover void casts in `netcode_client_process_packet` are gone.)
 
 **Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
 Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface

@@ -237,11 +237,9 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
     // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
     // 2. otherwise try to parse as a raw IPv6 address using inet_pton
 
-    #define NETCODE_ADDRESS_BUFFER_SAFETY 32
+    char buffer[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
-    char buffer[NETCODE_MAX_ADDRESS_STRING_LENGTH + NETCODE_ADDRESS_BUFFER_SAFETY*2];
-
-    char * address_string = buffer + NETCODE_ADDRESS_BUFFER_SAFETY;
+    char * address_string = buffer;
     strncpy( address_string, address_string_in, NETCODE_MAX_ADDRESS_STRING_LENGTH - 1 );
     address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH-1] = '\0';
 
@@ -2996,11 +2994,6 @@ void netcode_client_process_packet_internal( struct netcode_client_t * client, s
 
 void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes )
 {
-    (void) client;
-    (void) from;
-    (void) packet_data;
-    (void) packet_bytes;
-
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 0, sizeof( allowed_packets ) );
     allowed_packets[NETCODE_CONNECTION_DENIED_PACKET] = 1;
