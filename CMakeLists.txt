@@ -30,12 +30,10 @@ else()
     set(NETCODE_WARNINGS -Wall -Wextra)
 endif()
 
-# vendored libsodium subset. the SIMD variants guard themselves by target
-# architecture, and the .S assembly files are not part of the build.
+# vendored libsodium subset, amalgamated into a single header + source pair.
+# see sodium/NOTES.md for how it is generated and validated.
 
-file(GLOB SODIUM_SOURCES CONFIGURE_DEPENDS sodium/*.c sodium/*.h)
-
-add_library(sodium STATIC ${SODIUM_SOURCES})
+add_library(sodium STATIC sodium/sodium.c sodium/sodium.h)
 target_include_directories(sodium PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sodium)
 if(NOT MSVC)
     target_compile_options(sodium PRIVATE
