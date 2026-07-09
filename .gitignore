@@ -1,6 +1,36 @@
-# CMake
+# CMake build directories (the recommended out-of-source flow)
 build*/
+
+# CMake generated files, so an accidental in-source configure can never be committed
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
 CMakeUserPresets.json
+compile_commands.json
+install_manifest.txt
+Testing/
+_deps/
+
+# Ninja
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Compiled objects, libraries, and binaries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.dSYM/
 
 # Visual Studio
 *.db
@@ -37,7 +67,6 @@ Debug
 .vs
 cov-int
 docs
-*.exe
 valgrind/netcode
 docker/netcode
 
