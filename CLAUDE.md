@@ -8,8 +8,8 @@ encrypted/signed packets via libsodium, client slots, keep-alives, timeouts, and
 disconnect. The protocol is specified in STANDARD.md (netcode 1.02) and has multiple
 independent implementations (C#, Go, Rust, TypeScript).
 
-- `netcode.h` / `netcode.c` — the entire library. `netcode.c` is ~8,800 lines: ~5,300
-  of implementation and ~3,500 of tests gated behind `NETCODE_ENABLE_TESTS`.
+- `netcode.h` / `netcode.c` — the entire library. `netcode.c` is ~9,300 lines: ~5,400
+  of implementation and ~3,900 of tests gated behind `NETCODE_ENABLE_TESTS`.
 - `client.c`, `server.c`, `client_server.c`, `soak.c`, `profile.c` — examples and harnesses.
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
@@ -30,9 +30,9 @@ independent implementations (C#, Go, Rust, TypeScript).
 ### The short version
 
 This is a mature, disciplined, security-conscious C library that does exactly one thing
-and does it well. The protocol design is its strongest asset. The main weaknesses are
-maintainability of the single-file implementation (internal duplication) and per-packet
-allocation churn on the receive path.
+and does it well. The protocol design is its strongest asset. The main remaining
+weakness is per-packet allocation churn on the receive path; the single-file layout is
+a deliberate style choice that trades contribution ergonomics for trivial integration.
 
 ### What's genuinely good
 
@@ -94,16 +94,6 @@ stopped and started (`netcode_server_running`), and everything else is per-clien
 
 ### What's not so good
 
-**Internal duplication is the biggest code-quality issue.**
-`netcode_server_process_packet` (netcode.c:4590) and
-`netcode_server_read_and_process_packet` (netcode.c:4650) are near-identical ~55-line
-functions; a fix applied to one has to be remembered in the other. The client builds the
-same `allowed_packets` table and makes the same `netcode_read_packet` call in three
-places (netcode.c:2976, 3011, 3082). The IPv4/IPv6 sockaddr conversion logic is repeated
-in four spots. None of this is wrong, but it's the kind of duplication that breeds
-divergence bugs — and the git history (e.g. "Fix soak and profile sending all server
-packets to client 0") suggests it already has.
-
 **Per-packet heap allocation.** Every accepted packet is malloc'd, and non-payload
 packets are freed moments later after a switch statement reads one or two fields
 (netcode.c:2966, 4587). The allocator hooks let integrators pool this away, but the
@@ -136,7 +126,12 @@ crashing; the network simulator uses a per-instance seeded xorshift64* instead o
 `rand()`, so simulator runs are deterministic — pinned by
 test_network_simulator_determinism; `netcode_client_create_error()` and
 `netcode_server_create_error()` report why create returned NULL, with server bind
-failures distinguished per address family.)
+failures distinguished per address family; the internal duplication that used to be the
+biggest code-quality issue is consolidated — `netcode_server_process_packet` delegates
+to the shared read-and-process path, the client receive loops feed
+`netcode_client_process_packet`, sockaddr conversion and simulator/override/socket send
+dispatch are single helpers, and client slot reset is shared between the disconnect
+paths, for a net −116 lines with no public header or wire change.)
 
 **Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
 Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface
