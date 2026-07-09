@@ -3487,6 +3487,16 @@ void netcode_client_process_loopback_packet( struct netcode_client_t * client, N
 {
     netcode_assert( client );
     netcode_assert( client->loopback );
+    netcode_assert( packet_data );
+    netcode_assert( packet_bytes > 0 );
+    netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
+
+    if ( !client->loopback )
+        return;
+
+    if ( packet_bytes <= 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+        return;
+
     struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, client->config.allocator_context, client->config.allocate_function );
     if ( !packet )
         return;
@@ -4008,6 +4018,15 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     netcode_assert( max_clients > 0 );
     netcode_assert( max_clients <= NETCODE_MAX_CLIENTS );
 
+    // the per-client arrays are sized NETCODE_MAX_CLIENTS. an out of range value here
+    // must not get through in release builds where asserts compile out
+
+    if ( max_clients <= 0 || max_clients > NETCODE_MAX_CLIENTS )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: max clients must be in [1,%d], got %d\n", NETCODE_MAX_CLIENTS, max_clients );
+        return;
+    }
+
     if ( server->running )
     {
         netcode_server_stop( server );
@@ -4191,6 +4210,10 @@ void netcode_server_disconnect_client( struct netcode_server_t * server, int cli
 
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return;
+
     netcode_assert( server->client_loopback[client_index] == 0 );
 
     if ( !server->client_connected[client_index] )
@@ -4896,11 +4919,16 @@ struct netcode_address_t * netcode_server_client_address( struct netcode_server_
 
 uint64_t netcode_server_next_packet_sequence( struct netcode_server_t * server, int client_index )
 {
+    netcode_assert( server );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+    if ( !server->running )
+        return 0;
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return 0;
     if ( !server->client_connected[client_index] )
         return 0;
-    return server->client_sequence[client_index];    
+    return server->client_sequence[client_index];
 }
 
 void netcode_server_send_packet( struct netcode_server_t * server, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
@@ -4923,6 +4951,10 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return;
+
     if ( !server->client_connected[client_index] )
         return;
 
@@ -4973,6 +5005,9 @@ uint8_t * netcode_server_receive_packet( struct netcode_server_t * server, int c
 
     netcode_assert( client_index < server->max_clients );
 
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return NULL;
+
     if ( !server->client_connected[client_index] )
         return NULL;
 
@@ -5013,6 +5048,10 @@ void * netcode_server_client_user_data( struct netcode_server_t * server, int cl
     netcode_assert( server );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+    if ( !server->running )
+        return NULL;
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return NULL;
     return server->client_user_data[client_index];
 }
 
@@ -5042,7 +5081,17 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
+
+    if ( !server->running )
+        return;
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return;
+
     netcode_assert( !server->client_connected[client_index] );
+
+    if ( server->client_connected[client_index] )
+        return;
 
     server->num_connected_clients++;
 
@@ -5081,8 +5130,18 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->running );
+
+    if ( !server->running )
+        return;
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return;
+
     netcode_assert( server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
+
+    if ( !server->client_connected[client_index] || !server->client_loopback[client_index] )
+        return;
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected loopback client %d\n", client_index );
 
@@ -5123,6 +5182,10 @@ int netcode_server_client_loopback( struct netcode_server_t * server, int client
     netcode_assert( server->running );
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
+    if ( !server->running )
+        return 0;
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return 0;
     return server->client_loopback[client_index];
 }
 
@@ -5132,11 +5195,24 @@ void netcode_server_process_loopback_packet( struct netcode_server_t * server, i
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( packet_data );
-    netcode_assert( packet_bytes >= 0 );
+    netcode_assert( packet_bytes > 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
+    netcode_assert( server->running );
+
+    if ( !server->running )
+        return;
+
+    if ( client_index < 0 || client_index >= server->max_clients )
+        return;
+
     netcode_assert( server->client_connected[client_index] );
     netcode_assert( server->client_loopback[client_index] );
-    netcode_assert( server->running );
+
+    if ( !server->client_connected[client_index] || !server->client_loopback[client_index] )
+        return;
+
+    if ( packet_bytes <= 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+        return;
 
     struct netcode_connection_payload_packet_t * packet = netcode_create_payload_packet( packet_bytes, server->config.allocator_context, server->config.allocate_function );
     if ( !packet )
@@ -6608,6 +6684,95 @@ void test_replay_protection()
     // while packets that fell out of the window are rejected as before
 
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
+}
+
+static int num_ignored_asserts = 0;
+
+static void test_runtime_guards_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
+{
+    (void) condition;
+    (void) function;
+    (void) file;
+    (void) line;
+    num_ignored_asserts++;
+}
+
+void test_runtime_guards()
+{
+    // out of range arguments to public entry points must not crash or corrupt memory in
+    // release builds, where asserts compile out. install an assert handler that continues
+    // instead of aborting so this test also runs in debug builds.
+
+    netcode_set_assert_function( test_runtime_guards_assert_handler );
+
+    // no private key needed: nothing in this test decrypts anything
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+    check( server );
+
+    // starting with an out of range number of clients must not start the server
+
+    netcode_server_start( server, 0 );
+    check( !netcode_server_running( server ) );
+
+    netcode_server_start( server, -1 );
+    check( !netcode_server_running( server ) );
+
+    netcode_server_start( server, NETCODE_MAX_CLIENTS + 1 );
+    check( !netcode_server_running( server ) );
+
+    netcode_server_start( server, 1 );
+    check( netcode_server_running( server ) );
+    check( netcode_server_max_clients( server ) == 1 );
+
+    // out of range client indices must return cleanly. max clients is 1, so 1 is out of range
+
+    check( netcode_server_client_user_data( server, -1 ) == NULL );
+    check( netcode_server_client_user_data( server, 1 ) == NULL );
+    check( netcode_server_client_user_data( server, NETCODE_MAX_CLIENTS ) == NULL );
+
+    check( netcode_server_next_packet_sequence( server, -1 ) == 0 );
+    check( netcode_server_next_packet_sequence( server, 1 ) == 0 );
+
+    check( netcode_server_client_loopback( server, -1 ) == 0 );
+    check( netcode_server_client_loopback( server, 1 ) == 0 );
+
+    int packet_bytes = 0;
+    uint64_t packet_sequence = 0;
+    check( netcode_server_receive_packet( server, -1, &packet_bytes, &packet_sequence ) == NULL );
+    check( netcode_server_receive_packet( server, 1, &packet_bytes, &packet_sequence ) == NULL );
+
+    uint8_t payload[NETCODE_MAX_PACKET_SIZE];
+    memset( payload, 0, sizeof( payload ) );
+
+    netcode_server_send_packet( server, -1, payload, NETCODE_MAX_PACKET_SIZE );
+    netcode_server_send_packet( server, 1, payload, NETCODE_MAX_PACKET_SIZE );
+
+    netcode_server_disconnect_client( server, -1 );
+    netcode_server_disconnect_client( server, 1 );
+
+    netcode_server_connect_loopback_client( server, -1, 1, NULL );
+    netcode_server_connect_loopback_client( server, 1, 1, NULL );
+
+    netcode_server_disconnect_loopback_client( server, -1 );
+    netcode_server_disconnect_loopback_client( server, 1 );
+
+    netcode_server_process_loopback_packet( server, -1, payload, NETCODE_MAX_PACKET_SIZE, 0 );
+    netcode_server_process_loopback_packet( server, 1, payload, NETCODE_MAX_PACKET_SIZE, 0 );
+
+    // none of the above may have connected anybody or torn anything down
+
+    check( netcode_server_running( server ) );
+    check( netcode_server_num_connected_clients( server ) == 0 );
+
+    netcode_server_destroy( server );
+
+    netcode_set_assert_function( netcode_default_assert_handler );
 }
 
 void test_client_create()
@@ -8891,6 +9056,7 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
+        RUN_TEST( test_runtime_guards );
         RUN_TEST( test_client_create );
         RUN_TEST( test_server_create );
         RUN_TEST( test_client_server_connect );

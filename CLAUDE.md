@@ -14,7 +14,7 @@ independent implementations (C#, Go, Rust, TypeScript).
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (37 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (38 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
@@ -70,7 +70,7 @@ hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:554), `IPV6_V6ONLY
 dual-stack IPv4+IPv6 sockets, loopback clients for integrated host-and-play, allocator
 override hooks, and full send/receive transport overrides. A built-in network simulator
 (latency/jitter/loss/duplication) makes the connection tests deterministic without
-touching real sockets. Few networking libraries ship this complete a test story: 37
+touching real sockets. Few networking libraries ship this complete a test story: 38
 unit + integration tests covering every client error state, reconnect, multi-server
 fallback, dual-stack, loopback — plus a soak test and a profiler. All pass today.
 
@@ -119,7 +119,11 @@ continue; zero-byte payload sends are rejected at the API instead of silently va
 at the receiver; thread-safety expectations are documented in netcode.h; the
 `NETCODE_ADDRESS_BUFFER_SAFETY` margin in `netcode_parse_address` is removed — port
 parsing is validated and the indexing is guarded, verified by fuzz_parse_address under
-ASan; the leftover void casts in `netcode_client_process_packet` are gone.)
+ASan; the leftover void casts in `netcode_client_process_packet` are gone; public entry
+points that take `max_clients`, a client index, or a loopback packet size now pair their
+asserts with runtime bounds guards, so out-of-range values from the application can't
+index past the per-client arrays in release builds — covered by test_runtime_guards,
+which runs with a continuing assert handler so it exercises the guards in debug too.)
 
 **Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
 Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface
