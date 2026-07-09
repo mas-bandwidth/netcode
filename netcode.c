@@ -2673,6 +2673,13 @@ struct netcode_client_t
     int loopback;
 };
 
+static int client_create_error;
+
+int netcode_client_create_error()
+{
+    return client_create_error;
+}
+
 int netcode_client_socket_create( struct netcode_socket_t * socket,
                                   struct netcode_address_t * address,
                                   int send_buffer_size,
@@ -2689,6 +2696,8 @@ int netcode_client_socket_create( struct netcode_socket_t * socket,
         {
             if ( netcode_socket_create( socket, address, send_buffer_size, receive_buffer_size ) != NETCODE_SOCKET_ERROR_NONE )
             {
+                client_create_error = ( address->type == NETCODE_ADDRESS_IPV6 ) ? NETCODE_CLIENT_CREATE_ERROR_CREATE_SOCKET_IPV6_FAILED
+                                                                                : NETCODE_CLIENT_CREATE_ERROR_CREATE_SOCKET_IPV4_FAILED;
                 return 0;
             }
         }
@@ -2698,6 +2707,7 @@ int netcode_client_socket_create( struct netcode_socket_t * socket,
         if ( address->port == 0 )
         {
             netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: must bind to a specific port when using network simulator\n" );
+            client_create_error = NETCODE_CLIENT_CREATE_ERROR_SIMULATOR_REQUIRES_PORT;
             return 0;
         }
     }
@@ -2712,6 +2722,8 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
 {
     netcode_assert( config );
     netcode_assert( netcode.initialized );
+
+    client_create_error = NETCODE_CLIENT_CREATE_ERROR_NONE;
 
     // tolerate a zeroed config: default the allocator functions so a forgotten
     // netcode_default_client_config is an inconvenience, not a crash
@@ -2732,12 +2744,14 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
     if ( netcode_parse_address( address1_string, &address1 ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse client address\n" );
+        client_create_error = NETCODE_CLIENT_CREATE_ERROR_PARSE_ADDRESS_FAILED;
         return NULL;
     }
 
     if ( address2_string != NULL && netcode_parse_address( address2_string, &address2 ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse client address2\n" );
+        client_create_error = NETCODE_CLIENT_CREATE_ERROR_PARSE_ADDRESS2_FAILED;
         return NULL;
     }
 
@@ -2771,6 +2785,7 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
     {
         netcode_socket_destroy( &socket_ipv4 );
         netcode_socket_destroy( &socket_ipv6 );
+        client_create_error = NETCODE_CLIENT_CREATE_ERROR_ALLOCATE_CLIENT_FAILED;
         return NULL;
     }
 
@@ -6861,6 +6876,92 @@ void test_init_and_defaults()
     }
 }
 
+static void * test_failing_allocate_function( void * context, size_t bytes )
+{
+    (void) context;
+    (void) bytes;
+    return NULL;
+}
+
+void test_client_create_error()
+{
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+
+    // successful create leaves the create error as NONE
+
+    {
+        struct netcode_client_t * client = netcode_client_create( "0.0.0.0:50000", &client_config, 0.0 );
+
+        check( client );
+        check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_NONE );
+
+        netcode_client_destroy( client );
+    }
+
+    // bad first address
+
+    check( netcode_client_create( "not an address", &client_config, 0.0 ) == NULL );
+    check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_PARSE_ADDRESS_FAILED );
+
+    // bad second address
+
+    check( netcode_client_create_dual( "0.0.0.0:50000", "not an address", &client_config, 0.0 ) == NULL );
+    check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_PARSE_ADDRESS2_FAILED );
+
+    // the network simulator requires binding to a specific port
+
+    {
+        struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+        struct netcode_client_config_t simulator_config;
+        netcode_default_client_config( &simulator_config );
+        simulator_config.network_simulator = network_simulator;
+
+        check( netcode_client_create( "0.0.0.0", &simulator_config, 0.0 ) == NULL );
+        check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_SIMULATOR_REQUIRES_PORT );
+
+        netcode_network_simulator_destroy( network_simulator );
+    }
+
+    // binding a second client to a port already in use fails at socket creation (ipv4)
+
+    {
+        struct netcode_client_t * first_client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+        check( first_client );
+
+        check( netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 ) == NULL );
+        check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_CREATE_SOCKET_IPV4_FAILED );
+
+        netcode_client_destroy( first_client );
+    }
+
+    // and the same over ipv6 reports the ipv6 error
+
+    {
+        struct netcode_client_t * first_client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+        check( first_client );
+
+        check( netcode_client_create( "[::1]:50000", &client_config, 0.0 ) == NULL );
+        check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_CREATE_SOCKET_IPV6_FAILED );
+
+        netcode_client_destroy( first_client );
+    }
+
+    // client struct allocation failure
+
+    {
+        struct netcode_client_config_t failing_config;
+        netcode_default_client_config( &failing_config );
+        failing_config.allocate_function = test_failing_allocate_function;
+
+        check( netcode_client_create( "0.0.0.0:50000", &failing_config, 0.0 ) == NULL );
+        check( netcode_client_create_error() == NETCODE_CLIENT_CREATE_ERROR_ALLOCATE_CLIENT_FAILED );
+    }
+}
+
 void test_network_simulator_determinism()
 {
     // the network simulator has its own seeded rng, so two simulators given
@@ -9222,6 +9323,7 @@ void netcode_test()
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
+        RUN_TEST( test_client_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_client_create );
         RUN_TEST( test_server_create );
