@@ -31,8 +31,10 @@ independent implementations (C#, Go, Rust, TypeScript).
 
 This is a mature, disciplined, security-conscious C library that does exactly one thing
 and does it well. The protocol design is its strongest asset. The main weaknesses are
-maintainability of the single-file implementation (internal duplication) and thin error
-reporting at the API surface.
+maintainability of the single-file implementation (internal duplication) and error
+reporting that goes quiet at creation time and on the server side — the client's
+state machine covers connection errors well, but create returning NULL and the server
+API tell the integrator nothing about why something failed.
 
 ### What's genuinely good
 
@@ -98,12 +100,19 @@ default behavior is allocation churn proportional to packet rate, and the intern
 design (allocate → inspect → free) makes even keep-alives cost a round trip through the
 allocator.
 
-**Error reporting is thin.** `netcode_client_connect` returns void — an invalid token is
-only observable by polling state. `netcode_server_start` returns void. Socket creation
-failures reduce to a NULL from create plus a log line; the detailed
-`NETCODE_SOCKET_ERROR_*` codes exist internally but never reach the caller. For a library
-this careful about protocol errors, the API tells the integrator very little about *why*
-something failed.
+**Error reporting goes quiet outside the client state machine.** Client connection
+errors are reported well: denial, timeouts, and token problems are asynchronous by
+nature, and the negative `NETCODE_CLIENT_STATE_*` values polled from the game loop are
+the right mechanism for them — that is by design, not a gap. The gaps are the places
+that mechanism can't reach. Creation failures collapse to NULL: a bad address string, a
+socket creation failure, and a bind failure (the operationally common one — port
+already in use) are indistinguishable to the caller, even though the internal
+`NETCODE_SOCKET_ERROR_*` codes (netcode.c:486) enumerate exactly these cases before
+being discarded. The server has no state-machine equivalent at all — its failures
+reduce to `netcode_server_running()` returning false with no why. And runtime socket
+errors are swallowed (`sendto` results are cast to void, `recvfrom` errors are logged
+and dropped) — defensible for UDP, where transient errors are noise, but a persistently
+dead socket never surfaces to the application.
 
 **Small sharp edges:**
 - Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
