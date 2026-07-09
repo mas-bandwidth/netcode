@@ -144,7 +144,10 @@ Prior to encryption, challenge tokens have the following structure:
     [user data] (256 bytes)
     <zero pad to 300 bytes>
 
-Encryption of the challenge token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with no associated data, a random key generated when the dedicated server starts, and a sequence number that starts at zero and increases with each challenge token generated. The sequence number is extended by padding high bits with zero to create a 96 bit nonce.
+Encryption of the challenge token data is performed with the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with no associated data, a random key generated when the dedicated server starts, and a sequence number that starts at zero and increases with each challenge token generated. The 96 bit nonce is constructed from the sequence number as 12 bytes, with four zero bytes followed by the sequence number written as a 64 bit little-endian value:
+
+    [zero] (uint32)              // bytes 0..3, always zero
+    [sequence number] (uint64)   // bytes 4..11, little-endian
 
 Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store the HMAC of the encrypted buffer:
 
@@ -233,7 +236,10 @@ The per-packet type data is encrypted using the libsodium AEAD primitive *crypto
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
 
-The packet sequence number is extended by padding high bits with zero to create a 96 bit nonce.
+The 96 bit nonce for packet encryption is constructed from the packet sequence number as 12 bytes, with four zero bytes followed by the sequence number written as a 64 bit little-endian value:
+
+    [zero] (uint32)              // bytes 0..3, always zero
+    [sequence number] (uint64)   // bytes 4..11, little-endian
 
 Packets sent from client to server are encrypted with the client to server key in the connect token.
 
@@ -262,7 +268,13 @@ The following steps are taken when reading an encrypted packet, in this exact or
 
 * If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
 
-* If the per-packet type data size does not match the expected size for the packet type, ignore the packet.
+* If the packet type fails the replay protection already received test, ignore the packet. _See the section on replay protection below for details_.
+
+* If the per-packet type data fails to decrypt, ignore the packet.
+
+* Advance the most recent replay protection sequence #. _See the section on replay protection below for details_.
+
+* If the decrypted per-packet type data size does not match the expected size for the packet type, ignore the packet.
 
     * 0 bytes for _connection denied packet_
     * 308 bytes for _connection challenge packet_
@@ -270,12 +282,6 @@ The following steps are taken when reading an encrypted packet, in this exact or
     * 8 bytes for _connection keep-alive packet_
     * [1,1200] bytes for _connection payload packet_
     * 0 bytes for _connection disconnect packet_
-
-* If the packet type fails the replay protection already received test, ignore the packet. _See the section on replay protection below for details_.
-
-* If the per-packet type data fails to decrypt, ignore the packet.
-
-* Advance the most recent replay protection sequence #. _See the section on replay protection below for details_.
 
 * If all the above checks pass, the packet is processed.
 
@@ -338,7 +344,7 @@ Once the client has obtained a connect token, its goal is to establish connectio
 
 To begin this process, it transitions to _sending connection request_ with the first server address in the connect token.
 
-Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type values in the connect token are outside of the range [0,1], or if the create timestamp is more recent than the expire timestamp, the client transitions to _invalid connect token_.
+Before doing this, the client checks that the connect token is valid. If the number of server addresses in the connect token are outside of the range [1,32], or if any address type value in the connect token is not 1 (IPv4) or 2 (IPv6), or if the create timestamp is more recent than the expire timestamp, the client transitions to _invalid connect token_.
 
 ### Sending Connection Request
 
@@ -428,7 +434,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
-* If the decrypted private connect token fails to be read for any reason, for example, having a number of server addresses outside of the expected range of [1,32], or having an address type value outside of range [0,1], ignore the packet.
+* If the decrypted private connect token fails to be read for any reason, for example, having a number of server addresses outside of the expected range of [1,32], or having an address type value that is not 1 (IPv4) or 2 (IPv6), ignore the packet.
 
 * If the dedicated server public address is not in the list of server addresses in the private connect token, ignore the packet.
 
@@ -457,7 +463,7 @@ The _connection response packet_ contains the following data:
     [prefix byte] (uint8) // non-zero prefix byte: ( (num_sequence_bytes<<4) | packet_type )
     [sequence number] (variable length 1-8 bytes)
     [challenge token sequence] (uint64)
-    [encrypted challenge token data] (360 bytes)
+    [encrypted challenge token data] (300 bytes)
 
 The server takes these steps, in this exact order, when processing a _connection response packet_:
 
