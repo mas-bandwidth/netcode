@@ -1,3 +1,7 @@
+# CMake
+build*/
+CMakeUserPresets.json
+
 # Visual Studio
 *.db
 *.opendb
@@ -14,6 +18,7 @@ Makefile
 
 # Misc
 *.txt
+!CMakeLists.txt
 *.7z
 *.zip
 *.tar.gz
