@@ -27,3 +27,61 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --build-config ${{ matrix.config }} --output-on-failure --timeout 600
+
+  sanitizers:
+    name: sanitizers (asan+ubsan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DNETCODE_SANITIZE=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 600
+        env:
+          ASAN_OPTIONS: halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+
+  fuzz:
+    name: fuzz (smoke)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DNETCODE_SANITIZE=ON -DNETCODE_FUZZ=ON
+
+      - name: Build fuzz targets
+        run: cmake --build build --parallel --target fuzz_read_packet fuzz_connect_token fuzz_parse_address
+
+      - name: Smoke fuzz
+        run: |
+          mkdir -p fuzz-run
+          cd fuzz-run
+          for target in fuzz_read_packet fuzz_connect_token fuzz_parse_address; do
+            echo "=== $target ==="
+            ../build/bin/$target -max_total_time=60 -rss_limit_mb=4096 -print_final_stats=1
+          done
+
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: |
+            fuzz-run/crash-*
+            fuzz-run/oom-*
+            fuzz-run/timeout-*
+          if-no-files-found: ignore

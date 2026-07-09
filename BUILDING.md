@@ -24,6 +24,16 @@ Then you can run binaries like this:
 
 For a debug build, use `-DCMAKE_BUILD_TYPE=Debug` and a separate build directory, e.g. `-B build-debug`.
 
+## Sanitizers and fuzzing
+
+To build everything with AddressSanitizer and UndefinedBehaviorSanitizer, configure with `-DNETCODE_SANITIZE=ON` and run the tests as usual:
+
+    cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DNETCODE_SANITIZE=ON
+    cmake --build build-asan --parallel
+    ctest --test-dir build-asan --output-on-failure
+
+Fuzz harnesses for the untrusted-input surface live in `fuzz/` and are built with `-DNETCODE_FUZZ=ON`. See [fuzz/README.md](fuzz/README.md) for details.
+
 ## Building on Windows
 
 You need Visual Studio to build the source code. If you don't have Visual Studio you can [download the community edition for free](https://visualstudio.microsoft.com/downloads/).

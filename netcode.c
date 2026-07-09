@@ -1677,7 +1677,11 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 {
     netcode_assert( replay_protection );
 
-    if ( sequence + NETCODE_REPLAY_PROTECTION_BUFFER_SIZE <= replay_protection->most_recent_sequence )
+    // written so it cannot overflow: "sequence + BUFFER_SIZE <= most_recent" wraps for
+    // sequence values near UINT64_MAX and falsely rejects them as replays
+
+    if ( replay_protection->most_recent_sequence >= NETCODE_REPLAY_PROTECTION_BUFFER_SIZE &&
+         sequence <= replay_protection->most_recent_sequence - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE )
         return 1;
     
     int index = (int) ( sequence % NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
@@ -6593,6 +6597,26 @@ void test_replay_protection()
             check( netcode_replay_protection_already_received( &replay_protection, sequence ) == 1 );
         }
     }
+
+    // sequence numbers near UINT64_MAX must not be falsely rejected as replays.
+    // "sequence + buffer size" overflowed in the already received check and treated
+    // the top of the sequence space as ancient packets. found by fuzz_read_packet.
+
+    netcode_replay_protection_reset( &replay_protection );
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE );
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX - 1 );
+
+    // and a replayed packet up there is still caught
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 ) == 1 );
+
+    // while packets that fell out of the window are rejected as before
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
 }
 
 void test_client_create()
