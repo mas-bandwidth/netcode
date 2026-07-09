@@ -18,7 +18,10 @@ independent implementations (C#, Go, Rust, TypeScript).
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
-  standalone file replayer). CI (`.github/workflows/ci.yml`) builds and tests Debug +
+  standalone file replayer). For packaging: `-DNETCODE_SYSTEM_SODIUM=ON` links the
+  system libsodium instead of the vendored copy, `-DBUILD_SHARED_LIBS=ON` builds
+  libnetcode shared, and `cmake --install` installs netcode.h + the library
+  (this is the homebrew configuration, covered by a CI leg). CI (`.github/workflows/ci.yml`) builds and tests Debug +
   Release on Linux x64, Linux arm64, macOS Apple Silicon, and Windows x64 (MSVC + a
   MinGW leg), plus a Linux ASan+UBSan leg and a bounded smoke-fuzz leg. A separate
   nightly workflow (`.github/workflows/scheduled.yml`) runs deep fuzzing with an

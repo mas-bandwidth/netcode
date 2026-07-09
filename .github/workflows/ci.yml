@@ -57,6 +57,32 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --timeout 600
 
+  system-sodium:
+    name: ubuntu-24.04 system sodium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install libsodium
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNETCODE_SYSTEM_SODIUM=ON -DBUILD_SHARED_LIBS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 600
+
+      - name: Install
+        run: |
+          cmake --install build --prefix stage
+          test -f stage/include/netcode.h
+          test -f stage/lib/libnetcode.so || test -L stage/lib/libnetcode.so
+          echo "install layout ok"
+
   sanitizers:
     name: sanitizers (asan+ubsan)
     runs-on: ubuntu-24.04
