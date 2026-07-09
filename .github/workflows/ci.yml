@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-24.04, macos-15, windows-2025 ]   # linux x64, apple silicon, windows x64
+        os: [ ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025 ]   # linux x64, linux arm64, apple silicon, windows x64
         config: [ Debug, Release ]
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +27,35 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --build-config ${{ matrix.config }} --output-on-failure --timeout 600
+
+  mingw:
+    name: windows-2025 MinGW
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 600
 
   sanitizers:
     name: sanitizers (asan+ubsan)
@@ -72,7 +101,9 @@ jobs:
           cd fuzz-run
           for target in fuzz_read_packet fuzz_connect_token fuzz_parse_address; do
             echo "=== $target ==="
-            ../build/bin/$target -max_total_time=60 -rss_limit_mb=4096 -print_final_stats=1
+            seeds=""
+            if [ -d "../fuzz/corpus/$target" ]; then seeds="../fuzz/corpus/$target"; fi
+            ../build/bin/$target -max_total_time=60 -rss_limit_mb=4096 -print_final_stats=1 $seeds
           done
 
       - name: Upload crashes
