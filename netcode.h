@@ -25,6 +25,15 @@
 #ifndef NETCODE_H
 #define NETCODE_H
 
+/*
+    IMPORTANT: netcode is single-threaded by design and is not thread safe.
+
+    The library uses global state (netcode_init/netcode_term, the log level, and the
+    printf and assert hooks) and performs no internal synchronization. Call all netcode
+    functions from the same thread, or provide your own locking around them. Each client
+    and server object must only be updated from one thread at a time.
+*/
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -286,16 +295,21 @@ do                                                                              
     if ( !(condition) )                                                                     \
     {                                                                                       \
         netcode_assert_function( #condition, __FUNCTION__, __FILE__, __LINE__ );            \
-        exit(1);                                                                            \
     }                                                                                       \
 } while(0)
 #else
 #define netcode_assert( ignore ) ((void)0)
 #endif
 
-void netcode_set_assert_function( void (*function)( NETCODE_CONST char * /*condition*/, 
-                                  NETCODE_CONST char * /*function*/, 
-                                  NETCODE_CONST char * /*file*/, 
+/*
+    The default assert handler prints the failed condition, breaks into the debugger and
+    exits. A custom assert handler may return instead, in which case execution continues
+    past the failed assert -- that is the caller's choice and their responsibility.
+*/
+
+void netcode_set_assert_function( void (*function)( NETCODE_CONST char * /*condition*/,
+                                  NETCODE_CONST char * /*function*/,
+                                  NETCODE_CONST char * /*file*/,
                                   int /*line*/ ) );
 
 void netcode_random_bytes( uint8_t * data, int bytes );
