@@ -31,9 +31,8 @@ independent implementations (C#, Go, Rust, TypeScript).
 
 This is a mature, disciplined, security-conscious C library that does exactly one thing
 and does it well. The protocol design is its strongest asset. The main weaknesses are
-maintainability of the single-file implementation (internal duplication), O(n) per-packet
-scans that bound practical server size, thin error reporting at the API surface, and the
-absence of in-repo CI and fuzzing.
+maintainability of the single-file implementation (internal duplication) and thin error
+reporting at the API surface.
 
 ### What's genuinely good
 
@@ -53,6 +52,13 @@ trust the network. The security details are handled with visible care:
   vulnerability class credited in the README.
 - Connect-token single-use tracking is a deliberately constant-time worst-case scan, and
   says so in a comment (netcode.c:3701).
+- Per-packet address lookups (`netcode_server_find_client_index_by_address`, the
+  encryption mapping search) are deliberately flat linear scans, not hash maps. A hash
+  was considered and rejected: netcode targets ~100 players or fewer per server, and an
+  attacker who controls the keys (source addresses) can drive a hash table into
+  worst-case behavior, while a linear scan over small n is predictable — slower in the
+  best case, but with no attacker-controllable worst case. Same philosophy as the
+  connect-token scan above.
 - The challenge/response step defeats source-address spoofing, and "server is full" is
   only revealed after the token decrypts — no free oracle for random scanners.
 - Every read path length-checks before it touches or allocates anything; connection
@@ -84,14 +90,6 @@ places (netcode.c:2976, 3011, 3082). The IPv4/IPv6 sockaddr conversion logic is 
 in four spots. None of this is wrong, but it's the kind of duplication that breeds
 divergence bugs — and the git history (e.g. "Fix soak and profile sending all server
 packets to client 0") suggests it already has.
-
-**Per-packet linear scans bound server scale.** Every received packet does
-`netcode_server_find_client_index_by_address` — O(max_clients) — and packets from unknown
-addresses scan up to 1024 encryption mappings linearly (netcode.c:4611–4621). At 64
-clients this is irrelevant; at `NETCODE_MAX_CLIENTS` (256) under a packet flood it's real
-CPU spent before any crypto rejects anything. The dead define
-`NETCODE_ADDRESS_MAP_BUCKETS` (netcode.c:64) looks like a hash map that was planned and
-never built — it should either be built or the define deleted.
 
 **Per-packet heap allocation.** Every accepted packet is malloc'd, and non-payload
 packets are freed moments later after a switch statement reads one or two fields
@@ -134,19 +132,8 @@ bounded CI run, and a nightly soak leg. The vendored sodium subset makes builds 
 reliable, at the cost of decoupling from upstream security updates and risking symbol
 collisions if the host app links its own libsodium.
 
-**Style is a matter of taste, consistently applied.** One giant file with tests inline,
-section dividers instead of modules, C89-friendly declarations, `NETCODE_CONST`
-gymnastics. It's coherent and greppable, and single-file distribution is a legitimate
-philosophy — but an 8,800-line file with duplicated logic raises the cost of every
-contribution, and most of the contributor activity in the history is indeed small
-external fixes rather than structural work.
-
 ### Verdict
 
 As a protocol and reference implementation, this is top-tier work — the threat model is
 correct, the crypto usage is careful, the tests actually exercise the state machines,
-and the operational details reflect someone who has shipped real multiplayer games. As a
-codebase, it's showing its age in structure: duplication, linear scans with a dead
-optimization stub, and an API that swallows error detail. Nothing here is a reason not
-to use it; the criticisms are about the cost of maintaining and scaling it, not about
-whether it works. It works, and the passing test suite proves it on this machine today.
+and the operational details reflect someone who has shipped real multiplayer games.
