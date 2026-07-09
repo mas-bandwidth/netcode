@@ -1,5 +1,7 @@
 # netcode
 
+[![CI](https://github.com/mas-bandwidth/netcode/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mas-bandwidth/netcode/actions/workflows/ci.yml)
+
 **netcode** is a secure client/server protocol for multiplayer games built on top of UDP. 
 
 ![connections](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
