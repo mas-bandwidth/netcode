@@ -103,16 +103,19 @@ allocator.
 **Error reporting goes quiet outside the client state machine.** Client connection
 errors are reported well: denial, timeouts, and token problems are asynchronous by
 nature, and the negative `NETCODE_CLIENT_STATE_*` values polled from the game loop are
-the right mechanism for them — that is by design, not a gap. The gaps are the places
-that mechanism can't reach. Creation failures collapse to NULL: a bad address string, a
-socket creation failure, and a bind failure (the operationally common one — port
-already in use) are indistinguishable to the caller, even though the internal
-`NETCODE_SOCKET_ERROR_*` codes (netcode.c:486) enumerate exactly these cases before
-being discarded. The server has no state-machine equivalent at all — its failures
-reduce to `netcode_server_running()` returning false with no why. And runtime socket
-errors are swallowed (`sendto` results are cast to void, `recvfrom` errors are logged
-and dropped) — defensible for UDP, where transient errors are noise, but a persistently
-dead socket never surfaces to the application.
+the right mechanism for them — that is by design, not a gap. Per-packet socket errors
+being ignored (`sendto` results cast to void, `recvfrom` errors logged and dropped) is
+also by design, not a gap: UDP is unreliable, so a send error is semantically identical
+to a dropped packet, and the protocol must tolerate drops anyway. A persistently dead
+socket surfaces the same way persistent packet loss does — as a connection timeout
+through the state machine, which is the correct channel for an unreliable protocol.
+The actual gaps are the places the state machine can't reach. Creation failures
+collapse to NULL: a bad address string, a socket creation failure, and a bind failure
+(the operationally common one — port already in use) are indistinguishable to the
+caller, even though the internal `NETCODE_SOCKET_ERROR_*` codes (netcode.c:486)
+enumerate exactly these cases before being discarded. And the server has no
+state-machine equivalent at all — its failures reduce to `netcode_server_running()`
+returning false with no why.
 
 **Small sharp edges:**
 - Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
