@@ -30,9 +30,13 @@ independent implementations (C#, Go, Rust, TypeScript).
 ### The short version
 
 This is a mature, disciplined, security-conscious C library that does exactly one thing
-and does it well. The protocol design is its strongest asset. The main remaining
-weakness is per-packet allocation churn on the receive path; the single-file layout is
-a deliberate style choice that trades contribution ergonomics for trivial integration.
+and does it well. The protocol design is its strongest asset. The weaknesses called out
+by earlier passes of this assessment — thin error reporting, internal duplication,
+assert-only input validation, per-packet allocation — have each been either fixed or
+documented below as deliberate design. What remains is polish: continuous deep fuzzing
+rather than bounded CI runs, and the inherent contribution cost of a single ~9,300-line
+file, a deliberate style choice that trades contribution ergonomics for trivial
+integration.
 
 ### What's genuinely good
 
@@ -94,12 +98,15 @@ stopped and started (`netcode_server_running`), and everything else is per-clien
 
 ### What's not so good
 
-**Per-packet heap allocation.** Every accepted packet is malloc'd, and non-payload
-packets are freed moments later after a switch statement reads one or two fields
-(netcode.c:2966, 4587). The allocator hooks let integrators pool this away, but the
-default behavior is allocation churn proportional to packet rate, and the internal
-design (allocate → inspect → free) makes even keep-alives cost a round trip through the
-allocator.
+**Allocation is the integrator's contract.** Every allocation inside the library goes
+through the allocator hooks in the client/server config. Per-packet allocation on the
+receive path is by design: games that care are expected to supply an allocator whose
+alloc and free are cheap and don't call out to the OS (a pool or arena), and that is
+how shipped games actually use it — yojimbo, the author's higher-level library built on
+netcode, provides its own allocator through these exact hooks. The library defines
+*where* allocations happen; the application decides *how fast* they are. The default
+malloc/free is a convenience for getting started, not the intended production
+configuration.
 
 **Small sharp edges:**
 - Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
