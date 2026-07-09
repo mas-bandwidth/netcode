@@ -14,7 +14,7 @@ independent implementations (C#, Go, Rust, TypeScript).
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (40 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (41 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
@@ -72,7 +72,7 @@ hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:554), `IPV6_V6ONLY
 dual-stack IPv4+IPv6 sockets, loopback clients for integrated host-and-play, allocator
 override hooks, and full send/receive transport overrides. A built-in network simulator
 (latency/jitter/loss/duplication) makes the connection tests deterministic without
-touching real sockets. Few networking libraries ship this complete a test story: 40
+touching real sockets. Few networking libraries ship this complete a test story: 41
 unit + integration tests covering every client error state, reconnect, multi-server
 fallback, dual-stack, loopback — plus a soak test and a profiler. All pass today.
 
@@ -109,13 +109,14 @@ also by design, not a gap: UDP is unreliable, so a send error is semantically id
 to a dropped packet, and the protocol must tolerate drops anyway. A persistently dead
 socket surfaces the same way persistent packet loss does — as a connection timeout
 through the state machine, which is the correct channel for an unreliable protocol.
-The actual gaps are the places the state machine can't reach. Creation failures
-collapse to NULL: a bad address string, a socket creation failure, and a bind failure
-(the operationally common one — port already in use) are indistinguishable to the
-caller, even though the internal `NETCODE_SOCKET_ERROR_*` codes (netcode.c:486)
-enumerate exactly these cases before being discarded. And the server has no
-state-machine equivalent at all — its failures reduce to `netcode_server_running()`
-returning false with no why.
+The actual gaps are the places the state machine can't reach. Client create failures
+are now queryable — when `netcode_client_create` returns NULL,
+`netcode_client_create_error()` reports which step failed (address parse, socket
+create per family, simulator-requires-port, allocation) — though the finer
+`NETCODE_SOCKET_ERROR_*` granularity (bind vs sockopt vs create) still stops inside
+the socket layer. The remaining gap is the server: create returning NULL is
+undifferentiated, and there is no state-machine equivalent — failures reduce to
+`netcode_server_running()` returning false with no why.
 
 **Small sharp edges:**
 - Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
