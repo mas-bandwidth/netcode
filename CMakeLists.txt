@@ -30,6 +30,22 @@ else()
     set(NETCODE_WARNINGS -Wall -Wextra)
 endif()
 
+option(NETCODE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(NETCODE_FUZZ "Build the fuzz targets" OFF)
+
+# sanitizers apply to the whole build. the vendored crypto is exempted from UBSan
+# below (third-party SIMD code uses intentional type punning / unaligned access that
+# UBSan flags but is not netcode's to fix); it still gets AddressSanitizer.
+
+if(NETCODE_SANITIZE)
+    if(MSVC)
+        add_compile_options(/fsanitize=address)
+    else()
+        add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
+endif()
+
 # vendored libsodium subset, amalgamated into a single header + source pair.
 # see sodium/NOTES.md for how it is generated and validated.
 
@@ -43,6 +59,9 @@ if(NOT MSVC)
         -Wno-unknown-pragmas
         -Wno-unused-variable
         -Wno-type-limits)
+    if(NETCODE_SANITIZE)
+        target_compile_options(sodium PRIVATE -fno-sanitize=undefined)
+    endif()
 endif()
 
 # the netcode library
@@ -78,3 +97,44 @@ if(WIN32)
 endif()
 
 add_test(NAME netcode_test COMMAND netcode_test)
+
+# fuzz targets. each harness compiles netcode.c into itself (like the test runner)
+# so it links sodium directly, not the netcode library.
+#
+# where the compiler ships libFuzzer (real LLVM clang) these are libFuzzer targets.
+# elsewhere (AppleClang, GCC, MSVC) they build standalone with a main() that replays
+# input files, so the harnesses compile and reproduce crashes everywhere -- CI can
+# verify they build on all platforms even where it cannot fuzz.
+
+if(NETCODE_FUZZ)
+    include(CheckCSourceCompiles)
+    set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer")
+    check_c_source_compiles("
+        #include <stdint.h>
+        #include <stddef.h>
+        int LLVMFuzzerTestOneInput( const uint8_t * d, size_t s ) { (void) d; (void) s; return 0; }
+    " NETCODE_HAVE_LIBFUZZER)
+    unset(CMAKE_REQUIRED_FLAGS)
+
+    foreach(fuzzer fuzz_read_packet fuzz_connect_token fuzz_parse_address)
+        add_executable(${fuzzer} fuzz/${fuzzer}.c)
+        target_include_directories(${fuzzer} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/sodium)
+        target_link_libraries(${fuzzer} PRIVATE sodium)
+        if(WIN32)
+            target_link_libraries(${fuzzer} PRIVATE ws2_32 iphlpapi)
+        endif()
+
+        if(NETCODE_HAVE_LIBFUZZER)
+            target_compile_options(${fuzzer} PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+            target_link_options(${fuzzer} PRIVATE -fsanitize=fuzzer,address,undefined)
+        else()
+            target_compile_definitions(${fuzzer} PRIVATE NETCODE_FUZZ_STANDALONE)
+            if(NOT MSVC)
+                target_compile_options(${fuzzer} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+                target_link_options(${fuzzer} PRIVATE -fsanitize=address,undefined)
+            endif()
+        endif()
+    endforeach()
+endif()
