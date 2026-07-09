@@ -1,0 +1,146 @@
+name: Scheduled
+
+# Longer-running jobs that don't belong on every push: deep fuzzing with an
+# accumulating corpus, an extended soak, and a check for new libsodium releases.
+# Runs nightly, and can be triggered manually from the Actions tab.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # 06:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deep-fuzz:
+    name: deep fuzz (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ fuzz_read_packet, fuzz_connect_token, fuzz_parse_address ]
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      # restore the corpus discovered by previous runs; the key rotates every run so
+      # each run saves a fresh cache, and restore-keys picks up the most recent prior one
+
+      - name: Restore fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DNETCODE_SANITIZE=ON -DNETCODE_FUZZ=ON
+
+      - name: Build fuzz target
+        run: cmake --build build --parallel --target ${{ matrix.target }}
+
+      - name: Fuzz
+        run: |
+          mkdir -p corpus/${{ matrix.target }}
+          # seed from the checked-in corpus on the first ever run
+          if [ -d "fuzz/corpus/${{ matrix.target }}" ]; then
+            cp -n fuzz/corpus/${{ matrix.target }}/* corpus/${{ matrix.target }}/ 2>/dev/null || true
+          fi
+          ./build/bin/${{ matrix.target }} -max_total_time=1200 -rss_limit_mb=4096 -print_final_stats=1 corpus/${{ matrix.target }}
+
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-fuzz-crashes-${{ matrix.target }}
+          path: |
+            crash-*
+            oom-*
+            timeout-*
+            slow-unit-*
+          if-no-files-found: ignore
+
+  soak:
+    name: soak (asan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DNETCODE_SANITIZE=ON
+
+      - name: Build soak
+        run: cmake --build build --parallel --target soak
+
+      - name: Soak
+        env:
+          ASAN_OPTIONS: halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+        run: |
+          # run for 15 minutes of wall clock. the soak aborts (non-zero) on any packet
+          # mismatch or sanitizer error, so a clean timeout (124) is success and any
+          # other non-zero exit is a failure.
+          set +e
+          timeout --preserve-status 900 ./build/bin/soak
+          status=$?
+          if [ $status -eq 124 ] || [ $status -eq 143 ]; then
+            echo "soak ran clean for the full duration"
+            exit 0
+          fi
+          echo "soak exited with status $status"
+          exit 1
+
+  sodium-upstream-check:
+    name: libsodium upstream check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare vendored version to latest upstream release
+        run: |
+          set -euo pipefail
+
+          vendored=$(grep -oP 'SODIUM_VERSION_STRING\s+"\K[^"]+' sodium/sodium.h)
+          echo "vendored libsodium: $vendored"
+
+          latest=$(gh api repos/jedisct1/libsodium/releases/latest --jq '.tag_name' | sed 's/-RELEASE$//; s/^v//')
+          echo "latest upstream release: $latest"
+
+          if [ "$vendored" = "$latest" ]; then
+            echo "vendored subset is up to date"
+            exit 0
+          fi
+
+          title="libsodium $latest is available (vendored subset is $vendored)"
+
+          # don't open a duplicate if an open issue with this exact title already exists
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$existing" != "0" ]; then
+            echo "an open issue for $latest already exists; nothing to do"
+            exit 0
+          fi
+
+          gh issue create \
+            --title "$title" \
+            --label dependencies \
+            --body "The vendored libsodium subset in \`sodium/\` is at **$vendored**, but upstream has released **$latest**.
+
+          Review the upstream changelog for security-relevant fixes and, if warranted, regenerate the amalgamated subset per \`sodium/NOTES.md\` (re-run the known-answer validation, including \`test_crypto_aead_vectors\`, afterwards).
+
+          Opened automatically by the scheduled \`libsodium upstream check\` job." \
+          || echo "could not create issue (the 'dependencies' label may not exist); please create it manually"

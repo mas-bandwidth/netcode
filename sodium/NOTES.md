@@ -37,6 +37,26 @@ ChaCha20, Poly1305, and AEAD implementations are byte-identical across 1.0.17 �
 1.0.20. This subset has been verified to match libsodium 1.0.20 test vectors (see
 "Validation" below).
 
+## Upstream tracking
+
+Vendoring decouples this tree from upstream security updates, so the pinned version
+is watched rather than assumed current. The scheduled `libsodium upstream check` job
+(`.github/workflows/scheduled.yml`) reads the version from `SODIUM_VERSION_STRING` in
+`sodium.h`, compares it to the latest `jedisct1/libsodium` release, and opens a
+tracking issue if a newer release exists. When that fires:
+
+1. Read the upstream changelog for changes touching the included slice (ChaCha20,
+   Poly1305, the two AEAD constructions, and their support code — most releases do
+   not).
+2. If a relevant fix landed, regenerate the amalgamation per "Structure / regenerating"
+   above and bump `SODIUM_VERSION_STRING`.
+3. Re-run the validation below — in particular `test_crypto_aead_vectors`, which runs
+   in CI on every platform — and confirm the output is still bit-identical to the new
+   upstream for both AEADs.
+
+If the release only touches code outside the included slice, bumping the pinned
+version string (so the check goes quiet) is enough; note the reason in the commit.
+
 ## What is included
 
 Only the primitives netcode calls, plus their support code:

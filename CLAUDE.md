@@ -19,11 +19,16 @@ independent implementations (C#, Go, Rust, TypeScript).
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
   standalone file replayer). CI (`.github/workflows/ci.yml`) builds and tests Debug +
-  Release on Linux x64, macOS Apple Silicon, and Windows x64, plus a Linux ASan+UBSan
-  leg and a bounded smoke-fuzz leg.
+  Release on Linux x64, Linux arm64, macOS Apple Silicon, and Windows x64 (MSVC + a
+  MinGW leg), plus a Linux ASan+UBSan leg and a bounded smoke-fuzz leg. A separate
+  nightly workflow (`.github/workflows/scheduled.yml`) runs deep fuzzing with an
+  accumulating cached corpus, a 15-minute ASan soak, and a libsodium-upstream-release
+  check that opens a tracking issue when the vendored version falls behind.
 - `fuzz/` — fuzz harnesses over the untrusted-input surface (`netcode_read_packet`, the
   connect token readers, `netcode_parse_address`), each with write/read round-trip
-  invariants. See `fuzz/README.md`.
+  invariants, plus a checked-in seed corpus under `fuzz/corpus/`. See `fuzz/README.md`.
+- `IMPLEMENTERS.md` — findings other-language ports should check against (the
+  replay-protection overflow, the STANDARD.md errata).
 
 ## Honest assessment
 
@@ -33,10 +38,10 @@ This is a mature, disciplined, security-conscious C library that does exactly on
 and does it well. The protocol design is its strongest asset. The weaknesses called out
 by earlier passes of this assessment — thin error reporting, internal duplication,
 assert-only input validation, per-packet allocation — have each been either fixed or
-documented below as deliberate design. What remains is polish: continuous deep fuzzing
-rather than bounded CI runs, and the inherent contribution cost of a single ~9,300-line
-file, a deliberate style choice that trades contribution ergonomics for trivial
-integration.
+documented below as deliberate design. What remains is one genuinely external step —
+OSS-Fuzz enrollment for continuous rather than nightly-bounded fuzzing — and the inherent
+contribution cost of a single ~9,300-line file, a deliberate style choice that trades
+contribution ergonomics for trivial integration.
 
 ### What's genuinely good
 
@@ -140,13 +145,16 @@ to the shared read-and-process path, the client receive loops feed
 dispatch are single helpers, and client slot reset is shared between the disconnect
 paths, for a net −116 lines with no public header or wire change.)
 
-**Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
-Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface
-(`netcode_read_packet`, the token readers, `netcode_parse_address`) — the biggest gaps
-are closed. Remaining opportunities: continuous deep fuzzing (OSS-Fuzz) rather than a
-bounded CI run, and a nightly soak leg. The vendored sodium subset makes builds trivially
-reliable, at the cost of decoupling from upstream security updates and risking symbol
-collisions if the host app links its own libsodium.
+**Process.** CI builds and tests every push across Linux x64, Linux arm64, macOS Apple
+Silicon, and Windows (MSVC + MinGW) in Debug and Release, runs an ASan+UBSan leg, and
+smoke-fuzzes the parsing surface. A nightly workflow adds deep fuzzing with a cached
+accumulating corpus, a 15-minute ASan soak, and a libsodium-release watch that files a
+tracking issue when the vendored subset falls behind upstream — which is the one real
+liability of vendoring (decoupling from upstream security updates; that plus symbol
+collision risk if the host app links its own libsodium are the price of trivially
+reliable builds). The remaining process step that is genuinely external is OSS-Fuzz
+enrollment — the harnesses are already libFuzzer-shaped, so it is mostly a submission to
+google/oss-fuzz — which would turn the nightly bounded run into continuous coverage.
 
 ### Verdict
 

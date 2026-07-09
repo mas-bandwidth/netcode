@@ -88,7 +88,7 @@ Other netcode implementations include:
 * [netcode for UE4](https://github.com/RedpointGames/netcode.io-UE4)
 * [netcode for Typescript](https://github.com/bennychen/netcode.io-typescript)
 
-If you'd like to create your own implementation of netcode, please read the [netcode 1.02 standard](STANDARD.md).
+If you'd like to create your own implementation of netcode, please read the [netcode 1.02 standard](STANDARD.md), and see [IMPLEMENTERS.md](IMPLEMENTERS.md) for findings other implementations should check themselves against (a replay-protection overflow and some corrected errata).
 
 # Contributors
 
