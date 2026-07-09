@@ -103,44 +103,29 @@ jobs:
     name: libsodium upstream check
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compare vendored version to latest upstream release
+      - name: Compare latest upstream release to the reviewed marker
         run: |
           set -euo pipefail
 
-          vendored=$(grep -oP 'SODIUM_VERSION_STRING\s+"\K[^"]+' sodium/sodium.h)
-          echo "vendored libsodium: $vendored"
+          # the record of what has been reviewed lives in sodium/NOTES.md, not in issues.
+          # fail if a newer upstream release exists than the "Last reviewed" marker there;
+          # clearing the failure means reviewing the release and updating NOTES.md.
+
+          reviewed=$(grep -oP 'Last reviewed upstream release:\s*\K[0-9.]+' sodium/NOTES.md)
+          echo "last reviewed upstream release (per sodium/NOTES.md): $reviewed"
 
           latest=$(gh api repos/jedisct1/libsodium/releases/latest --jq '.tag_name' | sed 's/-RELEASE$//; s/^v//')
           echo "latest upstream release: $latest"
 
-          if [ "$vendored" = "$latest" ]; then
-            echo "vendored subset is up to date"
+          if [ "$latest" = "$reviewed" ]; then
+            echo "no unreviewed upstream release"
             exit 0
           fi
 
-          title="libsodium $latest is available (vendored subset is $vendored)"
-
-          # don't open a duplicate if an open issue with this exact title already exists
-          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq 'length')
-          if [ "$existing" != "0" ]; then
-            echo "an open issue for $latest already exists; nothing to do"
-            exit 0
-          fi
-
-          gh issue create \
-            --title "$title" \
-            --label dependencies \
-            --body "The vendored libsodium subset in \`sodium/\` is at **$vendored**, but upstream has released **$latest**.
-
-          Review the upstream changelog for security-relevant fixes and, if warranted, regenerate the amalgamated subset per \`sodium/NOTES.md\` (re-run the known-answer validation, including \`test_crypto_aead_vectors\`, afterwards).
-
-          Opened automatically by the scheduled \`libsodium upstream check\` job." \
-          || echo "could not create issue (the 'dependencies' label may not exist); please create it manually"
+          echo "::error::libsodium $latest is available and has not been reviewed (marker is $reviewed). Review it against the included slice and update the 'Last reviewed upstream release' marker and review log in sodium/NOTES.md."
+          exit 1
