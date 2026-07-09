@@ -100,6 +100,15 @@
 #define NETCODE_CLIENT_CREATE_ERROR_CREATE_SOCKET_IPV6_FAILED   5
 #define NETCODE_CLIENT_CREATE_ERROR_ALLOCATE_CLIENT_FAILED      6
 
+#define NETCODE_SERVER_CREATE_ERROR_NONE                        0
+#define NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS_FAILED        1
+#define NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS2_FAILED       2
+#define NETCODE_SERVER_CREATE_ERROR_CREATE_SOCKET_IPV4_FAILED   3
+#define NETCODE_SERVER_CREATE_ERROR_CREATE_SOCKET_IPV6_FAILED   4
+#define NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV4_FAILED     5
+#define NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV6_FAILED     6
+#define NETCODE_SERVER_CREATE_ERROR_ALLOCATE_SERVER_FAILED      7
+
 #define NETCODE_MAX_CLIENTS         256
 #define NETCODE_MAX_PACKET_SIZE     1200
 
@@ -251,6 +260,16 @@ void netcode_default_server_config( struct netcode_server_config_t * config );
 struct netcode_server_t * netcode_server_create( NETCODE_CONST char * server_address, NETCODE_CONST struct netcode_server_config_t * config, double time );
 
 struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * server_address1, NETCODE_CONST char * server_address2, NETCODE_CONST struct netcode_server_config_t * config, double time );
+
+/*
+    If netcode_server_create or netcode_server_create_dual returns NULL, call this to find out why.
+    Returns the NETCODE_SERVER_CREATE_ERROR_* value from the most recent server create call,
+    or NETCODE_SERVER_CREATE_ERROR_NONE if that call succeeded. Bind failures are reported
+    separately from other socket errors because a port already in use is the common
+    operational failure for dedicated servers.
+*/
+
+int netcode_server_create_error();
 
 void netcode_server_destroy( struct netcode_server_t * server );
 

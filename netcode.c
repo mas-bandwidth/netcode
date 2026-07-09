@@ -3920,6 +3920,13 @@ struct netcode_server_t
     struct netcode_address_t receive_from[NETCODE_SERVER_MAX_RECEIVE_PACKETS];
 };
 
+static int server_create_error;
+
+int netcode_server_create_error()
+{
+    return server_create_error;
+}
+
 int netcode_server_socket_create( struct netcode_socket_t * socket,
                                   struct netcode_address_t * address,
                                   int send_buffer_size,
@@ -3934,8 +3941,24 @@ int netcode_server_socket_create( struct netcode_socket_t * socket,
     {
         if ( !config->override_send_and_receive )
         {
-            if ( netcode_socket_create( socket, address, send_buffer_size, receive_buffer_size ) != NETCODE_SOCKET_ERROR_NONE )
+            int socket_error = netcode_socket_create( socket, address, send_buffer_size, receive_buffer_size );
+
+            if ( socket_error != NETCODE_SOCKET_ERROR_NONE )
             {
+                // report bind failures separately: a port already in use is the common
+                // operational failure for dedicated servers, and callers want to react
+                // to it differently than to a socket that could not be created at all
+
+                if ( socket_error == NETCODE_SOCKET_ERROR_BIND_IPV4_FAILED || socket_error == NETCODE_SOCKET_ERROR_BIND_IPV6_FAILED )
+                {
+                    server_create_error = ( address->type == NETCODE_ADDRESS_IPV6 ) ? NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV6_FAILED
+                                                                                    : NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV4_FAILED;
+                }
+                else
+                {
+                    server_create_error = ( address->type == NETCODE_ADDRESS_IPV6 ) ? NETCODE_SERVER_CREATE_ERROR_CREATE_SOCKET_IPV6_FAILED
+                                                                                    : NETCODE_SERVER_CREATE_ERROR_CREATE_SOCKET_IPV4_FAILED;
+                }
                 return 0;
             }
         }
@@ -3948,6 +3971,8 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
 {
     netcode_assert( config );
     netcode_assert( netcode.initialized );
+
+    server_create_error = NETCODE_SERVER_CREATE_ERROR_NONE;
 
     // tolerate a zeroed config: default the allocator functions so a forgotten
     // netcode_default_server_config is an inconvenience, not a crash
@@ -3968,12 +3993,14 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
     if ( netcode_parse_address( server_address1_string, &server_address1 ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse server public address\n" );
+        server_create_error = NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS_FAILED;
         return NULL;
     }
 
     if ( server_address2_string != NULL && netcode_parse_address( server_address2_string, &server_address2 ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to parse server public address2\n" );
+        server_create_error = NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS2_FAILED;
         return NULL;
     }
 
@@ -4017,6 +4044,7 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
     {
         netcode_socket_destroy( &socket_ipv4 );
         netcode_socket_destroy( &socket_ipv6 );
+        server_create_error = NETCODE_SERVER_CREATE_ERROR_ALLOCATE_SERVER_FAILED;
         return NULL;
     }
 
@@ -6962,6 +6990,70 @@ void test_client_create_error()
     }
 }
 
+void test_server_create_error()
+{
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+
+    // successful create leaves the create error as NONE
+
+    {
+        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+        check( server );
+        check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_NONE );
+
+        netcode_server_destroy( server );
+    }
+
+    // bad first address
+
+    check( netcode_server_create( "not an address", &server_config, 0.0 ) == NULL );
+    check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS_FAILED );
+
+    // bad second address
+
+    check( netcode_server_create_dual( "127.0.0.1:40000", "not an address", &server_config, 0.0 ) == NULL );
+    check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_PARSE_ADDRESS2_FAILED );
+
+    // a port already in use is reported as a bind failure, distinct from other socket errors (ipv4)
+
+    {
+        struct netcode_server_t * first_server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+        check( first_server );
+
+        check( netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 ) == NULL );
+        check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV4_FAILED );
+
+        netcode_server_destroy( first_server );
+    }
+
+    // and the same over ipv6 reports the ipv6 bind error
+
+    {
+        struct netcode_server_t * first_server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+        check( first_server );
+
+        check( netcode_server_create( "[::1]:40000", &server_config, 0.0 ) == NULL );
+        check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_BIND_SOCKET_IPV6_FAILED );
+
+        netcode_server_destroy( first_server );
+    }
+
+    // server struct allocation failure
+
+    {
+        struct netcode_server_config_t failing_config;
+        netcode_default_server_config( &failing_config );
+        failing_config.allocate_function = test_failing_allocate_function;
+
+        check( netcode_server_create( "127.0.0.1:40000", &failing_config, 0.0 ) == NULL );
+        check( netcode_server_create_error() == NETCODE_SERVER_CREATE_ERROR_ALLOCATE_SERVER_FAILED );
+    }
+}
+
 void test_network_simulator_determinism()
 {
     // the network simulator has its own seeded rng, so two simulators given
@@ -9324,6 +9416,7 @@ void netcode_test()
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
         RUN_TEST( test_client_create_error );
+        RUN_TEST( test_server_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_client_create );
         RUN_TEST( test_server_create );

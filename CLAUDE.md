@@ -14,7 +14,7 @@ independent implementations (C#, Go, Rust, TypeScript).
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (41 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (42 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
@@ -31,10 +31,8 @@ independent implementations (C#, Go, Rust, TypeScript).
 
 This is a mature, disciplined, security-conscious C library that does exactly one thing
 and does it well. The protocol design is its strongest asset. The main weaknesses are
-maintainability of the single-file implementation (internal duplication) and error
-reporting that goes quiet at creation time and on the server side — the client's
-state machine covers connection errors well, but create returning NULL and the server
-API tell the integrator nothing about why something failed.
+maintainability of the single-file implementation (internal duplication) and per-packet
+allocation churn on the receive path.
 
 ### What's genuinely good
 
@@ -72,7 +70,7 @@ hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:554), `IPV6_V6ONLY
 dual-stack IPv4+IPv6 sockets, loopback clients for integrated host-and-play, allocator
 override hooks, and full send/receive transport overrides. A built-in network simulator
 (latency/jitter/loss/duplication) makes the connection tests deterministic without
-touching real sockets. Few networking libraries ship this complete a test story: 41
+touching real sockets. Few networking libraries ship this complete a test story: 42
 unit + integration tests covering every client error state, reconnect, multi-server
 fallback, dual-stack, loopback — plus a soak test and a profiler. All pass today.
 
@@ -80,6 +78,19 @@ fallback, dual-stack, loopback — plus a soak test and a profiler. All pass tod
 explicit `netcode_client_update(client, time)` — time is injected, not sampled, which
 makes the state machines testable and frame-loop friendly. The header is a clean ~300
 lines with zero dependencies beyond stdint.
+
+**Error reporting matches the transport's nature.** Asynchronous connection failures
+(denial, timeouts, token problems) surface through the client's negative
+`NETCODE_CLIENT_STATE_*` values polled from the game loop — the only channel that can
+carry errors that happen seconds after the call that caused them. Create failures are
+queryable: `netcode_client_create_error()` / `netcode_server_create_error()` report why
+create returned NULL, with server bind failures (port already in use — the common
+operational failure) distinguished from other socket errors per address family.
+Per-packet socket errors are deliberately ignored: UDP is unreliable, so a send error
+is semantically identical to a dropped packet, and a persistently dead socket surfaces
+the same way persistent loss does — as a connection timeout through the state machine.
+The running server deliberately has no state machine of its own: its only states are
+stopped and started (`netcode_server_running`), and everything else is per-client.
 
 ### What's not so good
 
@@ -99,24 +110,6 @@ packets are freed moments later after a switch statement reads one or two fields
 default behavior is allocation churn proportional to packet rate, and the internal
 design (allocate → inspect → free) makes even keep-alives cost a round trip through the
 allocator.
-
-**Error reporting goes quiet outside the client state machine.** Client connection
-errors are reported well: denial, timeouts, and token problems are asynchronous by
-nature, and the negative `NETCODE_CLIENT_STATE_*` values polled from the game loop are
-the right mechanism for them — that is by design, not a gap. Per-packet socket errors
-being ignored (`sendto` results cast to void, `recvfrom` errors logged and dropped) is
-also by design, not a gap: UDP is unreliable, so a send error is semantically identical
-to a dropped packet, and the protocol must tolerate drops anyway. A persistently dead
-socket surfaces the same way persistent packet loss does — as a connection timeout
-through the state machine, which is the correct channel for an unreliable protocol.
-The actual gaps are the places the state machine can't reach. Client create failures
-are now queryable — when `netcode_client_create` returns NULL,
-`netcode_client_create_error()` reports which step failed (address parse, socket
-create per family, simulator-requires-port, allocation) — though the finer
-`NETCODE_SOCKET_ERROR_*` granularity (bind vs sockopt vs create) still stops inside
-the socket layer. The remaining gap is the server: create returning NULL is
-undifferentiated, and there is no state-machine equivalent — failures reduce to
-`netcode_server_running()` returning false with no why.
 
 **Small sharp edges:**
 - Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
@@ -141,7 +134,9 @@ which runs with a continuing assert handler so it exercises the guards in debug 
 term independently; a zeroed client/server config gets default allocators instead of
 crashing; the network simulator uses a per-instance seeded xorshift64* instead of global
 `rand()`, so simulator runs are deterministic — pinned by
-test_network_simulator_determinism.)
+test_network_simulator_determinism; `netcode_client_create_error()` and
+`netcode_server_create_error()` report why create returned NULL, with server bind
+failures distinguished per address family.)
 
 **Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
 Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface
