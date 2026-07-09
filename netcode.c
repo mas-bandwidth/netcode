@@ -423,10 +423,17 @@ static struct netcode_t netcode;
 
 int netcode_init()
 {
-    netcode_assert( !netcode.initialized );
+    // reference counted so multiple subsystems in the same application can call
+    // netcode_init and netcode_term independently
+
+    if ( netcode.initialized )
+    {
+        netcode.initialized++;
+        return NETCODE_OK;
+    }
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    WSADATA WsaData;         
+    WSADATA WsaData;
     if ( WSAStartup( MAKEWORD(2,2), &WsaData ) != NO_ERROR )
         return NETCODE_ERROR;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
@@ -443,11 +450,17 @@ void netcode_term()
 {
     netcode_assert( netcode.initialized );
 
+    if ( !netcode.initialized )
+        return;
+
+    netcode.initialized--;
+
+    if ( netcode.initialized )
+        return;
+
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     WSACleanup();
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-
-    netcode.initialized = 0;
 }
 
 // ----------------------------------------------------------------
@@ -2349,6 +2362,7 @@ void * netcode_packet_queue_pop( struct netcode_packet_queue_t * queue, uint64_t
 
 #define NETCODE_NETWORK_SIMULATOR_NUM_PACKET_ENTRIES ( NETCODE_MAX_CLIENTS * 256 )
 #define NETCODE_NETWORK_SIMULATOR_NUM_PENDING_RECEIVE_PACKETS ( NETCODE_MAX_CLIENTS * 64 )
+#define NETCODE_NETWORK_SIMULATOR_RNG_SEED 0x9E3779B97F4A7C15ULL
 
 struct netcode_network_simulator_packet_entry_t
 {
@@ -2368,6 +2382,7 @@ struct netcode_network_simulator_t
     float jitter_milliseconds;
     float packet_loss_percent;
     float duplicate_packet_percent;
+    uint64_t rng_state;
     double time;
     int current_index;
     int num_pending_receive_packets;
@@ -2399,6 +2414,7 @@ struct netcode_network_simulator_t * netcode_network_simulator_create( void * al
     network_simulator->allocator_context = allocator_context;
     network_simulator->allocate_function = allocate_function;
     network_simulator->free_function = free_function;
+    network_simulator->rng_state = NETCODE_NETWORK_SIMULATOR_RNG_SEED;
 
     return network_simulator;
 }
@@ -2424,6 +2440,7 @@ void netcode_network_simulator_reset( struct netcode_network_simulator_t * netwo
 
     network_simulator->current_index = 0;
     network_simulator->num_pending_receive_packets = 0;
+    network_simulator->rng_state = NETCODE_NETWORK_SIMULATOR_RNG_SEED;
 }
 
 void netcode_network_simulator_destroy( struct netcode_network_simulator_t * network_simulator )
@@ -2433,13 +2450,25 @@ void netcode_network_simulator_destroy( struct netcode_network_simulator_t * net
     network_simulator->free_function( network_simulator->allocator_context, network_simulator );
 }
 
-float netcode_random_float( float a, float b )
+static uint64_t netcode_network_simulator_random_uint64( struct netcode_network_simulator_t * network_simulator )
+{
+    // xorshift64*. self-contained and deterministic, unlike rand(): the simulator
+    // produces the same loss, jitter and duplication sequence on every run, and
+    // shares no state with the application or other simulator instances.
+
+    uint64_t x = network_simulator->rng_state;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    network_simulator->rng_state = x;
+    return x * 0x2545F4914F6CDD1DULL;
+}
+
+static float netcode_network_simulator_random_float( struct netcode_network_simulator_t * network_simulator, float a, float b )
 {
     netcode_assert( a < b );
-    float random = ( (float) rand() ) / (float) RAND_MAX;
-    float diff = b - a;
-    float r = random * diff;
-    return a + r;
+    float random = (float) ( netcode_network_simulator_random_uint64( network_simulator ) >> 40 ) / (float) ( 1 << 24 );
+    return a + random * ( b - a );
 }
 
 void netcode_network_simulator_queue_packet( struct netcode_network_simulator_t * network_simulator, 
@@ -2481,19 +2510,19 @@ void netcode_network_simulator_send_packet( struct netcode_network_simulator_t *
     netcode_assert( packet_bytes > 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
 
-    if ( netcode_random_float( 0.0f, 100.0f ) <= network_simulator->packet_loss_percent )
+    if ( netcode_network_simulator_random_float( network_simulator, 0.0f, 100.0f ) <= network_simulator->packet_loss_percent )
         return;
 
     float delay = network_simulator->latency_milliseconds / 1000.0f;
 
     if ( network_simulator->jitter_milliseconds > 0.0 )
-        delay += netcode_random_float( -network_simulator->jitter_milliseconds, +network_simulator->jitter_milliseconds ) / 1000.0f;
+        delay += netcode_network_simulator_random_float( network_simulator, -network_simulator->jitter_milliseconds, +network_simulator->jitter_milliseconds ) / 1000.0f;
 
     netcode_network_simulator_queue_packet( network_simulator, from, to, packet_data, packet_bytes, delay );
 
-    if ( netcode_random_float( 0.0f, 100.0f ) <= network_simulator->duplicate_packet_percent )
+    if ( netcode_network_simulator_random_float( network_simulator, 0.0f, 100.0f ) <= network_simulator->duplicate_packet_percent )
     {
-        netcode_network_simulator_queue_packet( network_simulator, from, to, packet_data, packet_bytes, delay + netcode_random_float( 0, 1.0 ) );
+        netcode_network_simulator_queue_packet( network_simulator, from, to, packet_data, packet_bytes, delay + netcode_network_simulator_random_float( network_simulator, 0, 1.0 ) );
     }
 }
 
@@ -2683,6 +2712,16 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
 {
     netcode_assert( config );
     netcode_assert( netcode.initialized );
+
+    // tolerate a zeroed config: default the allocator functions so a forgotten
+    // netcode_default_client_config is an inconvenience, not a crash
+
+    struct netcode_client_config_t config_copy = *config;
+    if ( !config_copy.allocate_function )
+        config_copy.allocate_function = netcode_default_allocate_function;
+    if ( !config_copy.free_function )
+        config_copy.free_function = netcode_default_free_function;
+    config = &config_copy;
 
     struct netcode_address_t address1;
     struct netcode_address_t address2;
@@ -3894,6 +3933,16 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
 {
     netcode_assert( config );
     netcode_assert( netcode.initialized );
+
+    // tolerate a zeroed config: default the allocator functions so a forgotten
+    // netcode_default_server_config is an inconvenience, not a crash
+
+    struct netcode_server_config_t config_copy = *config;
+    if ( !config_copy.allocate_function )
+        config_copy.allocate_function = netcode_default_allocate_function;
+    if ( !config_copy.free_function )
+        config_copy.free_function = netcode_default_free_function;
+    config = &config_copy;
 
     struct netcode_address_t server_address1;
     struct netcode_address_t server_address2;
@@ -6775,6 +6824,121 @@ void test_runtime_guards()
     netcode_set_assert_function( netcode_default_assert_handler );
 }
 
+void test_init_and_defaults()
+{
+    // netcode_init is reference counted, so multiple subsystems in the same
+    // application can call netcode_init and netcode_term independently.
+    // the test runner has already called netcode_init once.
+
+    check( netcode.initialized == 1 );
+    check( netcode_init() == NETCODE_OK );
+    check( netcode.initialized == 2 );
+    netcode_term();
+    check( netcode.initialized == 1 );
+
+    // a zeroed config must give working defaults instead of crashing on a NULL allocator
+
+    {
+        struct netcode_client_config_t client_config;
+        memset( &client_config, 0, sizeof( client_config ) );
+
+        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+        check( client );
+
+        netcode_client_destroy( client );
+    }
+
+    {
+        struct netcode_server_config_t server_config;
+        memset( &server_config, 0, sizeof( server_config ) );
+
+        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+        check( server );
+
+        netcode_server_destroy( server );
+    }
+}
+
+void test_network_simulator_determinism()
+{
+    // the network simulator has its own seeded rng, so two simulators given
+    // identical inputs must drop, delay and duplicate identically
+
+    #define DETERMINISM_NUM_PACKETS 100
+    #define DETERMINISM_MAX_RECEIVE 256
+
+    struct netcode_network_simulator_t * simulator_a = netcode_network_simulator_create( NULL, NULL, NULL );
+    struct netcode_network_simulator_t * simulator_b = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    check( simulator_a );
+    check( simulator_b );
+
+    simulator_a->latency_milliseconds = 100.0f;
+    simulator_a->jitter_milliseconds = 50.0f;
+    simulator_a->packet_loss_percent = 25.0f;
+    simulator_a->duplicate_packet_percent = 25.0f;
+
+    simulator_b->latency_milliseconds = 100.0f;
+    simulator_b->jitter_milliseconds = 50.0f;
+    simulator_b->packet_loss_percent = 25.0f;
+    simulator_b->duplicate_packet_percent = 25.0f;
+
+    struct netcode_address_t from;
+    struct netcode_address_t to;
+    check( netcode_parse_address( "127.0.0.1:40000", &from ) == NETCODE_OK );
+    check( netcode_parse_address( "127.0.0.1:50000", &to ) == NETCODE_OK );
+
+    int i, j;
+    uint8_t packet_data[256];
+    for ( i = 0; i < DETERMINISM_NUM_PACKETS; i++ )
+    {
+        for ( j = 0; j < (int) sizeof( packet_data ); j++ )
+        {
+            packet_data[j] = (uint8_t) ( i + j );
+        }
+        netcode_network_simulator_send_packet( simulator_a, &from, &to, packet_data, sizeof( packet_data ) );
+        netcode_network_simulator_send_packet( simulator_b, &from, &to, packet_data, sizeof( packet_data ) );
+    }
+
+    int total_received = 0;
+
+    double time;
+    for ( time = 0.0; time < 2.0; time += 0.01 )
+    {
+        netcode_network_simulator_update( simulator_a, time );
+        netcode_network_simulator_update( simulator_b, time );
+
+        uint8_t * packet_data_a[DETERMINISM_MAX_RECEIVE];
+        uint8_t * packet_data_b[DETERMINISM_MAX_RECEIVE];
+        int packet_bytes_a[DETERMINISM_MAX_RECEIVE];
+        int packet_bytes_b[DETERMINISM_MAX_RECEIVE];
+        struct netcode_address_t from_a[DETERMINISM_MAX_RECEIVE];
+        struct netcode_address_t from_b[DETERMINISM_MAX_RECEIVE];
+
+        int num_packets_a = netcode_network_simulator_receive_packets( simulator_a, &to, DETERMINISM_MAX_RECEIVE, packet_data_a, packet_bytes_a, from_a );
+        int num_packets_b = netcode_network_simulator_receive_packets( simulator_b, &to, DETERMINISM_MAX_RECEIVE, packet_data_b, packet_bytes_b, from_b );
+
+        check( num_packets_a == num_packets_b );
+
+        for ( i = 0; i < num_packets_a; i++ )
+        {
+            check( packet_bytes_a[i] == packet_bytes_b[i] );
+            check( memcmp( packet_data_a[i], packet_data_b[i], packet_bytes_a[i] ) == 0 );
+            free( packet_data_a[i] );
+            free( packet_data_b[i] );
+        }
+
+        total_received += num_packets_a;
+    }
+
+    check( total_received > 0 );
+
+    netcode_network_simulator_destroy( simulator_a );
+    netcode_network_simulator_destroy( simulator_b );
+}
+
 void test_client_create()
 {
     {
@@ -9057,6 +9221,8 @@ void netcode_test()
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_runtime_guards );
+        RUN_TEST( test_init_and_defaults );
+        RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_client_create );
         RUN_TEST( test_server_create );
         RUN_TEST( test_client_server_connect );

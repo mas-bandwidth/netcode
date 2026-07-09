@@ -14,7 +14,7 @@ independent implementations (C#, Go, Rust, TypeScript).
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (38 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (40 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
@@ -70,7 +70,7 @@ hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:554), `IPV6_V6ONLY
 dual-stack IPv4+IPv6 sockets, loopback clients for integrated host-and-play, allocator
 override hooks, and full send/receive transport overrides. A built-in network simulator
 (latency/jitter/loss/duplication) makes the connection tests deterministic without
-touching real sockets. Few networking libraries ship this complete a test story: 38
+touching real sockets. Few networking libraries ship this complete a test story: 40
 unit + integration tests covering every client error state, reconnect, multi-server
 fallback, dual-stack, loopback — plus a soak test and a profiler. All pass today.
 
@@ -106,9 +106,9 @@ this careful about protocol errors, the API tells the integrator very little abo
 something failed.
 
 **Small sharp edges:**
-- Global mutable state (log level, printf/assert hooks, `netcode.initialized`, static
-  timers, `rand()` in the simulator) means the library is single-threaded by design.
-  The header now documents this at the top, but the state is still global.
+- Global mutable state (log level, printf/assert hooks, the `netcode_init` reference
+  count, static timers) means the library is single-threaded by design. The header now
+  documents this at the top, but the state is still global.
 - The real-socket connect tests advance virtual time while pumping real sockets; they
   sleep 10ms per iteration so OS packet delivery can keep up. Without that yield they
   are timing-sensitive on loaded CI runners (this bit once: macOS Release, run 28993111836).
@@ -123,7 +123,12 @@ ASan; the leftover void casts in `netcode_client_process_packet` are gone; publi
 points that take `max_clients`, a client index, or a loopback packet size now pair their
 asserts with runtime bounds guards, so out-of-range values from the application can't
 index past the per-client arrays in release builds — covered by test_runtime_guards,
-which runs with a continuing assert handler so it exercises the guards in debug too.)
+which runs with a continuing assert handler so it exercises the guards in debug too;
+`netcode_init`/`netcode_term` are reference counted, so multiple subsystems can init and
+term independently; a zeroed client/server config gets default allocators instead of
+crashing; the network simulator uses a per-instance seeded xorshift64* instead of global
+`rand()`, so simulator runs are deterministic — pinned by
+test_network_simulator_determinism.)
 
 **Process gaps.** CI now builds and runs the tests on all three platforms in Debug and
 Release, runs an ASan+UBSan leg, and smoke-fuzzes the parsing surface
