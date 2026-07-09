@@ -204,6 +204,30 @@ void netcode_default_free_function( void * context, void * pointer )
 
 #endif
 
+static int netcode_parse_port( NETCODE_CONST char * string, uint16_t * port )
+{
+    // the port must be all digits and fit in [0,65535]. anything else is an error,
+    // rather than whatever atoi truncation used to produce.
+
+    if ( string[0] == '\0' )
+        return NETCODE_ERROR;
+
+    int value = 0;
+    int i;
+    for ( i = 0; string[i] != '\0'; i++ )
+    {
+        if ( string[i] < '0' || string[i] > '9' )
+            return NETCODE_ERROR;
+        value = value * 10 + ( string[i] - '0' );
+        if ( value > 65535 )
+            return NETCODE_ERROR;
+    }
+
+    *port = (uint16_t) value;
+
+    return NETCODE_OK;
+}
+
 int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcode_address_t * address )
 {
     netcode_assert( address_string_in );
@@ -237,7 +261,8 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
                 break;
             if ( address_string[index] == ':' && address_string[index-1] == ']' )
             {
-                address->port = (uint16_t) ( atoi( &address_string[index + 1] ) );
+                if ( netcode_parse_port( &address_string[index+1], &address->port ) != NETCODE_OK )
+                    return NETCODE_ERROR;
                 address_string[index-1] = '\0';
                 break;
             }
@@ -277,7 +302,8 @@ int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcod
             break;
         if ( address_string[index] == ':' )
         {
-            address->port = (uint16_t) atoi( &address_string[index+1] );
+            if ( netcode_parse_port( &address_string[index+1], &address->port ) != NETCODE_OK )
+                return NETCODE_ERROR;
             address_string[index] = '\0';
             break;
         }
@@ -3317,11 +3343,16 @@ void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST
 {
     netcode_assert( client );
     netcode_assert( packet_data );
-    netcode_assert( packet_bytes >= 0 );
+    netcode_assert( packet_bytes > 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
 
-    if ( packet_bytes < 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+    // zero byte payloads are not valid on the wire and would silently vanish at the receiver
+
+    if ( packet_bytes <= 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: payload packet size is out of range (%d)\n", packet_bytes );
         return;
+    }
 
     if ( client->state != NETCODE_CLIENT_STATE_CONNECTED )
         return;
@@ -4881,11 +4912,16 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 {
     netcode_assert( server );
     netcode_assert( packet_data );
-    netcode_assert( packet_bytes >= 0 );
+    netcode_assert( packet_bytes > 0 );
     netcode_assert( packet_bytes <= NETCODE_MAX_PACKET_SIZE );
 
-    if ( packet_bytes < 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+    // zero byte payloads are not valid on the wire and would silently vanish at the receiver
+
+    if ( packet_bytes <= 0 || packet_bytes > NETCODE_MAX_PACKET_SIZE )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: payload packet size is out of range (%d)\n", packet_bytes );
         return;
+    }
 
     if ( !server->running )
         return;
@@ -5495,6 +5531,25 @@ static void test_address()
         check( netcode_parse_address( "...", &address ) == NETCODE_ERROR );
         check( netcode_parse_address( "....", &address ) == NETCODE_ERROR );
         check( netcode_parse_address( ".....", &address ) == NETCODE_ERROR );
+    }
+
+    // ports must be all digits in [0,65535]. out of range and non-numeric ports must not silently truncate
+
+    {
+        struct netcode_address_t address;
+        check( netcode_parse_address( "127.0.0.1:65535", &address ) == NETCODE_OK );
+        check( address.type == NETCODE_ADDRESS_IPV4 );
+        check( address.port == 65535 );
+        check( netcode_parse_address( "[::1]:65535", &address ) == NETCODE_OK );
+        check( address.type == NETCODE_ADDRESS_IPV6 );
+        check( address.port == 65535 );
+        check( netcode_parse_address( "127.0.0.1:65536", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "127.0.0.1:99999", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "127.0.0.1:", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "127.0.0.1:40k", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "[::1]:65536", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "[::1]:", &address ) == NETCODE_ERROR );
+        check( netcode_parse_address( "[::1]:40k", &address ) == NETCODE_ERROR );
     }
 
     {
@@ -6872,6 +6927,12 @@ void client_server_socket_connect_to( NETCODE_CONST char * client_address, NETCO
 
         if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
             break;
+
+        // this test runs over real sockets while advancing virtual time, so it must yield
+        // real time each iteration or the virtual timeouts can expire before the OS delivers
+        // a single loopback packet
+
+        netcode_sleep( 0.01 );
 
         time += delta_time;
     }
