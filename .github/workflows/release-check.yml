@@ -1,0 +1,38 @@
+name: Release Check
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    name: tag matches project version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release version
+        run: |
+          cmake_version=$(sed -nE 's/^project\(netcode VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)
+          if [ -z "$cmake_version" ]; then
+            echo "::error::Could not extract the project version from CMakeLists.txt"
+            exit 1
+          fi
+          echo "CMakeLists.txt project version: $cmake_version"
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              tag_version="${GITHUB_REF_NAME#v}"
+              echo "Release tag version:            $tag_version"
+              if [ "$tag_version" != "$cmake_version" ]; then
+                echo "::error::Tag $GITHUB_REF_NAME does not match project(netcode VERSION $cmake_version) in CMakeLists.txt — bump the CMake project version as part of the release."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Not a tag build, nothing more to check."
+              ;;
+          esac
