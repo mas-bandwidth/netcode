@@ -18,17 +18,31 @@ jobs:
       - name: Check release version
         run: |
           cmake_version=$(sed -nE 's/^project\(netcode VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)
-          if [ -z "$cmake_version" ]; then
-            echo "::error::Could not extract the project version from CMakeLists.txt"
+          header_full=$(sed -nE 's/^#define NETCODE_VERSION_FULL[[:space:]]+"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' netcode.h)
+          major=$(sed -nE 's/^#define NETCODE_VERSION_MAJOR[[:space:]]+([0-9]+).*/\1/p' netcode.h)
+          minor=$(sed -nE 's/^#define NETCODE_VERSION_MINOR[[:space:]]+([0-9]+).*/\1/p' netcode.h)
+          patch=$(sed -nE 's/^#define NETCODE_VERSION_PATCH[[:space:]]+([0-9]+).*/\1/p' netcode.h)
+          if [ -z "$cmake_version" ] || [ -z "$header_full" ] || [ -z "$major" ] || [ -z "$minor" ] || [ -z "$patch" ]; then
+            echo "::error::Could not extract versions (CMakeLists.txt: '$cmake_version', NETCODE_VERSION_FULL: '$header_full', MAJOR/MINOR/PATCH: '$major.$minor.$patch')"
             exit 1
           fi
-          echo "CMakeLists.txt project version: $cmake_version"
+          echo "CMakeLists.txt project version:  $cmake_version"
+          echo "netcode.h NETCODE_VERSION_FULL:  $header_full"
+          echo "netcode.h MAJOR.MINOR.PATCH:     $major.$minor.$patch"
+          if [ "$header_full" != "$major.$minor.$patch" ]; then
+            echo "::error::NETCODE_VERSION_FULL ($header_full) does not match NETCODE_VERSION_MAJOR/MINOR/PATCH ($major.$minor.$patch) in netcode.h"
+            exit 1
+          fi
+          if [ "$cmake_version" != "$header_full" ]; then
+            echo "::error::project(netcode VERSION $cmake_version) in CMakeLists.txt does not match NETCODE_VERSION_FULL ($header_full) in netcode.h"
+            exit 1
+          fi
           case "$GITHUB_REF" in
             refs/tags/*)
               tag_version="${GITHUB_REF_NAME#v}"
-              echo "Release tag version:            $tag_version"
+              echo "Release tag version:             $tag_version"
               if [ "$tag_version" != "$cmake_version" ]; then
-                echo "::error::Tag $GITHUB_REF_NAME does not match project(netcode VERSION $cmake_version) in CMakeLists.txt — bump the CMake project version as part of the release."
+                echo "::error::Tag $GITHUB_REF_NAME does not match version $cmake_version in CMakeLists.txt and netcode.h — bump both as part of the release."
                 exit 1
               fi
               ;;
