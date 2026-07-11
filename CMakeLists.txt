@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(netcode VERSION 1.3.4 LANGUAGES C CXX)
+project(netcode VERSION 1.3.5 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
