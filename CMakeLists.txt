@@ -5,8 +5,19 @@ project(netcode VERSION 1.3.3 LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# static MSVC runtime, matching the previous premake configuration
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# is this the top level project, or pulled in via add_subdirectory / FetchContent?
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(NETCODE_TOP_LEVEL TRUE)
+else()
+    set(NETCODE_TOP_LEVEL FALSE)
+endif()
+
+# static MSVC runtime by default, matching the previous premake configuration. package
+# managers (e.g. vcpkg) pass their own CMAKE_MSVC_RUNTIME_LIBRARY to match the CRT
+# linkage their consumers expect.
+if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -32,6 +43,7 @@ endif()
 
 option(NETCODE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NETCODE_FUZZ "Build the fuzz targets" OFF)
+option(NETCODE_BUILD_TESTS "Build netcode tests and examples" ${NETCODE_TOP_LEVEL})
 option(NETCODE_SYSTEM_SODIUM "Link against the system libsodium instead of the vendored copy" OFF)
 option(NETCODE_INSTALL "Generate the install target (netcode.h and the netcode library)" ON)
 
@@ -108,29 +120,33 @@ if(NETCODE_INSTALL)
     install(FILES netcode.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-# examples and long-running harnesses
+if(NETCODE_BUILD_TESTS)
 
-foreach(example client server client_server soak profile)
-    add_executable(${example} ${example}.c)
-    target_compile_options(${example} PRIVATE ${NETCODE_WARNINGS})
-    target_link_libraries(${example} PRIVATE netcode)
-endforeach()
+    # examples and long-running harnesses
 
-# unit tests. test.cpp compiles netcode.c into itself with NETCODE_ENABLE_TESTS,
-# so it links sodium directly, not the netcode library. the target cannot be
-# named "test" (reserved by CTest) so the output name is set instead.
+    foreach(example client server client_server soak profile)
+        add_executable(${example} ${example}.c)
+        target_compile_options(${example} PRIVATE ${NETCODE_WARNINGS})
+        target_link_libraries(${example} PRIVATE netcode)
+    endforeach()
 
-enable_testing()
+    # unit tests. test.cpp compiles netcode.c into itself with NETCODE_ENABLE_TESTS,
+    # so it links sodium directly, not the netcode library. the target cannot be
+    # named "test" (reserved by CTest) so the output name is set instead.
 
-add_executable(netcode_test test.cpp)
-set_target_properties(netcode_test PROPERTIES OUTPUT_NAME test)
-target_compile_options(netcode_test PRIVATE ${NETCODE_WARNINGS})
-target_link_libraries(netcode_test PRIVATE sodium)
-if(WIN32)
-    target_link_libraries(netcode_test PRIVATE ws2_32 iphlpapi)
+    enable_testing()
+
+    add_executable(netcode_test test.cpp)
+    set_target_properties(netcode_test PROPERTIES OUTPUT_NAME test)
+    target_compile_options(netcode_test PRIVATE ${NETCODE_WARNINGS})
+    target_link_libraries(netcode_test PRIVATE sodium)
+    if(WIN32)
+        target_link_libraries(netcode_test PRIVATE ws2_32 iphlpapi)
+    endif()
+
+    add_test(NAME netcode_test COMMAND netcode_test)
+
 endif()
-
-add_test(NAME netcode_test COMMAND netcode_test)
 
 # fuzz targets. each harness compiles netcode.c into itself (like the test runner)
 # so it links sodium directly, not the netcode library.
