@@ -65,6 +65,32 @@ implementation was written from the older document rather than from the code, ve
   placed it before. The corrected list also notes the replay window advances only after
   a successful decrypt.
 
+## 3. Server global packet sequence must be re-seeded on restart (check your port)
+
+**Where:** the server start/stop lifecycle.
+
+Global packets — the packets a server sends before a client occupies a slot, i.e.
+_connection challenge_ and _connection denied_ — are encrypted with the same
+per-connect-token server-to-client key as per-client packets, whose sequence numbers
+start at zero. To keep the AEAD nonces disjoint under that shared key, the server's
+global sequence number starts at `1 << 63`, the top half of the sequence space.
+
+The reference implementation applied that seed only in `netcode_server_create`, and
+`netcode_server_stop` reset the global sequence to zero. A server object that was
+stopped and then started again sent challenge packets from global sequence 0, 1, 2 ...
+— inside the per-client sequence space. Once a client connected, the server encrypted
+two different plaintexts (a challenge packet and a keep-alive or payload packet) with
+the same key and the same nonce, which voids the confidentiality and authenticity
+guarantees of the AEAD for those packets.
+
+The fix is to seed the global sequence in server start as well as create, so the
+invariant holds for every running lifetime of the server object. Not a wire format
+change — the sequence seed is server-local behavior. Fixed here in commit `dc21b70`,
+pinned by `test_server_restart_global_sequence`. Ports that copied the create/stop
+behavior from this codebase should check what their restart path does to the global
+sequence. Found while porting netcode to Rust
+([netcode.rs](https://github.com/mas-bandwidth/netcode.rs), which seeds on start).
+
 ## Reporting back
 
 If you maintain a netcode implementation and confirm (or refute) any of the above in your
