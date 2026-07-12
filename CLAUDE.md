@@ -146,7 +146,12 @@ biggest code-quality issue is consolidated — `netcode_server_process_packet` d
 to the shared read-and-process path, the client receive loops feed
 `netcode_client_process_packet`, sockaddr conversion and simulator/override/socket send
 dispatch are single helpers, and client slot reset is shared between the disconnect
-paths, for a net −116 lines with no public header or wire change.)
+paths, for a net −116 lines with no public header or wire change; the server re-seeds
+its global packet sequence to `1ULL << 63` in `netcode_server_start`, not just in
+create — `netcode_server_stop` zeroes it, so a stopped-and-restarted server used to
+send challenge packets from sequence 0 and reuse AEAD nonces against per-client packets
+under the same per-token key — pinned by test_server_restart_global_sequence and
+written up as finding 3 in IMPLEMENTERS.md.)
 
 **Process.** CI builds and tests every push across Linux x64, Linux arm64, macOS Apple
 Silicon, and Windows (MSVC + MinGW) in Debug and Release, runs an ASan+UBSan leg, and
