@@ -42,10 +42,12 @@ def main():
     ap.add_argument("--cc", default=os.environ.get("CC", "cc"))
     a = ap.parse_args()
 
-    token, packets = None, []
+    token, packets, challenge = None, [], None
     for line in build_and_run(a.cc).splitlines():
         if line.startswith("TOKEN "):
             _, n, h = line.split(); token = bytes.fromhex(h); assert int(n) == len(token)
+        elif line.startswith("CHALLENGE "):
+            _, n, h = line.split(); challenge = bytes.fromhex(h); assert int(n) == len(challenge)
         elif line.startswith("PKT "):
             p = line.split(); packets.append((int(p[1]), bytes.fromhex(p[3])))
     if token is None or not packets:
@@ -96,6 +98,17 @@ def main():
         for i in range(nseq):
             v |= p[1 + i] << (8 * i)
         c.eq(f"seq {seq}: sequence round-trips", v, seq)
+
+    # ---- Challenge token. STANDARD.md, "Prior to encryption, challenge tokens have the following structure"
+    if challenge is not None:
+        c.eq("challenge token size (zero pad to 300)", len(challenge), 300)
+        c.eq("challenge client id", struct.unpack_from("<Q", challenge, 0)[0], 0x0102030405060708)
+        c.eq("challenge user data (256 bytes)",
+             challenge[8:8 + 256], bytes((i ^ 0x5A) for i in range(256)))
+        c.eq("challenge zero pad after client id + user data",
+             set(challenge[8 + 256:300]) or {0}, {0})
+        c.eq("challenge plaintext leaves room for the 16-byte HMAC",
+             300 - (8 + 256) >= 16, True)
 
     print(f"{c.n} checks against STANDARD.md, {len(c.fails)} failures")
     for f in c.fails: print("  FAIL " + f)

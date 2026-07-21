@@ -4,6 +4,8 @@
 #include "netcode.h"
 struct keep_alive_t { uint8_t packet_type; int client_index; int max_clients; };
 int netcode_write_packet( void*, uint8_t*, int, uint64_t, uint8_t*, uint64_t );
+struct netcode_challenge_token_t;
+void netcode_write_challenge_token( struct netcode_challenge_token_t *, uint8_t *, int );
 static void dump(const char*tag, uint8_t*b, int n){
     printf("%s %d ", tag, n);
     for(int i=0;i<n;i++) printf("%02x", b[i]);
@@ -28,6 +30,16 @@ int main(void){
         int n=netcode_write_packet(&ka,buf,sizeof(buf),seqs[s],key,0x1234567890ABCDEFULL);
         if(n<=0){fprintf(stderr,"write_packet failed seq=%llu\n",(unsigned long long)seqs[s]);return 1;}
         printf("PKT %llu ", (unsigned long long)seqs[s]); dump("", buf, n);
+    }
+
+    /* challenge token, plaintext layout per STANDARD.md "Challenge Token" */
+    {
+        struct { uint64_t client_id; uint8_t user_data[256]; } ct;
+        ct.client_id = 0x0102030405060708ULL;
+        for ( int i = 0; i < 256; i++ ) ct.user_data[i] = (uint8_t)( i ^ 0x5A );
+        uint8_t cbuf[300];
+        netcode_write_challenge_token( (struct netcode_challenge_token_t*) &ct, cbuf, sizeof(cbuf) );
+        dump( "CHALLENGE", cbuf, 300 );
     }
     return 0;
 }

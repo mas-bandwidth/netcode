@@ -20,6 +20,8 @@ wrong — decide which, and fix that one.
 * the packet prefix byte: type in the low 4 bits, sequence byte count in the high 4
 * the variable-length sequence encoding, including that the byte count is
   **minimal** (high zero bytes omitted) and the little-endian order
+* the challenge token's plaintext layout: client id, 256 bytes of user data,
+  the zero pad to 300, and that the pad leaves room for the 16-byte HMAC
 
 ## What is NOT covered, and why
 
@@ -29,5 +31,6 @@ libsodium's xchacha20poly1305 against the same keys — which tests the crypto
 library, not the specification. The plaintext framing is what an independent
 implementation gets wrong, and that is what is covered here.
 
-Challenge tokens and the client/server state machines are also unverified. They
-are specified in STANDARD.md and would be worth adding.
+The client and server state machines are also unverified. They are specified in
+STANDARD.md but they are behaviour over time rather than bytes on the wire, so
+they belong in a behavioural test rather than here.
