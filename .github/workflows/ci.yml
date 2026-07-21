@@ -158,3 +158,9 @@ jobs:
       - name: Verify STANDARD.md
         run: python3 tools/conformance/verify_standard.py
 
+
+      # Behaviour over time rather than bytes on the wire: drives a real client
+      # and server through a full connection lifecycle and checks every state
+      # transition against the machine STANDARD.md specifies.
+      - name: Verify STANDARD.md client state machine
+        run: python3 tools/conformance/verify_state_machine.py

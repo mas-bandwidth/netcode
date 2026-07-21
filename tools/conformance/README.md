@@ -23,6 +23,25 @@ wrong — decide which, and fix that one.
 * the challenge token's plaintext layout: client id, 256 bytes of user data,
   the zero pad to 300, and that the pad leaves room for the 16-byte HMAC
 
+## The client state machine, separately
+
+`verify_state_machine.py` checks the client state machine STANDARD.md specifies
+— behaviour over time rather than bytes on the wire, so a different instrument.
+It drives a real client and server through a full connection lifecycle over UDP,
+records every state transition, and checks that:
+
+* the initial state is *disconnected*;
+* every observed transition is one the document permits (all ten states and
+  their licensed transitions are transcribed into the checker);
+* the happy path is exactly *disconnected -> sending connection request ->
+  sending challenge response -> connected -> disconnected*;
+* nothing reaches *connected* except from *sending challenge response* — the
+  document admits exactly one route to the goal state;
+* a connected, idle client produces **no** transitions at all;
+* a clean disconnect ends in *disconnected* and never in an error state.
+
+    python3 tools/conformance/verify_state_machine.py
+
 ## What is NOT covered, and why
 
 Encrypted packet bodies. Everything from the sequence number onward in packet
@@ -31,6 +50,12 @@ libsodium's xchacha20poly1305 against the same keys — which tests the crypto
 library, not the specification. The plaintext framing is what an independent
 implementation gets wrong, and that is what is covered here.
 
-The client and server state machines are also unverified. They are specified in
-STANDARD.md but they are behaviour over time rather than bytes on the wire, so
-they belong in a behavioural test rather than here.
+The SERVER-side connection process is still unverified — slot allocation,
+connection request handling, and the per-slot lifecycle. The client state
+machine now has a checker (above); the server's would need a second driver that
+inspects server state rather than client state.
+
+Only the happy path is exercised. The error transitions — denied, the three
+timeouts, expired and invalid tokens — are transcribed into the checker's legal
+set but never taken, because the driver connects successfully every time.
+Provoking them needs a hostile or absent server, which is worth adding.
