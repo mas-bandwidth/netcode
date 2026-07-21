@@ -55,7 +55,13 @@ connection request handling, and the per-slot lifecycle. The client state
 machine now has a checker (above); the server's would need a second driver that
 inspects server state rather than client state.
 
-Only the happy path is exercised. The error transitions — denied, the three
-timeouts, expired and invalid tokens — are transcribed into the checker's legal
-set but never taken, because the driver connects successfully every time.
-Provoking them needs a hostile or absent server, which is worth adding.
+ONE error path is now exercised: the connection-request timeout, provoked
+deterministically by a token pointed at an address where nothing listens
+(drive_error_paths.c). It confirms the machine takes the licensed failure route
+— sending-request -> request-timed-out — rather than some other path.
+
+The other five error states remain untaken: denied, the response and connection
+timeouts, and expired/invalid tokens. Denied and the later timeouts need a
+server that rejects or goes silent mid-handshake; the token errors need
+deliberate token corruption. Each is worth adding; the request timeout was the
+one provokable with no server at all.

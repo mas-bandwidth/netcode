@@ -115,6 +115,54 @@ def main():
     if any(t < 0 for _, t in moves):
         fails.append("an error state was reached during a clean lifecycle")
 
+    # ---- error path: the transitions the happy path never exercises.
+    # STANDARD.md lists six error states; the happy-path driver reaches none of
+    # them, so the legal transitions into them were transcribed but untested.
+    # This provokes the connection-request timeout deterministically (a token
+    # pointed at an address where nothing listens) and checks the machine takes
+    # the licensed failure path rather than some other route.
+    err_src = os.path.join(ROOT, "tools", "conformance", "drive_error_paths.c")
+    # No silent skip: this driver is committed beside the checker, so its
+    # absence is a fault, not a reason to quietly check less. (The floors-test
+    # lesson: `if exists` around an assertion lets a rename disable a check
+    # while the suite stays green.)
+    checks += 1
+    if not os.path.exists(err_src):
+        fails.append("drive_error_paths.c is missing — the error-path phase cannot run")
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "err")
+            r = subprocess.run([a.cc, "-I" + ROOT, "-I" + os.path.join(ROOT, "sodium"),
+                                "-o", exe, err_src, os.path.join(ROOT, "netcode.c"),
+                                os.path.join(ROOT, "sodium", "sodium.c")],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                fails.append("error-path driver failed to build")
+            else:
+                out = subprocess.run([exe], capture_output=True, text=True, timeout=120).stdout
+                emoves, eresult = [], None
+                for line in out.splitlines():
+                    f = line.split()
+                    if f[0] == "STATE" and int(f[1]) != int(f[2]):
+                        emoves.append((int(f[1]), int(f[2])))
+                    elif f[0] == "RESULT":
+                        eresult = f[1:]
+                eq("error path reached an error state", eresult and eresult[0], "ok")
+                for frm, to in emoves:
+                    checks += 1
+                    if (frm, to) not in LEGAL:
+                        fails.append(f"error-path transition '{NAME.get(frm,frm)}' -> "
+                                     f"'{NAME.get(to,to)}' is not permitted by STANDARD.md")
+                # the request-timeout must be reached FROM sending-request, never
+                # from disconnected or by skipping the request stage
+                to_timeout = [f for f, t in emoves if t == REQUEST_TIMEOUT]
+                if REQUEST_TIMEOUT in [t for _, t in emoves]:
+                    eq("request-timeout entered from sending-request",
+                       to_timeout, [SENDING_REQUEST])
+                else:
+                    fails.append("expected CONNECTION_REQUEST_TIMED_OUT, reached "
+                                 + str([NAME.get(t,t) for _,t in emoves]))
+
     print(f"{checks} checks against STANDARD.md, {len(fails)} failures")
     print("  observed: " + " -> ".join([NAME.get(moves[0][0], "?")] + [NAME.get(t, "?") for _, t in moves]))
     for f in fails: print("  FAIL " + f)
