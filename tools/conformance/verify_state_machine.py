@@ -212,6 +212,44 @@ def main():
                     if conn:
                         eq("the freed slot is the one that connected", freed[0][1], conn[0][1])
 
+    # ---- invalid connect token. STANDARD.md: the client validates the token
+    # BEFORE the connection attempt, and on a bad num_server_addresses transitions
+    # straight to INVALID_CONNECT_TOKEN without ever sending a request. The error
+    # path above covers a timeout mid-handshake; this covers pre-attempt rejection.
+    inv_src = os.path.join(ROOT, "tools", "conformance", "drive_invalid_token.c")
+    checks += 1
+    if not os.path.exists(inv_src):
+        fails.append("drive_invalid_token.c is missing — the invalid-token phase cannot run")
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "inv")
+            r = subprocess.run([a.cc, "-I" + ROOT, "-I" + os.path.join(ROOT, "sodium"),
+                                "-o", exe, inv_src, os.path.join(ROOT, "netcode.c"),
+                                os.path.join(ROOT, "sodium", "sodium.c")],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                fails.append("invalid-token driver failed to build")
+            else:
+                out = subprocess.run([exe], capture_output=True, text=True, timeout=120).stdout
+                imoves, iresult = [], None
+                for line in out.splitlines():
+                    f = line.split()
+                    if f[0] == "STATE" and int(f[1]) != int(f[2]):
+                        imoves.append((int(f[1]), int(f[2])))
+                    elif f[0] == "RESULT":
+                        iresult = f[1:]
+                eq("invalid-token driver reached the rejection", iresult and iresult[0], "ok")
+                for frm, to in imoves:
+                    checks += 1
+                    if (frm, to) not in LEGAL:
+                        fails.append(f"invalid-token transition {NAME.get(frm,frm)} -> "
+                                     f"{NAME.get(to,to)} is not permitted by STANDARD.md")
+                # the whole point: reached INVALID_TOKEN, and DIRECTLY from disconnected
+                # (validation before the attempt), never via sending-request
+                eq("reached invalid-connect-token", INVALID_TOKEN in [t for _, t in imoves], True)
+                eq("invalid-token entered from disconnected (pre-attempt validation)",
+                   [f for f, t in imoves if t == INVALID_TOKEN], [DISCONNECTED])
+
     print(f"{checks} checks against STANDARD.md, {len(fails)} failures")
     print("  observed: " + " -> ".join([NAME.get(moves[0][0], "?")] + [NAME.get(t, "?") for _, t in moves]))
     for f in fails: print("  FAIL " + f)

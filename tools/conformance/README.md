@@ -61,8 +61,13 @@ deterministically by a token pointed at an address where nothing listens
 (drive_error_paths.c). It confirms the machine takes the licensed failure route
 — sending-request -> request-timed-out — rather than some other path.
 
-The other five error states remain untaken: denied, the response and connection
-timeouts, and expired/invalid tokens. Denied and the later timeouts need a
-server that rejects or goes silent mid-handshake; the token errors need
-deliberate token corruption. Each is worth adding; the request timeout was the
-one provokable with no server at all.
+Two error paths are now exercised: the connection-REQUEST timeout (dead
+address) and INVALID_CONNECT_TOKEN (num_server_addresses corrupted to 0 — the
+client rejects before it ever sends, and the driver self-verifies the byte
+offset by asserting the pre-corruption value).
+
+Three error states remain untaken, and honestly so: CONNECT_TOKEN_EXPIRED needs
+wall-clock manipulation (generate_connect_token stamps real time, the drivers
+run on simulated time); CONNECTION_DENIED and CONNECTION_RESPONSE_TIMED_OUT need
+a server that rejects or goes silent mid-handshake. Worth adding when a
+configurable test server exists.
