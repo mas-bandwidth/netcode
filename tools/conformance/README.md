@@ -50,10 +50,11 @@ libsodium's xchacha20poly1305 against the same keys — which tests the crypto
 library, not the specification. The plaintext framing is what an independent
 implementation gets wrong, and that is what is covered here.
 
-The SERVER-side connection process is still unverified — slot allocation,
-connection request handling, and the per-slot lifecycle. The client state
-machine now has a checker (above); the server's would need a second driver that
-inspects server state rather than client state.
+The server-side connection process now has coverage too (drive_server.c):
+baseline zero clients, a client connecting into a valid slot with its own id
+visible to the server, num_connected tracking, no spurious idle change, and the
+slot freeing on disconnect. What remains on the server side: multi-client slot
+allocation (only one client is driven here) and server-side rejection paths.
 
 ONE error path is now exercised: the connection-request timeout, provoked
 deterministically by a token pointed at an address where nothing listens

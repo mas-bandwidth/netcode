@@ -163,6 +163,55 @@ def main():
                     fails.append("expected CONNECTION_REQUEST_TIMED_OUT, reached "
                                  + str([NAME.get(t,t) for _,t in emoves]))
 
+    # ---- server-side connection process. STANDARD.md's "Server-Side Connection
+    # Process": the server manages slots [0, max_clients); a client connects into
+    # a slot, the server sees it, and a disconnect frees the slot. The client
+    # state machine above never checks any of this.
+    srv_src = os.path.join(ROOT, "tools", "conformance", "drive_server.c")
+    checks += 1
+    if not os.path.exists(srv_src):
+        fails.append("drive_server.c is missing — the server-side phase cannot run")
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "srv")
+            r = subprocess.run([a.cc, "-I" + ROOT, "-I" + os.path.join(ROOT, "sodium"),
+                                "-o", exe, srv_src, os.path.join(ROOT, "netcode.c"),
+                                os.path.join(ROOT, "sodium", "sodium.c")],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                fails.append("server driver failed to build")
+            else:
+                out = subprocess.run([exe], capture_output=True, text=True, timeout=120).stdout
+                events, result, maxc = [], None, None
+                for line in out.splitlines():
+                    f = line.split()
+                    if f[0] == "SLOT":
+                        events.append(f[1:])
+                        if f[1] == "baseline":
+                            maxc = int(f[4].split("=")[1])
+                    elif f[0] == "RESULT":
+                        result = f[1:]
+                EXPECTED_ID = 0x1234567890ABCDEF
+                eq("server driver completed", result and result[0], "ok")
+                base = [e for e in events if e[0] == "baseline"]
+                conn = [e for e in events if e[0] == "connected"]
+                freed = [e for e in events if e[0] == "freed"]
+                idle = [e for e in events if e[0] == "changed_while_idle"]
+                eq("baseline: zero clients connected", base and base[0][2], "0")
+                eq("exactly one client connected", len(conn), 1)
+                if conn:
+                    slot, num = int(conn[0][1]), int(conn[0][2])
+                    eq("connect slot in [0, max_clients)", 0 <= slot < (maxc or 0), True)
+                    eq("num_connected is 1 at connect", num, 1)
+                    got_id = int(conn[0][3].split("=")[1])
+                    eq("server reports the client's own id", got_id, EXPECTED_ID)
+                eq("no spurious slot change while idle", idle, [])
+                eq("exactly one slot freed on disconnect", len(freed), 1)
+                if freed:
+                    eq("num_connected back to 0 after free", int(freed[0][2]), 0)
+                    if conn:
+                        eq("the freed slot is the one that connected", freed[0][1], conn[0][1])
+
     print(f"{checks} checks against STANDARD.md, {len(fails)} failures")
     print("  observed: " + " -> ".join([NAME.get(moves[0][0], "?")] + [NAME.get(t, "?") for _, t in moves]))
     for f in fails: print("  FAIL " + f)
