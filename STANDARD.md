@@ -313,6 +313,28 @@ Replay protection is applied to the following packet types on both client and se
 
 The replay buffer size is implementation specific, but as a guide, a few seconds worth of packets at a typical send rate (20-60HZ) should be supported. Conservatively, a replay buffer size of 256 entries per-client should be sufficient for most applications.
 
+## Nonce Reuse and Server Restarts
+
+Encrypted packet sequence numbers are used directly as nonces for packet encryption (see _Replay Protection_ above). Within a single run of a dedicated server instance, netcode keeps the nonce spaces disjoint:
+
+* Per-client packet sequence numbers start at zero for each client slot.
+
+* The server's _global sequence number_, used for packets sent before a client is assigned to a slot (_connection challenge packet_ and _connection denied packet_), is set to 2^63 when the server starts.
+
+The normative requirement is that starting the server sets the global sequence number to 2^63. The value it holds while the server is not running is unspecified, and an implementation may leave it at 2^63 or zero it; what matters is that a start restores the floor. Because per-client sequence numbers start at zero and the global sequence number is at least 2^63 for the whole run, global packets and per-client packets never share a sequence number under the same key during a run.
+
+**This guarantee is scoped to a single run of the server, and does not extend across a restart.** The server to client key is carried inside the private connect token, so it is the same key every time that connect token is presented. The history of connect tokens already used (see _Processing Connection Requests_) is held in memory, and is therefore empty after a restart. Per-client sequence numbers also begin again at zero. A client that presents the same connect token to a server that has restarted will therefore have packets encrypted under that key at sequence numbers that were already used before the restart, repeating a nonce under that key.
+
+The window is bounded by connect token expiry. A server ignores any connection request whose connect token expire timestamp is <= the current timestamp, so only a connect token that is still unexpired after the restart can be affected.
+
+An implementation MAY close the window entirely. Both of the options below are optional, neither changes any packet, and neither requires any change to clients. **A server that implements neither remains conformant and fully interoperable, and the protocol version remains "NETCODE 1.02" either way.**
+
+* **Reject connect tokens that predate the server start.** The server records its start time, and ignores any connection request whose connect token expire timestamp is earlier than the start time plus the maximum connect token lifetime issued by the deployment. A connect token issued before the restart always fails this test, because its expire timestamp is at most its issue time plus that lifetime. A connect token issued with a full lifetime after the restart always passes it, so the server can accept connections immediately on start. This requires no persistent state, and no data beyond the expire timestamp already present in the connection request packet. Note that a connect token deliberately issued with a shorter lifetime than the configured maximum will be rejected until the maximum has elapsed.
+
+* **Persist the connect token history.** The server writes the history of connect tokens already used - the private connect token hmac, address and time - to durable storage, and restores it on start. A connect token used before the restart is then rejected after it by the existing rule. This costs durable storage, and is the option to choose when the deployment issues connect tokens with widely varying lifetimes.
+
+Neither option requires the client to know which, if either, the server implements. In both cases a rejected connect token produces the existing behaviour: the connection request is ignored, and the client requests a new connect token from the web backend.
+
 ## Client State Machine
 
 The client has the following states:
@@ -355,6 +377,8 @@ When the client receives a _connection challenge packet_ from the server, it sto
 All other transitions from _sending connection request_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, if there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
 If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
+
+A server that implements either of the optional restart mitigations described in _Nonce Reuse and Server Restarts_ rejects an affected connect token by ignoring the connection request, which is the same path as any other rejected request. No new client state and no new transition is required, and the client cannot distinguish this case from a server that is unreachable: it retries at its normal rate, moves on to the next server address in the connect token, and finally transitions to _connection request timed out_, or to _connect token expired_ if the whole process outlasts the token. The correct client response is to request a new connect token from the web backend, which is already the response to those states.
 
 ### Sending Challenge Response
 
@@ -431,6 +455,8 @@ The server takes the following steps, in this exact order, when processing a _co
 * If the protocol id in the packet doesn't match the expected protocol id of the dedicated server, ignore the packet.
 
 * If the connect token expire timestamp is <= the current timestamp, ignore the packet.
+
+* OPTIONAL. If the server implements the connect token restart mitigation described in _Nonce Reuse and Server Restarts_, and the connect token expire timestamp is earlier than the server start time plus the maximum connect token lifetime issued by the deployment, ignore the packet. This check belongs here, immediately after the expiry check and before the decrypt, because it uses only the unencrypted expire timestamp and so costs nothing on a request that is going to be rejected anyway. A server that does not implement the mitigation omits this step entirely.
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
