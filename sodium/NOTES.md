@@ -31,11 +31,11 @@ the system `sodium` library. See BUILDING.md.
 
 ## Baseline
 
-The crypto sources track **libsodium 1.0.20**. netcode/yojimbo only use a tiny
-slice of libsodium, and upstream has not changed those sources since 1.0.17 — the
-ChaCha20, Poly1305, and AEAD implementations are byte-identical across 1.0.17 →
-1.0.20. This subset has been verified to match libsodium 1.0.20 test vectors (see
-"Validation" below).
+The crypto sources track **libsodium 1.0.22**. netcode/yojimbo only use a tiny
+slice of libsodium, and the AEAD/ChaCha20/Poly1305 implementations were byte-identical
+across 1.0.17 → 1.0.20; 1.0.21/1.0.22 then made three hardening changes inside the
+slice, all incorporated (see the review log). This subset is verified against libsodium
+test vectors by `test_crypto_aead_vectors` in netcode.c (see "Validation").
 
 ## Upstream tracking
 
@@ -62,15 +62,43 @@ Reviewing a new release means:
 
 ### Review log
 
-- **1.0.22 (reviewed; vendored still 1.0.20).** 1.0.21 and 1.0.22 are mostly outside the
-  included slice — the ed25519 small-order-point fix, ipcrypt, XOF/SHA-3, ML-KEM768 /
-  X-Wing, and assorted build/platform work do not touch the ChaCha20/Poly1305/AEAD code
-  netcode uses. **One item does:** 1.0.20-stable/1.0.21 added memory fences after MAC
-  verification in the AEAD path (a speculative-access hardening — plaintext must not be
-  read before authentication completes). This appears to touch the ChaCha20-Poly1305
-  decrypt code in this subset and is **pending incorporation** on the next re-vendor;
-  it is a defense-in-depth hardening, not a functional or interop change, so the vendored
-  1.0.20 remains correct and interoperable in the meantime.
+- **1.0.22 (reviewed AND incorporated, 2026-07-25).** The vendored slice now carries the
+  1.0.22 text. Most of 1.0.21/1.0.22 is outside the slice — the ed25519 small-order-point
+  fix, ipcrypt, XOF/SHA-3, ML-KEM768 / X-Wing and assorted build work do not touch the
+  ChaCha20/Poly1305/AEAD code netcode uses.
+
+  **THREE items were inside it, not one.** The earlier review of this release found only
+  the first and recorded the other two as absent; they were found by diffing the trees
+  file-by-file rather than reading the changelog. The changelog is a summary, and a
+  summary is not a diff:
+
+  1. **`ACQUIRE_FENCE` after MAC verification** in all three AEAD decrypt paths
+     (chacha20poly1305, chacha20poly1305_ietf, xchacha20poly1305_ietf), placed between
+     the authentication-failure return and the plaintext stream-xor. Speculative-access
+     hardening: plaintext must not be produced before authentication completes.
+  2. **`crypto_verify_n` constant-time hardening** (`verify.c`) — an inline-asm
+     optimisation barrier plus a `volatile optblocker_u16` threaded through the final
+     reduction, and `uint_fast16_t` narrowed to `uint16_t`. This is the function that
+     compares the **Poly1305 tag**, so this is arguably the most security-relevant of
+     the three: it defends the constant-time comparison against a compiler turning it
+     branchy, which would reintroduce a timing side channel.
+  3. **poly1305 SSE2 final reduction** — the same `optblocker_u64` treatment. Upstream
+     did NOT change the donna64 copy, and this amalgamation's changed line is confirmed
+     inside the `poly1305_state_internal__sse2` section, so only the SSE2 copy moved.
+
+  All three are defence-in-depth: none changes ciphertext, tags, or interop. Verified by
+  a differential test — the patched amalgamation and the pristine 1.0.20 baseline were
+  each built against the same harness and produced byte-identical output over 200
+  randomised encrypt / decrypt / tamper-reject rounds for both AEADs, plus the
+  `crypto_verify_*` contract. The harness was then proven capable of failing by injecting
+  the most plausible transcription error in this patch (`>> 3` for `>> 2` in the
+  optblocker reduction), which it caught immediately.
+
+  **Deliberately NOT applied:** the remaining 1.0.20 → 1.0.22 deltas inside the slice are
+  comment-only or cosmetic and are enumerated here so the difference is known rather than
+  forgotten — `/* LCOV_EXCL_LINE */` coverage annotations in `stream_chacha20.c`,
+  `utils.c` and the AEAD files; `defined _AIX` → `defined(_AIX)`; and the removal of an
+  unused `uint32_t t32` in `utils.c`. None affects generated code.
 
 ## What is included
 
@@ -114,7 +142,12 @@ On MSVC, AVX2 additionally requires building with `/arch:AVX2` (which predefines
 - All files amalgamated into `sodium.h` + `sodium.c` (see "Structure" above).
 - Optional `NETCODE_CRYPTO_LOGS` debug prints in the implementation selectors.
 - SIMD feature macros (`HAVE_*INTRIN_H`, `HAVE_TI_MODE`) are derived from the
-  compiler's own target macros (in `sodium.h`) instead of from autoconf. The SIMD
+  compiler's own target macros (in `sodium.h`) instead of from autoconf. Since
+  2026-07-25 the same is done for `HAVE_GCC_MEMORY_FENCES` and `HAVE_INLINE_ASM`,
+  which gate `ACQUIRE_FENCE` and the `crypto_verify_n` asm barrier. On GCC/Clang both
+  are enabled; on MSVC `ACQUIRE_FENCE` falls back to `(void) 0`, which is exactly
+  upstream's behaviour when autoconf detects no fence primitive — correct and
+  interoperable, without that one hardening. The SIMD
   code uses the same `#pragma clang attribute` / `#pragma GCC target` idiom as
   upstream 1.0.20 so it compiles without global `-m` flags.
 
@@ -135,9 +168,17 @@ The crypto here is checked several ways:
    architectures.
 3. The full yojimbo test suite passes linked against this subset (exercises
    netcode's real connect-token / packet encryption paths).
-4. `test.cpp` includes `test_crypto_aead_vectors()`, a known-answer test that runs
-   in CI on every platform — so whichever implementation the target CPU selects is
-   exercised.
+4. `netcode.c` includes `test_crypto_aead_vectors()`, a known-answer test registered
+   first in `netcode_test()`, so it runs in CI on every platform and whichever
+   implementation the target CPU selects is exercised. It pins the golden ciphertext
+   for both AEADs, the tamper-rejection path, and the `crypto_verify_*` contract.
+
+   *(Added 2026-07-25. This document previously told the reader to re-run
+   `test_crypto_aead_vectors` from `test.cpp` — but that test lived in **yojimbo**, not
+   here, and these notes had been copied across. The prescribed validation did not
+   exist in this repo. It does now, and it is declared `static` so it cannot collide
+   with yojimbo's own copy when yojimbo vendors this file with
+   `NETCODE_ENABLE_TESTS=1`.)*
 
 If you change anything in this directory, re-run `bin/test` and make sure
 `test_crypto_aead_vectors` passes.
