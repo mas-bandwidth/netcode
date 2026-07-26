@@ -33,6 +33,21 @@ DECISIONS THAT READ AS BUGS (they are not — do not "fix" them)
 
 SECURITY: netcode 1.3.5 and earlier carry the nonce-reuse issue above; see SECURITY.md for
 affected versions and which channels still serve them.
+
+KNOWN OPEN DEFECTS -- do not rediscover these, and do not assert them in tests
+- #173 `netcode_generate_connect_token` bounds `num_server_addresses` with `netcode_assert`
+  only. Under `-DNDEBUG` (the release build, and what Debian ships) the asserts vanish and
+  the parse loops write past a 32-element STACK array. Note the same loop body already
+  returns NETCODE_ERROR for a bad address string, so the inconsistency is within one
+  function. Caller-precondition, not attacker-controlled by design -- not filed as an
+  advisory.
+- #174 `netcode_parse_address("[::1")` returns OK and yields `::1`. The opening bracket is
+  skipped whether or not it was ever closed. The suite already rejects `[`, `[]` and `[]:`,
+  so this is a gap, not deliberate leniency. Low severity.
+Both were found by WRITING TESTS against a release build, not by reading the source.
+Neither is asserted in mas-bandwidth/apt's autopkgtest on purpose: the shipped `-DNDEBUG`
+library does not promise the first, and the second is unfixed. A packaging test that
+asserts an unshipped fix makes a faithful package look broken.
 <!-- HOT:END -->
 
 # CLAUDE.md
