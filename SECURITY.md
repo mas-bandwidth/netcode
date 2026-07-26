@@ -43,6 +43,8 @@ affects every implementation of netcode rather than one.
 
 ## Known issue: nonce reuse between global and per-client packets (fixed in 1.4.0)
 
+**Advisory: [GHSA-3x95-24j9-7448](https://github.com/mas-bandwidth/netcode/security/advisories/GHSA-3x95-24j9-7448)** (published 2026-07-26; a CVE has been requested and is pending assignment).
+
 **Affected: netcode 1.3.5 and earlier. Fixed in 1.4.0.**
 
 Global packets (connection challenge, connection denied) encrypt with the same
