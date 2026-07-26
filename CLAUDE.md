@@ -48,6 +48,30 @@ Both were found by WRITING TESTS against a release build, not by reading the sou
 Neither is asserted in mas-bandwidth/apt's autopkgtest on purpose: the shipped `-DNDEBUG`
 library does not promise the first, and the second is unfixed. A packaging test that
 asserts an unshipped fix makes a faithful package look broken.
+
+THE WRITE/READ RULE — read this BEFORE reporting any assert as a missing bounds check
+Glenn, 2026-07-26: "intention is on write, user is responsible to not crash or do undefined
+behavior. asserts are there to help. callers responsibility. on read, obviously, we must
+check." Plus Postel: "be conservative in what you send, permissive in what you receive."
+  WRITE / caller-supplied -> the CALLER validates. An assert-only bound is the DESIGN, and
+    -DNDEBUG removing it is correct. Do not add runtime checks here.
+  READ / off the wire     -> the library checks at runtime, for SAFETY (bounds, sizes).
+    Permissive about format variation; strict about never crashing.
+This repo states the policy itself at netcode.c:4101-4103 -- "an out of range value here
+must not get through in release builds where asserts compile out" -- attached to the entry
+points that were hardened (3387, 4104, 4998, 5010, every client_index accessor). I audited
+this file, quoted that comment, and STILL filed the write-path asserts as defects. Do not
+repeat that.
+DELIBERATELY LENIENT, do not "fix": netcode_parse_address("[::1") returns OK and yields
+::1. That is permissive-on-receive and intended (#174 closed as by-design).
+netcode_generate_connect_token WAS genuinely missing its runtime check -- it was the one
+entry point skipped in the hardening pass above. Fixed; regression test
+test_generate_connect_token_out_of_range.
+GOTCHA: netcode_set_assert_function( NULL ) is a landmine. netcode_assert calls the pointer
+with NO null guard (netcode.h:350-356), so NULL turns the next failing assert into a crash.
+Restore &netcode_default_assert_handler instead -- which is what netcode.c:6984 already does.
+A custom handler MAY return (documented netcode.h:362-366); that is the only way a test with
+asserts compiled in can reach a release-build code path.
 <!-- HOT:END -->
 
 # CLAUDE.md
