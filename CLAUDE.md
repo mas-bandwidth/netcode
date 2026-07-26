@@ -1,3 +1,40 @@
+<!-- HOT:BEGIN -->
+## HOT — read before reasoning about this repo
+
+WHAT: the C reference implementation of the netcode protocol (encrypted, connection-oriented
+UDP with connect tokens). NOT netcode.rs / netcode.go (the ports), NOT the crates.io crate
+`netcode` (unrelated, taken 2017 — ours is `netcode-official`).
+
+**THE PROTOCOL IS THE PRODUCT.** `STANDARD.md` is the spec every implementation follows. A
+change here that alters wire behaviour breaks every port and every third-party
+implementation. Spec change first, code second, ports after — never the reverse.
+
+DECISIONS THAT READ AS BUGS (they are not — do not "fix" them)
+- **One ~9,300-line file.** A deliberate style choice trading contribution ergonomics for
+  trivial integration (drop in two files, no build system).
+- **Flat linear scans, not hash maps**, for per-client address lookup and the encryption
+  mapping search. A hash WAS considered and rejected: netcode targets ~100 players, and an
+  attacker controls the keys (source addresses) and could drive a hash into its worst case.
+  Linear is the hardened choice here, not the lazy one.
+- **Connect-token single-use tracking is constant-time worst-case on purpose**
+  (netcode.c:3701, says so in a comment). Timing must not leak whether a token was seen.
+- **Per-packet socket errors are ignored deliberately.** UDP is unreliable, so a send error
+  is semantically identical to a dropped packet; a persistently dead socket surfaces as a
+  connection timeout through the state machine.
+- **The running server has no state machine of its own** — only stopped/started
+  (`netcode_server_running`). All other state is per-client. That is not an omission.
+- **Global packet sequence starts at `1ULL << 63`** (netcode.c:3940) and is re-seeded on
+  BOTH start and stop. Nonce-space separation: pre-connection and per-client packets share
+  a key, so their nonces must not collide. Seeding on create only was the AEAD nonce-reuse
+  bug fixed in 1.4.0. Keep every seeding site.
+- **Replay protection advances the window only AFTER authentication** (netcode.c:1863,
+  1907). The cheap pre-decrypt reject is an optimisation; moving the window advance before
+  auth would let spoofed plaintext sequence numbers poison it.
+
+SECURITY: netcode 1.3.5 and earlier carry the nonce-reuse issue above; see SECURITY.md for
+affected versions and which channels still serve them.
+<!-- HOT:END -->
+
 # CLAUDE.md
 
 ## What this is
