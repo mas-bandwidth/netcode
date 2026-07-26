@@ -6051,10 +6051,14 @@ static void test_generate_connect_token_out_of_range()
     check( netcode_generate_connect_token( -1, &server_address, &server_address, 30, 5, 1000ULL, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) == NETCODE_ERROR );
     check( netcode_generate_connect_token( NETCODE_MAX_SERVERS_PER_CONNECT + 1, &server_address, &server_address, 30, 5, 1000ULL, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) == NETCODE_ERROR );
 
-    // the asserts must still have fired -- they are the debug aid and this test must not
-    // silently prove that they were removed
+    // In a DEBUG build the asserts must still have fired -- they are the caller's debug aid
+    // and this test must not silently prove they were removed. In a RELEASE build they are
+    // compiled to ((void)0) by design, so requiring them there would fail the very
+    // configuration this fix exists for. That asymmetry IS the point of the fix.
 
+#ifndef NDEBUG
     check( test_oor_asserts_fired > 0 );
+#endif // #ifndef NDEBUG
 
     // restore the DEFAULT handler, not NULL: netcode_assert calls the pointer with no null
     // guard, so NULL would turn the next failing assert anywhere in the suite into a crash
