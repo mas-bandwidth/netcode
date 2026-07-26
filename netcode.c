@@ -6942,7 +6942,11 @@ void test_init_and_defaults()
         struct netcode_client_config_t client_config;
         memset( &client_config, 0, sizeof( client_config ) );
 
-        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+        // port 0 asks the OS for an ephemeral port. This test only checks that a zeroed
+        // config yields working defaults -- it never connects -- so a fixed port buys
+        // nothing and makes the test fail whenever anything else on the machine happens
+        // to hold that port. Observed on a windows CI runner, 2026-07-26.
+        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:0", &client_config, 0.0 );
 
         check( client );
 
@@ -6953,7 +6957,8 @@ void test_init_and_defaults()
         struct netcode_server_config_t server_config;
         memset( &server_config, 0, sizeof( server_config ) );
 
-        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+        // ephemeral here too, and for the same reason: nothing connects to this server.
+        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:0", &server_config, 0.0 );
 
         check( server );
 
