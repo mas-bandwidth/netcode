@@ -38,6 +38,23 @@ By default netcode builds as a static library against the vendored libsodium sub
 - `BUILD_SHARED_LIBS=ON` builds `libnetcode` as a shared library.
 - `cmake --install` installs `netcode.h` and the library (`NETCODE_INSTALL=OFF` disables the install target, e.g. when embedding netcode as a subproject).
 
+## Floating point: netcode builds with -ffp-contract=off
+
+Estate policy for mas-bandwidth network libraries: builds are strict about floating point
+contraction. This build sets the right flag on every target, so nothing is required of you to
+build netcode itself:
+
+  - GCC/Clang: `-ffp-contract=off`. Not merely the absence of `-ffast-math` — GCC's default
+    is `-ffp-contract=fast`, which contracts across statement boundaries, and clang's default
+    `=on` still fuses within a single expression.
+  - MSVC: `/fp:precise`.
+
+netcode's wire format carries no floating point, so no flag is required of consumers for
+correct wire bytes today. The strict build is the family floor: contraction is
+architecture-dependent (FMA is in the aarch64 baseline and absent from the x86-64 one), so
+float arithmetic near a wire diverges bit-wise between architectures without it. If you
+compile `netcode.c` into your own build rather than linking the library, carry the same flag.
+
 ## Sanitizers and fuzzing
 
 To build everything with AddressSanitizer and UndefinedBehaviorSanitizer, configure with `-DNETCODE_SANITIZE=ON` and run the tests as usual:
