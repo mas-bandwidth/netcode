@@ -33,11 +33,23 @@ add_compile_definitions(
     $<$<NOT:$<CONFIG:Debug>>:NETCODE_RELEASE>
 )
 
+# strict floating point. Estate policy for mas-bandwidth network libraries: "generally
+# speaking, network libraries we work on require -ffp-contract=off" (Glenn, 2026-08-24).
+#   - GCC/Clang: -ffp-contract=off. Not merely "no -ffast-math" -- GCC's default is
+#     -ffp-contract=fast, which contracts across statements, and clang's default =on still
+#     fuses within a single expression.
+#   - MSVC: /fp:precise, which since VS 2022 does not imply contraction.
+# netcode's wire format carries no floating point -- the floats here are connection stats
+# and the network simulator -- so this is the family floor rather than a wire fix:
+# contraction is architecture-dependent (FMA is in the aarch64 baseline and absent from
+# the x86-64 one), so any float arithmetic that ever nears the wire diverges bit-wise
+# between architectures without it. CI builds through this file, so every CI leg builds
+# with these flags.
 if(MSVC)
-    add_compile_options(/fp:fast)
+    add_compile_options(/fp:precise)
     set(NETCODE_WARNINGS /W4)
 else()
-    add_compile_options(-ffast-math)
+    add_compile_options(-ffp-contract=off)
     set(NETCODE_WARNINGS -Wall -Wextra)
 endif()
 
