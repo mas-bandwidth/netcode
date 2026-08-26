@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/mas-bandwidth/netcode/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mas-bandwidth/netcode/actions/workflows/ci.yml)
 
+If this library helps you, please support it: **[Become a supporter](https://www.patreon.com/MasBandwidth/membership)**
+
 **netcode** is a secure client/server protocol for multiplayer games built on top of UDP. 
 
 ![connections](https://github.com/user-attachments/assets/5c7e0c9b-17b6-4e84-a57b-13bdb55a9978)
@@ -111,7 +113,7 @@ The author of this library is [Glenn Fiedler](https://www.linkedin.com/in/glenn-
 
 Other open source libraries by the same author include: [reliable](https://github.com/mas-bandwidth/reliable), [serialize](https://github.com/mas-bandwidth/serialize), and [yojimbo](https://github.com/mas-bandwidth/yojimbo).
 
-If you find this software useful, [please consider sponsoring it](https://github.com/sponsors/mas-bandwidth). Thanks!
+If you find this software useful, please consider [becoming a supporter](https://www.patreon.com/MasBandwidth/membership). Thanks!
 
 # License
 
