@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
 
+# A no-op build prints nothing (rowan-new#110). The per-target "Built target" lines are
+# the only output a rebuild with nothing to do produces, and they carry no information; a
+# real build still prints its [ x%] progress lines, and errors are untouched. This sits
+# above project() because CMAKE_TARGET_MESSAGES initializes the TARGET_MESSAGES global
+# property there and has no effect if set after it, and under the same top-level test as the
+# NETCODE_TOP_LEVEL guard below, so a consumer that pulls this library in through FetchContent
+# keeps its own messages.
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(CMAKE_TARGET_MESSAGES OFF)
+endif()
+
 project(netcode VERSION 1.4.4 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
