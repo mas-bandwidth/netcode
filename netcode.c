@@ -3890,8 +3890,8 @@ int netcode_encryption_manager_get_connect_token_entry_index( struct netcode_enc
 struct netcode_connect_token_entry_t
 {
     int state;
-    double time;
-    uint64_t expire_timestamp;
+    double time;                    // server time the entry was created. never refreshed afterwards
+    uint64_t expire_timestamp;      // when the connect token expires, and with it this entry
     uint8_t mac[NETCODE_MAC_BYTES];
     struct netcode_address_t address;
 };
