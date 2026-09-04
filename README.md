@@ -46,6 +46,7 @@ char * server_address = "127.0.0.1:40000";
 
 struct netcode_server_config_t server_config;
 netcode_default_server_config( &server_config );
+server_config.max_connect_token_lifetime = 30;
 memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
 
 struct netcode_server_t * server = netcode_server_create( server_address, &server_config, time );
@@ -55,6 +56,8 @@ if ( !server )
     return 1;
 }
 ```
+
+`max_connect_token_lifetime` is the longest lifetime in seconds your backend issues connect tokens with. The server refuses any connect token that could have been issued before it started, and this is how it knows which those are, so set it to the lifetime your backend uses.
 
 Then start the server with the number of client slots you want:
 

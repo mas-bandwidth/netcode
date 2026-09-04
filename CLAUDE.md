@@ -27,6 +27,14 @@ DECISIONS THAT READ AS BUGS (they are not — do not "fix" them)
   BOTH start and stop. Nonce-space separation: pre-connection and per-client packets share
   a key, so their nonces must not collide. Seeding on create only was the AEAD nonce-reuse
   bug fixed in 1.4.0. Keep every seeding site.
+- **A connect token is single use.** Its history entry is created pending on the first
+  connection request, admits retransmitted requests from that same address while the
+  handshake runs, and becomes consumed when the client is installed in a slot. A consumed
+  entry admits nothing, whatever the address, so the keys inside a connect token encrypt
+  exactly one session. Entries live until their token expires and a full history refuses new
+  tokens rather than evicting one. The server also refuses any connect token that could have
+  been issued before it started, using `max_connect_token_lifetime` in the server config.
+  STANDARD.md's *Connect Token History* and *Nonce Reuse and Server Restarts* are the contract.
 - **Replay protection advances the window only AFTER authentication** (netcode.c:1863,
   1907). The cheap pre-decrypt reject is an optimisation; moving the window advance before
   auth would let spoofed plaintext sequence numbers poison it.
@@ -90,16 +98,23 @@ independent implementations (C#, Go, Rust, TypeScript).
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (42 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (51 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
-  standalone file replayer). For packaging: `-DNETCODE_SYSTEM_SODIUM=ON` links the
-  system libsodium instead of the vendored copy, `-DBUILD_SHARED_LIBS=ON` builds
-  libnetcode shared, and `cmake --install` installs netcode.h + the library
-  (this is the homebrew configuration, covered by a CI leg). CI (`.github/workflows/ci.yml`) builds and tests Debug +
+  standalone file replayer); `-DNETCODE_NONCE_AUDIT=ON` records the key and nonce of every
+  packet the tests encrypt and fails the run on a repeat (test-only, nothing enters the
+  library). For packaging: `-DNETCODE_SYSTEM_SODIUM=ON` links the system libsodium instead
+  of the vendored copy, `-DBUILD_SHARED_LIBS=ON` builds libnetcode shared everywhere except
+  Windows, where CMake refuses it because netcode.h declares no export macro, and
+  `cmake --install` installs netcode.h, the library and a CMake package consumers find with
+  `find_package(netcode CONFIG)` and link as `netcode::netcode` (the vendored build folds the
+  sodium objects into libnetcode, so the installed static library is self contained; the
+  system-sodium build, the homebrew configuration, exports its libsodium instead).
+  CI (`.github/workflows/ci.yml`) builds and tests Debug +
   Release on Linux x64, Linux arm64, macOS Apple Silicon, and Windows x64 (MSVC + a
-  MinGW leg), plus a Linux ASan+UBSan leg and a bounded smoke-fuzz leg. A separate
+  MinGW leg), plus a Linux ASan+UBSan leg, a bounded smoke-fuzz leg, a big endian s390x leg
+  under QEMU, a clean-prefix consumer leg for both install shapes, and the nonce audit leg. A separate
   nightly workflow (`.github/workflows/scheduled.yml`) runs deep fuzzing with an
   accumulating cached corpus, a 15-minute ASan soak, and a libsodium-upstream-release
   check that opens a tracking issue when the vendored version falls behind.
