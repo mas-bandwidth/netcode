@@ -122,6 +122,7 @@ void soak_iteration( double time )
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = PROTOCOL_ID;
+    server_config.max_connect_token_lifetime = CONNECT_TOKEN_EXPIRY;
     memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
 
     for ( i = 0; i < MAX_SERVERS; ++i )
@@ -132,7 +133,7 @@ void soak_iteration( double time )
 			#if _MSC_VER > 1600
 			sprintf_s( server_address, 256, "127.0.0.1:%d", SERVER_BASE_PORT + i );
 			#else
-			sprintf( server_address, "127.0.0.1:%d", SERVER_BASE_PORT + i );
+			snprintf( server_address, sizeof( server_address ), "127.0.0.1:%d", SERVER_BASE_PORT + i );
 			#endif
         
             server[i] = netcode_server_create( server_address, &server_config, time );
@@ -251,7 +252,7 @@ void soak_iteration( double time )
 						#if _MSC_VER > 1600
                         sprintf_s( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
 						#else
-                        sprintf( server_address[num_server_addresses], "127.0.0.1:%d", SERVER_BASE_PORT + j );
+                        snprintf( server_address[num_server_addresses], 256, "127.0.0.1:%d", SERVER_BASE_PORT + j );
 						#endif
                         num_server_addresses++;
                     }

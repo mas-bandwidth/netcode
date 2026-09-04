@@ -35,8 +35,15 @@ By default netcode builds as a static library against the vendored libsodium sub
     cmake --install build --prefix /some/prefix
 
 - `NETCODE_SYSTEM_SODIUM=ON` links the system libsodium instead of the vendored copy (they are interchangeable — the vendored subset is a byte-identical slice of upstream).
-- `BUILD_SHARED_LIBS=ON` builds `libnetcode` as a shared library.
-- `cmake --install` installs `netcode.h` and the library (`NETCODE_INSTALL=OFF` disables the install target, e.g. when embedding netcode as a subproject).
+- `BUILD_SHARED_LIBS=ON` builds `libnetcode` as a shared library. Shared builds are not supported on Windows: `netcode.h` declares no export macro, so a DLL built from these sources exports nothing, and CMake refuses the combination. On Windows link the static library or compile `netcode.c` into your application.
+- `cmake --install` installs `netcode.h`, the library, and a CMake package. In the default vendored build the sodium objects are compiled into `libnetcode`, so the installed library is self contained; the system libsodium build exports the libsodium it found instead.
+
+A consumer picks the installed library up with:
+
+    find_package(netcode CONFIG REQUIRED)
+    target_link_libraries(your_app PRIVATE netcode::netcode)
+
+pointing CMake at the install prefix with `-DCMAKE_PREFIX_PATH=/some/prefix`. `NETCODE_INSTALL=OFF` disables the install target, e.g. when embedding netcode as a subproject.
 
 ## Floating point: netcode builds with -ffp-contract=off
 
@@ -64,6 +71,8 @@ To build everything with AddressSanitizer and UndefinedBehaviorSanitizer, config
     ctest --test-dir build-asan --output-on-failure
 
 Fuzz harnesses for the untrusted-input surface live in `fuzz/` and are built with `-DNETCODE_FUZZ=ON`. See [fuzz/README.md](fuzz/README.md) for details.
+
+`-DNETCODE_NONCE_AUDIT=ON` builds the test runner with the key and nonce of every packet it encrypts recorded, and adds a test that fails if any pair repeats. It is a test-only option: nothing it adds is compiled into the library.
 
 ## Building on Windows
 

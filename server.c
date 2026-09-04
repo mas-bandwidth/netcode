@@ -62,6 +62,12 @@ int main( int argc, char ** argv )
 
     #define TEST_PROTOCOL_ID 0x1122334455667788
 
+    // the lifetime client.c generates its connect tokens with. the server refuses connect
+    // tokens that could have been issued before it started, and needs the backend's lifetime
+    // to work out which those are.
+
+    #define CONNECT_TOKEN_EXPIRY 30
+
     char * server_address_ipv4 = "127.0.0.1:40000";
     char * server_address_ipv6 = "[::1]:40000";
     if ( argc == 2 )
@@ -78,6 +84,7 @@ int main( int argc, char ** argv )
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.max_connect_token_lifetime = CONNECT_TOKEN_EXPIRY;
     memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
 
     struct netcode_server_t * server = netcode_server_create_dual( server_address_ipv4, server_address_ipv6, &server_config, time );

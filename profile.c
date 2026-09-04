@@ -88,6 +88,7 @@ void profile_initialize()
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = PROTOCOL_ID;
+    server_config.max_connect_token_lifetime = CONNECT_TOKEN_EXPIRY;
     memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
 
     for ( i = 0; i < MAX_SERVERS; ++i )

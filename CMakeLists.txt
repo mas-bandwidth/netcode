@@ -11,7 +11,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(CMAKE_TARGET_MESSAGES OFF)
 endif()
 
-project(netcode VERSION 1.4.4 LANGUAGES C CXX)
+project(netcode VERSION 1.4.5 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -69,6 +69,17 @@ option(NETCODE_FUZZ "Build the fuzz targets" OFF)
 option(NETCODE_BUILD_TESTS "Build netcode tests and examples" ${NETCODE_TOP_LEVEL})
 option(NETCODE_SYSTEM_SODIUM "Link against the system libsodium instead of the vendored copy" OFF)
 option(NETCODE_INSTALL "Generate the install target (netcode.h and the netcode library)" ON)
+option(NETCODE_NONCE_AUDIT "Record the key and nonce of every packet the tests encrypt and fail on a repeat" OFF)
+
+# netcode.h declares no export macro, so a Windows DLL built from these sources exports
+# nothing and every consumer fails to link. Static is the supported shape on Windows: link
+# the static library, or compile netcode.c straight into your application.
+
+if(BUILD_SHARED_LIBS AND WIN32)
+    message(FATAL_ERROR "netcode does not support shared library builds on Windows. Build the static library (the default), or compile netcode.c into your application.")
+endif()
+
+include(GNUInstallDirs)
 
 # sanitizers apply to the whole build. the vendored crypto is exempted from UBSan
 # below (third-party SIMD code uses intentional type punning / unaligned access that
@@ -102,7 +113,7 @@ else()
     # vendored libsodium subset, amalgamated into a single header + source pair.
     # see sodium/NOTES.md for how it is generated and validated.
 
-    add_library(sodium STATIC sodium/sodium.c sodium/sodium.h)
+    add_library(sodium OBJECT sodium/sodium.c sodium/sodium.h)
     target_include_directories(sodium PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sodium)
     set_target_properties(sodium PROPERTIES POSITION_INDEPENDENT_CODE ON)
     if(NOT MSVC)
@@ -120,13 +131,28 @@ else()
 
 endif()
 
-# the netcode library. static by default; -DBUILD_SHARED_LIBS=ON builds it shared
-# (the vendored sodium objects are position independent, so they fold in either way)
+# the netcode library. static by default; -DBUILD_SHARED_LIBS=ON builds it shared on the
+# platforms that support it (the vendored sodium objects are position independent, so they
+# fold in either way).
+#
+# in the default vendored build the sodium objects are compiled into libnetcode itself, so
+# the installed library is self contained: a consumer links netcode and nothing else. the
+# system-sodium build exports the libsodium it found instead, because that libsodium is the
+# package manager's to supply and update.
 
-add_library(netcode netcode.c netcode.h)
-target_include_directories(netcode PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(NETCODE_SYSTEM_SODIUM)
+    add_library(netcode netcode.c netcode.h)
+    target_include_directories(netcode PRIVATE ${NETCODE_SODIUM_INCLUDE_DIR})
+    target_link_libraries(netcode PUBLIC ${NETCODE_SODIUM_LIBRARY})
+else()
+    add_library(netcode netcode.c netcode.h $<TARGET_OBJECTS:sodium>)
+    target_include_directories(netcode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sodium)
+endif()
+
+target_include_directories(netcode PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_options(netcode PRIVATE ${NETCODE_WARNINGS})
-target_link_libraries(netcode PUBLIC sodium)
 set_target_properties(netcode PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR})
@@ -135,12 +161,31 @@ if(WIN32)
 endif()
 
 if(NETCODE_INSTALL)
-    include(GNUInstallDirs)
-    install(TARGETS netcode
+    include(CMakePackageConfigHelpers)
+
+    install(TARGETS netcode EXPORT netcodeTargets
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES netcode.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+    install(EXPORT netcodeTargets
+            FILE netcodeTargets.cmake
+            NAMESPACE netcode::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/netcode)
+
+    configure_package_config_file(cmake/netcodeConfig.cmake.in
+                                  ${CMAKE_CURRENT_BINARY_DIR}/netcodeConfig.cmake
+                                  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/netcode)
+
+    write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/netcodeConfigVersion.cmake
+                                     VERSION ${PROJECT_VERSION}
+                                     COMPATIBILITY SameMajorVersion)
+
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/netcodeConfig.cmake
+                  ${CMAKE_CURRENT_BINARY_DIR}/netcodeConfigVersion.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/netcode)
 endif()
 
 if(NETCODE_BUILD_TESTS)
@@ -165,6 +210,9 @@ if(NETCODE_BUILD_TESTS)
     target_link_libraries(netcode_test PRIVATE sodium)
     if(WIN32)
         target_link_libraries(netcode_test PRIVATE ws2_32 iphlpapi)
+    endif()
+    if(NETCODE_NONCE_AUDIT)
+        target_compile_definitions(netcode_test PRIVATE NETCODE_ENABLE_NONCE_AUDIT=1)
     endif()
 
     add_test(NAME netcode_test COMMAND netcode_test)
