@@ -327,13 +327,11 @@ The normative requirement is that starting the server sets the global sequence n
 
 The window is bounded by connect token expiry. A server ignores any connection request whose connect token expire timestamp is <= the current timestamp, so only a connect token that is still unexpired after the restart can be affected.
 
-An implementation MAY close the window entirely. Both of the options below are optional, neither changes any packet, and neither requires any change to clients. **A server that implements neither remains conformant and fully interoperable, and the protocol version remains "NETCODE 1.02" either way.**
+**A server MUST reject any connect token that could have been issued before it started.** The server is configured with the maximum connect token lifetime its deployment issues, and records the time it started. It ignores any connection request whose connect token expire timestamp minus that maximum lifetime is earlier than the server start time. A connect token issued before the start always fails this test, because its expire timestamp is at most its issue time plus that lifetime. A connect token issued with a full lifetime after the start always passes it, so the server accepts connections immediately on start. This requires no persistent state, and no data beyond the expire timestamp already present in the connection request packet. A connect token deliberately issued with a shorter lifetime than the configured maximum is rejected until the difference has elapsed.
 
-* **Reject connect tokens that predate the server start.** The server records its start time, and ignores any connection request whose connect token expire timestamp is earlier than the start time plus the maximum connect token lifetime issued by the deployment. A connect token issued before the restart always fails this test, because its expire timestamp is at most its issue time plus that lifetime. A connect token issued with a full lifetime after the restart always passes it, so the server can accept connections immediately on start. This requires no persistent state, and no data beyond the expire timestamp already present in the connection request packet. Note that a connect token deliberately issued with a shorter lifetime than the configured maximum will be rejected until the maximum has elapsed.
+A server MAY also persist the connect token history: it writes the history entries to durable storage, and restores them on start, so that a connect token consumed before the start is refused after it. Persistence is meaningful only together with the consumed state, because a restored entry is only useful if it refuses the address that used the token as well as every other address. It costs durable storage, and is the option to choose when the deployment issues connect tokens with widely varying lifetimes.
 
-* **Persist the connect token history.** The server writes the history of connect tokens already used - the private connect token hmac, address and time - to durable storage, and restores it on start. A connect token used before the restart is then rejected after it by the existing rule. This costs durable storage, and is the option to choose when the deployment issues connect tokens with widely varying lifetimes.
-
-Neither option requires the client to know which, if either, the server implements. In both cases a rejected connect token produces the existing behaviour: the connection request is ignored, and the client requests a new connect token from the web backend.
+Neither rule changes any packet, and neither requires any change to clients: the protocol version remains "NETCODE 1.02", and a rejected connect token produces the existing behavior, where the connection request is ignored and the client requests a new connect token from the web backend.
 
 ## Client State Machine
 
@@ -378,7 +376,7 @@ All other transitions from _sending connection request_ are failure cases. In th
 
 If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
-A server that implements either of the optional restart mitigations described in _Nonce Reuse and Server Restarts_ rejects an affected connect token by ignoring the connection request, which is the same path as any other rejected request. No new client state and no new transition is required, and the client cannot distinguish this case from a server that is unreachable: it retries at its normal rate, moves on to the next server address in the connect token, and finally transitions to _connection request timed out_, or to _connect token expired_ if the whole process outlasts the token. The correct client response is to request a new connect token from the web backend, which is already the response to those states.
+A server rejects a connect token that could have been issued before it started, as described in _Nonce Reuse and Server Restarts_, by ignoring the connection request, which is the same path as any other rejected request. No new client state and no new transition is required, and the client cannot distinguish this case from a server that is unreachable: it retries at its normal rate, moves on to the next server address in the connect token, and finally transitions to _connection request timed out_, or to _connect token expired_ if the whole process outlasts the token. The correct client response is to request a new connect token from the web backend, which is already the response to those states.
 
 ### Sending Challenge Response
 
@@ -456,7 +454,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the connect token expire timestamp is <= the current timestamp, ignore the packet.
 
-* OPTIONAL. If the server implements the connect token restart mitigation described in _Nonce Reuse and Server Restarts_, and the connect token expire timestamp is earlier than the server start time plus the maximum connect token lifetime issued by the deployment, ignore the packet. This check belongs here, immediately after the expiry check and before the decrypt, because it uses only the unencrypted expire timestamp and so costs nothing on a request that is going to be rejected anyway. A server that does not implement the mitigation omits this step entirely.
+* If the connect token expire timestamp minus the maximum connect token lifetime issued by the deployment is earlier than the server start time, ignore the packet, as required by _Nonce Reuse and Server Restarts_. This check belongs here, immediately after the expiry check and before the decrypt, because it uses only the unencrypted expire timestamp and so costs nothing on a request that is going to be rejected anyway.
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
@@ -468,9 +466,9 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If a client with the client id contained in the private connect token data is already connected, ignore the packet.
 
-* If the connect token has already been used by a different packet source IP address and port, ignore the packet. 
+* If the history of connect tokens already used does not admit this connection request, as defined in _Connect Token History_ below, ignore the packet.
 
-* Otherwise, add the private connect token hmac + packet source IP address and port to the history of connect tokens already used.
+* Otherwise, the history holds a pending entry for the private connect token hmac and the packet source IP address and port.
 
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
@@ -479,6 +477,26 @@ The server takes the following steps, in this exact order, when processing a _co
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
 * Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
+
+### Connect Token History
+
+The server keeps a history of the connect tokens it has already seen. Each entry holds the private connect token hmac, the packet source IP address and port that presented it, the connect token expire timestamp, the time the entry was created, and a state, which is either _pending_ or _consumed_.
+
+* An entry is created in the _pending_ state when the server accepts a connection request presenting a connect token that is not already in the history.
+
+* An entry becomes _consumed_ when the server accepts the connection response for its connect token and assigns the client to a client slot. The server associates the entry with the connection it is establishing, for example through the encryption mapping it added for that packet source IP address and port, so nothing extra is carried on the wire.
+
+* A _pending_ entry admits a connection request presenting its connect token from the same packet source IP address and port, and no other. This is what lets a client retransmit its connection request while the handshake is in progress.
+
+* A _consumed_ entry admits nothing. A connection request presenting its connect token is ignored whatever the packet source IP address and port, and whether or not the client is still in its slot. A connect token is therefore usable for exactly one connection, and the keys it carries encrypt exactly one session.
+
+* An entry lives until its connect token expires. Once the entry's connect token expire timestamp has passed, the server may reuse the entry for another connect token, because a request presenting the expired token is already ignored by the expiry check.
+
+* When every entry in the history holds an unexpired connect token, the server ignores a connection request presenting a connect token that is not already in the history. A full history refuses new connect tokens, and never evicts an unexpired entry to make room, so a flood of connect tokens cannot reopen one that has been used.
+
+* An entry's time is set when the entry is created, and is never refreshed afterwards. Neither a retransmitted connection request nor the transition to _consumed_ changes it.
+
+The size of the history is implementation specific. It bounds the number of distinct connect tokens a server accepts within one connect token lifetime, so it should be comfortably larger than the number of client slots.
 
 ### Processing Connection Response Packets
 
@@ -502,6 +520,8 @@ The server takes these steps, in this exact order, when processing a _connection
 * If no client slots are available, then the server is full. Respond with a _connection denied packet_.
 
 * Assign the packet IP address + port and client id to a free client slot and mark that client as connected.
+
+* Mark the connect token history entry created for the connection request that produced this challenge as consumed.
 
 * Copy across the user data from the challenge token into the client slot so it is accessible to the server application.
 
