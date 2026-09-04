@@ -9350,6 +9350,7 @@ struct test_wire_t
     struct netcode_server_t * server;
     struct netcode_address_t client_address;
     struct netcode_address_t server_address;
+    int shutting_down;
     int drop_server_packets;
     int num_connection_requests;
     uint8_t payload_packet[NETCODE_MAX_PACKET_BYTES];
@@ -9362,6 +9363,12 @@ static void test_wire_client_send_packet( void * context, struct netcode_address
 {
     (void) context;
     (void) to;
+
+    // the wire is down once either end is being destroyed. the disconnect packets they send
+    // on the way out have nowhere to go, exactly as an application shutting down would find
+
+    if ( test_wire.shutting_down )
+        return;
 
     if ( packet_data[0] == NETCODE_CONNECTION_REQUEST_PACKET )
     {
@@ -9381,6 +9388,9 @@ static void test_wire_server_send_packet( void * context, struct netcode_address
 {
     (void) context;
     (void) to;
+
+    if ( test_wire.shutting_down )
+        return;
 
     if ( test_wire.drop_server_packets > 0 )
     {
@@ -9436,6 +9446,7 @@ static void test_wire_create( int drop_server_packets )
 
 static void test_wire_destroy()
 {
+    test_wire.shutting_down = 1;
     netcode_server_destroy( test_wire.server );
     netcode_client_destroy( test_wire.client );
     memset( &test_wire, 0, sizeof( test_wire ) );
