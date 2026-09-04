@@ -41,6 +41,29 @@ The protocol itself is specified in `STANDARD.md`. A flaw in the *specification*
 opposed to this implementation of it — is in scope and is more valuable to us, because it
 affects every implementation of netcode rather than one.
 
+## Known issue: connect token reuse after disconnect (fixed in 1.4.5)
+
+**Advisory: [GHSA-v29p-3vj4-vg4f](https://github.com/mas-bandwidth/netcode/security/advisories/GHSA-v29p-3vj4-vg4f)** (published 2026-09-04).
+
+**Affected: netcode 1.4.4 and earlier. Fixed in 1.4.5.**
+
+A connect token that had already established a session could establish another one once that
+client disconnected, and the second session encrypts under the same keys from a packet
+sequence that starts over, so it repeats AEAD nonces.
+
+Fixed by spending a connect token on the connection it admits, so a token the server has
+accepted a client with is refused from then on
+([`8eb9583`](https://github.com/mas-bandwidth/netcode/commit/8eb9583)), first released in
+**1.4.5**.
+
+### If you are using an affected version
+
+Upgrade to 1.4.5 or later. There is no configuration that avoids this in an affected version.
+
+**yojimbo** vendors netcode. A yojimbo release is affected if the netcode it carries is 1.4.4
+or earlier — that is **yojimbo 1.12.0 and earlier**; yojimbo 1.12.1 was the first to vendor
+netcode 1.4.5.
+
 ## Known issue: nonce reuse between global and per-client packets (fixed in 1.4.0)
 
 **Advisory: [GHSA-3x95-24j9-7448](https://github.com/mas-bandwidth/netcode/security/advisories/GHSA-3x95-24j9-7448)** (published 2026-07-26; a CVE has been requested and is pending assignment).
