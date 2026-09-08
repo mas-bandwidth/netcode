@@ -62,15 +62,24 @@ Reviewing a new release means:
 
 ### Review log
 
-- **1.0.22 attributes (2026-09-08).** Ten declarations still carried a bare
-  `__attribute__ ((nonnull))` while upstream 1.0.22 names only the pointers that
-  cannot be NULL (`crypto_stream_chacha20{,_ietf}_xor{,_ic}`,
-  `crypto_onetimeauth{,_poly1305}{,_verify,_update}`). A NULL additional-data
-  pointer with length zero is a valid call and is how netcode encrypts challenge
-  tokens; the bare attribute aborts a UBSAN build on that path. Separately,
-  `crypto_aead_xchacha20poly1305_ietf_decrypt_detached` had `nonnull(3, 5, 9, 9)`
-  (nonce missing, parameter 9 twice); upstream is `nonnull(3, 5, 8, 9)`. Header
-  attributes only; crypto text unchanged. See netcode#186.
+- **1.0.22 attributes (2026-09-08).** Fourteen declarations carried a bare
+  `__attribute__ ((nonnull))`. This pass was the crypto slice netcode actually
+  calls (`crypto_stream_chacha20{,_ietf}_xor{,_ic}`,
+  `crypto_onetimeauth{,_poly1305}{,_verify,_update}`), because a NULL
+  additional-data pointer with length zero is a valid call and is how netcode
+  encrypts challenge tokens; the bare attribute aborts a UBSAN build on that
+  path. Those eleven declarations now match upstream 1.0.22, including
+  `crypto_aead_xchacha20poly1305_ietf_decrypt_detached` which had
+  `nonnull(3, 5, 9, 9)` (nonce missing, parameter 9 twice); upstream is
+  `nonnull(3, 5, 8, 9)`. Nine other divergences remain in the utils slice and
+  are not reachable from netcode's own code: `sodium_memcmp` and
+  `sodium_compare` keep a bare nonnull beside unused-result where upstream has
+  unused-result only; `sodium_bin2hex` and `sodium_bin2base64` keep bare
+  nonnull against upstream `nonnull(1)`; `sodium_hex2bin` and
+  `sodium_base642bin` carry `nonnull(1, 3)` against upstream `nonnull(1)`;
+  `sodium_memzero`, `sodium_add` and `sodium_sub` carry a bare nonnull where
+  upstream declares none. Header attributes only; crypto text unchanged. See
+  netcode#186.
 
 - **1.0.22 (reviewed AND incorporated, 2026-07-25).** The vendored slice now carries the
   1.0.22 text. Most of 1.0.21/1.0.22 is outside the slice — the ed25519 small-order-point
