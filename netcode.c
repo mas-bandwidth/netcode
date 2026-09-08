@@ -1487,7 +1487,7 @@ struct netcode_connection_payload_packet_t
 {
     uint8_t packet_type;
     uint32_t payload_bytes;
-    uint8_t payload_data[1];
+    uint8_t payload_data[8];
 };
 
 struct netcode_connection_disconnect_packet_t
