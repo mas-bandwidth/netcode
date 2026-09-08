@@ -78,8 +78,10 @@ Reviewing a new release means:
   nonnull against upstream `nonnull(1)`; `sodium_hex2bin` and
   `sodium_base642bin` carry `nonnull(1, 3)` against upstream `nonnull(1)`;
   `sodium_memzero`, `sodium_add` and `sodium_sub` carry a bare nonnull where
-  upstream declares none. Header attributes only; crypto text unchanged. See
-  netcode#186.
+  upstream declares none. Header attributes only; crypto text unchanged. The
+  vendored sodium object's UBSan exemption is alignment only, not all of
+  undefined, so `test_challenge_token` (additional data NULL, 0) is a real
+  nonnull-attribute guard. See netcode#186.
 
 - **1.0.22 (reviewed AND incorporated, 2026-07-25).** The vendored slice now carries the
   1.0.22 text. Most of 1.0.21/1.0.22 is outside the slice — the ed25519 small-order-point
