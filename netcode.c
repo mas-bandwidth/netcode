@@ -1487,8 +1487,16 @@ struct netcode_connection_payload_packet_t
 {
     uint8_t packet_type;
     uint32_t payload_bytes;
-    uint8_t payload_data[1];
+    /* serialize's BitReader loads an 8-byte window from the current byte, so a
+       read in the last payload byte reaches 7 past it. This array is the last
+       member; sizeof(*packet)+payload_bytes is allocated, leaving 8 bytes
+       behind the returned payload pointer. Do not shrink it. */
+    uint8_t payload_data[8];
 };
+
+typedef char netcode_payload_packet_tail_holds_reader_slack[
+    ( sizeof( struct netcode_connection_payload_packet_t )
+      - offsetof( struct netcode_connection_payload_packet_t, payload_data ) >= 8 ) ? 1 : -1 ];
 
 struct netcode_connection_disconnect_packet_t
 {
