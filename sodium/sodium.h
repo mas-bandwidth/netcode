@@ -1272,7 +1272,7 @@ extern "C" {
 # endif
 #endif
 
-void sodium_memzero(void * const pnt, const size_t len) __attribute__ ((nonnull));
+void sodium_memzero(void * const pnt, const size_t len);
 
 void sodium_stackzero(const size_t len);
 
