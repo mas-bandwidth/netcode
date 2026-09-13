@@ -156,6 +156,30 @@ The constant-time comparison qualifiers in `sodium_memcmp`, `sodium_compare` and
 *volatile`); an earlier local copy had dropped the pointer-`volatile`, which this
 tree restores.
 
+## Console platforms need their own RNG
+
+On `__ORBIS__` / `__PROSPERO__` the `randombytes_sysrandom` backend in `sodium.c` is a
+set of stubs — upstream libsodium ships no system RNG for those platforms, so
+`randombytes_sysrandom_buf` returns without writing a single byte of the buffer it was
+handed (`sodium/sodium.c`, the `#elif defined(__ORBIS__) || defined(__PROSPERO__)`
+block). Nothing warns at build time.
+
+netcode uses `randombytes_buf` for every key and nonce it generates — connect token keys,
+the client-to-server key, and the challenge token key among them. On a console build with
+the default backend those come back as whatever was on the stack or the heap, which is not
+a key.
+
+**A console port must register a real RNG before calling `netcode_init`**, using the
+platform's own cryptographic random source:
+
+```c
+randombytes_set_implementation( &my_console_randombytes_implementation );
+```
+
+This is a porting requirement, not a defect in the vendored slice: it matches upstream
+libsodium's behaviour on those platforms, and the desktop platforms netcode builds and
+tests on (Linux, macOS, Windows) all use a real system RNG.
+
 ## Validation
 
 The crypto here is checked several ways:

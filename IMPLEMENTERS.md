@@ -91,6 +91,23 @@ behavior from this codebase should check what their restart path does to the glo
 sequence. Found while porting netcode to Rust
 ([netcode.rs](https://github.com/mas-bandwidth/netcode.rs), which seeds on start).
 
+## 4. Console builds must supply their own RNG (check your port)
+
+**Where:** wherever your implementation gets its random bytes.
+
+The C reference gets every key and nonce from libsodium's `randombytes_buf`. libsodium
+ships no system RNG backend for the PlayStation platforms (`__ORBIS__` / `__PROSPERO__`):
+its `randombytes_sysrandom_buf` there is a stub that leaves the buffer untouched, with no
+build-time warning. A console build that takes the default backend therefore generates
+keys from uninitialised memory.
+
+**Exploitability:** total, on an affected build — the connect token keys are predictable
+to whatever extent the uninitialised memory is. It is not reachable on any platform
+netcode builds and tests on (Linux, macOS, Windows all have a real system RNG), so it is a
+porting trap rather than a live defect. Documented here and in `sodium/NOTES.md`. If your
+implementation targets a platform whose crypto library has a stubbed or weak default RNG,
+check what it actually returns rather than assuming the call filled the buffer.
+
 ## Reporting back
 
 If you maintain a netcode implementation and confirm (or refute) any of the above in your
