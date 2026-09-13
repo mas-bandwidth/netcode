@@ -3651,6 +3651,8 @@ void netcode_client_connect_loopback( struct netcode_client_t * client, int clie
     // a loopback client sends only through this callback. without it the first send would
     // call a null pointer, so refuse to enter loopback at all, in every build.
 
+    netcode_assert( client->config.send_loopback_packet_callback );
+
     if ( !client->config.send_loopback_packet_callback )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: a loopback client requires send_loopback_packet_callback\n" );
@@ -5392,6 +5394,8 @@ void netcode_server_connect_loopback_client( struct netcode_server_t * server, i
 
     // the server sends to a loopback client only through this callback. without it the
     // first send would call a null pointer, so refuse the slot at all, in every build.
+
+    netcode_assert( server->config.send_loopback_packet_callback );
 
     if ( !server->config.send_loopback_packet_callback )
     {
@@ -10468,7 +10472,10 @@ void test_packet_tagging()
 void test_loopback_callback_required()
 {
     // entering loopback with send_loopback_packet_callback unset would call a null pointer
-    // on the next send. both sides must refuse to enter loopback instead.
+    // on the next send. both sides must refuse to enter loopback instead. the guard asserts
+    // as well as returning, so install the handler that continues to run this in debug.
+
+    netcode_set_assert_function( test_runtime_guards_assert_handler );
 
     struct netcode_client_config_t client_config;
     netcode_default_client_config( &client_config );
@@ -10507,6 +10514,8 @@ void test_loopback_callback_required()
     netcode_server_send_packet( server, 0, payload, NETCODE_MAX_PACKET_SIZE );
 
     netcode_server_destroy( server );
+
+    netcode_set_assert_function( netcode_default_assert_handler );
 }
 
 #define RUN_TEST( test_function )                                           \
