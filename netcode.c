@@ -7568,6 +7568,10 @@ void test_network_simulator_allocation_failure()
 
     check( netcode_network_simulator_receive_packets( network_simulator, &to, 16, receive_packet_data, receive_packet_bytes, receive_from ) == 1 );
 
+    // a received packet buffer belongs to the caller, so free it before the simulator goes
+
+    test_toggle_free_function( NULL, receive_packet_data[0] );
+
     netcode_network_simulator_destroy( network_simulator );
 }
 
