@@ -81,9 +81,9 @@ endif()
 
 include(GNUInstallDirs)
 
-# sanitizers apply to the whole build. the vendored crypto is exempted from UBSan
-# below (third-party SIMD code uses intentional type punning / unaligned access that
-# UBSan flags but is not netcode's to fix); it still gets AddressSanitizer.
+# sanitizers apply to the whole build. the vendored crypto is exempted only from
+# UBSan alignment (SIMD kernels use unaligned loads and type punning). nonnull-attribute
+# stays on so a NULL zero-length additional-data pointer is a real failure (netcode#186).
 
 if(NETCODE_SANITIZE)
     if(MSVC)
@@ -125,7 +125,7 @@ else()
             -Wno-unused-variable
             -Wno-type-limits)
         if(NETCODE_SANITIZE)
-            target_compile_options(sodium PRIVATE -fno-sanitize=undefined)
+            target_compile_options(sodium PRIVATE -fno-sanitize=alignment)
         endif()
     endif()
 

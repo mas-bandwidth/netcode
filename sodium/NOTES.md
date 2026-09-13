@@ -62,6 +62,27 @@ Reviewing a new release means:
 
 ### Review log
 
+- **1.0.22 attributes (2026-09-08, revised 2026-09-13).** Ten crypto
+  declarations netcode actually calls now match upstream 1.0.22
+  (`crypto_stream_chacha20{,_ietf}_xor{,_ic}`,
+  `crypto_onetimeauth{,_poly1305}{,_verify,_update}`, and
+  `crypto_aead_xchacha20poly1305_ietf_decrypt_detached` which had
+  `nonnull(3, 5, 9, 9)` — nonce missing, parameter 9 twice; upstream is
+  `nonnull(3, 5, 8, 9)`). A NULL additional-data pointer with length zero is a
+  valid call and is how netcode encrypts challenge tokens; the bare attribute
+  aborted a UBSAN build on that path. `sodium_memzero` is reachable from
+  netcode.c (ten call sites, including `netcode.c:2985`); this revision
+  matches upstream 1.0.22 (no nonnull). Eight other utils divergences remain:
+  `sodium_memcmp` and `sodium_compare` keep a bare nonnull beside unused-result
+  where upstream has unused-result only; `sodium_bin2hex` and
+  `sodium_bin2base64` keep bare nonnull against upstream `nonnull(1)`;
+  `sodium_hex2bin` and `sodium_base642bin` carry `nonnull(1, 3)` against
+  upstream `nonnull(1)`; `sodium_add` and `sodium_sub` carry a bare nonnull
+  where upstream declares none. Header attributes only; crypto text unchanged.
+  The vendored sodium object's UBSan exemption is alignment only (`CMakeLists.txt`),
+  not all of undefined, so `test_challenge_token` (additional data NULL, 0) is a
+  real nonnull-attribute guard. See netcode#186 / #187.
+
 - **1.0.22 (reviewed AND incorporated, 2026-07-25).** The vendored slice now carries the
   1.0.22 text. Most of 1.0.21/1.0.22 is outside the slice — the ed25519 small-order-point
   fix, ipcrypt, XOF/SHA-3, ML-KEM768 / X-Wing and assorted build work do not touch the

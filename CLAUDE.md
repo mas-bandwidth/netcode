@@ -100,7 +100,8 @@ independent implementations (C#, Go, Rust, TypeScript).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
   then `ctest --test-dir build --output-on-failure` runs the suite (51 tests). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
-  links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium gets ASan only);
+  links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium keeps UBSan
+  except alignment);
   `-DNETCODE_FUZZ=ON` builds the `fuzz/` harnesses (libFuzzer where available, else a
   standalone file replayer); `-DNETCODE_NONCE_AUDIT=ON` records the key and nonce of every
   packet the tests encrypt and fails the run on a repeat (test-only, nothing enters the
