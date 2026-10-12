@@ -62,6 +62,8 @@ architecture-dependent (FMA is in the aarch64 baseline and absent from the x86-6
 float arithmetic near a wire diverges bit-wise between architectures without it. If you
 compile `netcode.c` into your own build rather than linking the library, carry the same flag.
 
+`test_fp_contract_off` in `test.cpp` is the canary for this: it fails if the flag is dropped, and on the architectures where FMA is in the baseline (aarch64: `macos-15`, `ubuntu-24.04-arm`) it is the test that goes red, so a silent edit that removes the flag cannot pass CI.
+
 ## Sanitizers and fuzzing
 
 To build everything with AddressSanitizer and UndefinedBehaviorSanitizer, configure with `-DNETCODE_SANITIZE=ON` and run the tests as usual:
