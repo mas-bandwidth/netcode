@@ -1843,6 +1843,11 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 {
     netcode_assert( replay_protection );
 
+    // the top sequence is reserved because it marks an empty slot, so it is always already received
+
+    if ( sequence == UINT64_MAX )
+        return 1;
+
     // written so it cannot overflow: "sequence + BUFFER_SIZE <= most_recent" wraps for
     // sequence values near UINT64_MAX and falsely rejects them as replays
 
