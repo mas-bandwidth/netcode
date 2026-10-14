@@ -4805,7 +4805,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    double expire_time = ( connect_token_private.timeout_seconds >= 0 ) ? server->time + connect_token_private.timeout_seconds : -1.0;
+    double expire_time = server->time + ( connect_token_private.timeout_seconds > 0 ? connect_token_private.timeout_seconds : NETCODE_PRECONNECT_MAPPING_SECONDS );
 
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, 
                                                              from, 
