@@ -1971,7 +1971,7 @@ void * netcode_read_packet( uint8_t * buffer,
         // a connect token that could have been issued before the server started is refused: its keys
         // were already used to encrypt packets under sequence numbers that start again from zero.
 
-        if ( packet_connect_token_expire_timestamp < min_connect_token_expire_timestamp )
+        if ( packet_connect_token_expire_timestamp <= min_connect_token_expire_timestamp )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token predates the server start\n" );
             return NULL;
