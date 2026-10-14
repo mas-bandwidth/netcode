@@ -10291,6 +10291,53 @@ void test_client_refuses_a_reused_connect_token()
     netcode_client_destroy( client );
 }
 
+void test_client_connect_refuses_unbound_address_family()
+{
+    // a client with an open IPv4 socket and no IPv6 socket, handed a connect token whose
+    // only server address is IPv6, must refuse the token rather than read from a socket it
+    // never opened. the client is built through the create path with the send and receive
+    // overrides so no socket is opened, then the IPv4 handle is stood up by hand and the
+    // overrides taken out of play to model an IPv4-only client. connect never touches a
+    // socket, so the test opens none.
+
+    int asserts_before = num_ignored_asserts;
+    netcode_set_assert_function( test_runtime_guards_assert_handler );
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    memset( user_data, 0, sizeof( user_data ) );
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+    check( num_ignored_asserts == asserts_before );
+
+    client->socket_holder.ipv4.handle = 0;
+
+    netcode_client_destroy( client );
+
+    netcode_set_assert_function( netcode_default_assert_handler );
+}
+
 
 void test_client_error_connect_token_predates_server_start()
 {
@@ -11832,6 +11879,7 @@ void netcode_test()
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
         RUN_TEST( test_client_refuses_a_reused_connect_token );
+        RUN_TEST( test_client_connect_refuses_unbound_address_family );
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
