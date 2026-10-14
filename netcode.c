@@ -879,6 +879,38 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
     (void) result;
 }
 
+static int netcode_socket_error_would_block( int error )
+{
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    return error == WSAEWOULDBLOCK;
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    return error == EAGAIN || error == EWOULDBLOCK;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+}
+
+/*
+    Classifies the result of one recvfrom. A positive result is the number of bytes received.
+    Zero means would block: the socket is drained and the receive loop stops. -1 means skip this
+    datagram and keep draining. A zero-length datagram is legal and is not the end of the queue,
+    so it is skipped, and so is any other recvfrom error: errors are per packet, as UDP is.
+*/
+
+static int netcode_classify_receive_result( int result, int error, int would_block )
+{
+    if ( result > 0 )
+        return result;
+
+    if ( result == 0 )
+        return -1;
+
+    if ( would_block )
+        return 0;
+
+    netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
+
+    return -1;
+}
+
 int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netcode_address_t * from, void * packet_data, int max_packet_size )
 {
     netcode_assert( socket );
@@ -899,28 +931,15 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result == SOCKET_ERROR )
-    {
-        int error = WSAGetLastError();
-
-        if ( error == WSAEWOULDBLOCK )
-            return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
-
-        return 0;
-    }
+    int error = ( result == SOCKET_ERROR ) ? WSAGetLastError() : 0;
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result <= 0 )
-    {
-        if ( errno == EAGAIN )
-            return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
-
-        return 0;
-    }
+    int error = ( result < 0 ) ? errno : 0;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    result = netcode_classify_receive_result( result, error, netcode_socket_error_would_block( error ) );
+
+    if ( result <= 0 )
+        return result;
 
     if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
     {
@@ -3269,10 +3288,15 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
     if ( !client->config.network_simulator )
     {
-        // process packets received from socket
+        // process packets received from socket. at most NETCODE_CLIENT_MAX_RECEIVE_PACKETS are read
+        // per update, so a flood of datagrams cannot hold one update in the receive loop
 
-        while ( 1 )
+        int num_packets_received = 0;
+
+        while ( num_packets_received < NETCODE_CLIENT_MAX_RECEIVE_PACKETS )
         {
+            num_packets_received++;
+
             struct netcode_address_t from;
             uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
             int packet_bytes = 0;
@@ -3290,8 +3314,13 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
                 packet_bytes = netcode_socket_receive_packet( &client->socket_holder.ipv6, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             }
 
+            // zero is drained. a negative result is a datagram to skip, and the drain goes on
+
             if ( packet_bytes == 0 )
                 break;
+
+            if ( packet_bytes < 0 )
+                continue;
 
             netcode_client_process_packet( client, &from, packet_data, packet_bytes );
         }
@@ -5064,10 +5093,15 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
     if ( !server->config.network_simulator )
     {
-        // process packets received from socket
+        // process packets received from socket. at most NETCODE_SERVER_MAX_RECEIVE_PACKETS are read
+        // per update, so a flood of datagrams cannot hold one update in the receive loop
 
-        while ( 1 )
+        int num_packets_received = 0;
+
+        while ( num_packets_received < NETCODE_SERVER_MAX_RECEIVE_PACKETS )
         {
+            num_packets_received++;
+
             struct netcode_address_t from;
             memset( &from, 0, sizeof(from) );
 
@@ -5088,8 +5122,13 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
                     packet_bytes = netcode_socket_receive_packet( &server->socket_holder.ipv6, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             }
 
+            // zero is drained. a negative result is a datagram to skip, and the drain goes on
+
             if ( packet_bytes == 0 )
                 break;
+
+            if ( packet_bytes < 0 )
+                continue;
 
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
@@ -10522,6 +10561,205 @@ void test_loopback_callback_required()
     netcode_set_assert_function( netcode_default_assert_handler );
 }
 
+static void test_receive_result_classification()
+{
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    int would_block_error = WSAEWOULDBLOCK;
+    int other_error = WSAECONNRESET;
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    int would_block_error = EAGAIN;
+    int other_error = ECONNREFUSED;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    // a zero-length datagram is legal. it is skipped, and the socket is not drained
+
+    check( netcode_classify_receive_result( 0, 0, netcode_socket_error_would_block( 0 ) ) == -1 );
+
+    // would block is the only result that means the socket is drained
+
+    check( netcode_socket_error_would_block( would_block_error ) );
+    check( netcode_classify_receive_result( -1, would_block_error, netcode_socket_error_would_block( would_block_error ) ) == 0 );
+
+    // any other error skips this datagram and the drain goes on
+
+    check( !netcode_socket_error_would_block( other_error ) );
+    check( netcode_classify_receive_result( -1, other_error, netcode_socket_error_would_block( other_error ) ) == -1 );
+
+    // a datagram with bytes in it is its size
+
+    check( netcode_classify_receive_result( 5, 0, netcode_socket_error_would_block( 0 ) ) == 5 );
+}
+
+/*
+    The receive drain, fed through the receive override with no socket. Each entry is one call:
+    a positive entry is a junk datagram of that many bytes, -1 is a datagram the receive path
+    skips, and once the entries run out the override returns 0, the socket is drained.
+*/
+
+#define TEST_RECEIVE_DRAIN_MAX_ENTRIES ( NETCODE_SERVER_MAX_RECEIVE_PACKETS + 16 )
+
+struct test_receive_drain_t
+{
+    int num_entries;
+    int num_calls;
+    int entries[TEST_RECEIVE_DRAIN_MAX_ENTRIES];
+};
+
+static struct test_receive_drain_t test_receive_drain;
+
+static void test_receive_drain_reset()
+{
+    memset( &test_receive_drain, 0, sizeof( test_receive_drain ) );
+}
+
+static void test_receive_drain_add( int packet_bytes, int count )
+{
+    int i;
+    for ( i = 0; i < count; i++ )
+    {
+        check( test_receive_drain.num_entries < TEST_RECEIVE_DRAIN_MAX_ENTRIES );
+        test_receive_drain.entries[test_receive_drain.num_entries++] = packet_bytes;
+    }
+}
+
+static int test_receive_drain_receive_packet( void * context, struct netcode_address_t * from, uint8_t * packet_data, int max_packet_bytes )
+{
+    (void) context;
+
+    int index = test_receive_drain.num_calls++;
+
+    if ( index >= test_receive_drain.num_entries )
+        return 0;
+
+    int packet_bytes = test_receive_drain.entries[index];
+
+    if ( packet_bytes < 0 )
+        return -1;
+
+    check( packet_bytes <= max_packet_bytes );
+
+    // junk: no packet type has prefix 0xFF, so these bytes never read as a packet
+
+    memset( packet_data, 0xFF, packet_bytes );
+
+    check( netcode_parse_address( "[::1]:50000", from ) == NETCODE_OK );
+
+    return packet_bytes;
+}
+
+static struct netcode_server_t * test_receive_drain_create_server()
+{
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_receive_drain_receive_packet;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    return server;
+}
+
+static struct netcode_client_t * test_receive_drain_create_client()
+{
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_receive_drain_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+    check( client );
+
+    return client;
+}
+
+static void test_receive_drain_stops_at_cap()
+{
+    // one server update reads at most NETCODE_SERVER_MAX_RECEIVE_PACKETS datagrams, however many are queued
+
+    {
+        test_receive_drain_reset();
+        test_receive_drain_add( 100, NETCODE_SERVER_MAX_RECEIVE_PACKETS + 10 );
+
+        struct netcode_server_t * server = test_receive_drain_create_server();
+
+        netcode_server_update( server, 0.0 );
+
+        check( test_receive_drain.num_calls == NETCODE_SERVER_MAX_RECEIVE_PACKETS );
+
+        // the next update reads the rest, then finds the socket drained
+
+        netcode_server_update( server, 0.1 );
+
+        check( test_receive_drain.num_calls == NETCODE_SERVER_MAX_RECEIVE_PACKETS + 10 + 1 );
+
+        netcode_server_destroy( server );
+    }
+
+    // and one client update reads at most NETCODE_CLIENT_MAX_RECEIVE_PACKETS
+
+    {
+        test_receive_drain_reset();
+        test_receive_drain_add( 100, NETCODE_CLIENT_MAX_RECEIVE_PACKETS + 10 );
+
+        struct netcode_client_t * client = test_receive_drain_create_client();
+
+        netcode_client_update( client, 0.0 );
+
+        check( test_receive_drain.num_calls == NETCODE_CLIENT_MAX_RECEIVE_PACKETS );
+
+        netcode_client_update( client, 0.1 );
+
+        check( test_receive_drain.num_calls == NETCODE_CLIENT_MAX_RECEIVE_PACKETS + 10 + 1 );
+
+        netcode_client_destroy( client );
+    }
+}
+
+static void test_receive_drain_skips_empty_datagram()
+{
+    // a skipped datagram between two others does not end the drain: one update reads all three,
+    // then finds the socket drained
+
+    {
+        test_receive_drain_reset();
+        test_receive_drain_add( 100, 1 );
+        test_receive_drain_add( -1, 1 );
+        test_receive_drain_add( 100, 1 );
+
+        struct netcode_server_t * server = test_receive_drain_create_server();
+
+        netcode_server_update( server, 0.0 );
+
+        check( test_receive_drain.num_calls == 3 + 1 );
+
+        netcode_server_destroy( server );
+    }
+
+    {
+        test_receive_drain_reset();
+        test_receive_drain_add( 100, 1 );
+        test_receive_drain_add( -1, 1 );
+        test_receive_drain_add( 100, 1 );
+
+        struct netcode_client_t * client = test_receive_drain_create_client();
+
+        netcode_client_update( client, 0.0 );
+
+        check( test_receive_drain.num_calls == 3 + 1 );
+
+        netcode_client_destroy( client );
+    }
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -10586,6 +10824,9 @@ void netcode_test()
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
         RUN_TEST( test_loopback_callback_required );
+        RUN_TEST( test_receive_drain_skips_empty_datagram );
+        RUN_TEST( test_receive_result_classification );
+        RUN_TEST( test_receive_drain_stops_at_cap );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
