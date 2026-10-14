@@ -1843,6 +1843,11 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 {
     netcode_assert( replay_protection );
 
+    // the top sequence is reserved because it marks an empty slot, so it is always already received
+
+    if ( sequence == UINT64_MAX )
+        return 1;
+
     // written so it cannot overflow: "sequence + BUFFER_SIZE <= most_recent" wraps for
     // sequence values near UINT64_MAX and falsely rejects them as replays
 
@@ -7305,6 +7310,60 @@ void test_replay_protection()
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
 }
 
+void test_replay_protection_top_sequence()
+{
+    struct netcode_replay_protection_t replay_protection;
+
+    netcode_replay_protection_reset( &replay_protection );
+
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX );
+
+    // the top of the sequence space is reserved: it is the empty-slot marker, so after
+    // advancing with UINT64_MAX the slot would still read as empty and a replay at the
+    // top would be accepted forever. already_received must treat it as always received.
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+
+    // a keep alive at UINT64_MAX is rejected by the replay check before it is decrypted,
+    // even though it carries a valid MAC for the key. the prefix byte says eight sequence
+    // bytes (all 0xFF), so the wire value is reachable by a peer holding the packet key.
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( packet_key );
+
+    struct netcode_connection_keep_alive_packet_t input_packet;
+    input_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+    input_packet.client_index = 10;
+    input_packet.max_clients = 16;
+
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), UINT64_MAX, packet_key, TEST_PROTOCOL_ID );
+
+    check( bytes_written > 0 );
+
+    check( ( buffer[0] >> 4 ) == 8 );
+    check( ( buffer[0] & 0xF ) == NETCODE_CONNECTION_KEEP_ALIVE_PACKET );
+
+    int i;
+    for ( i = 0; i < 8; i++ )
+    {
+        check( buffer[1+i] == 0xFF );
+    }
+
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 1, sizeof( allowed_packets ) );
+
+    uint64_t sequence = 0;
+
+    void * output_packet = netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packets, &replay_protection, NULL, NULL );
+
+    check( output_packet == NULL );
+
+    if ( output_packet )
+        free( output_packet );
+}
+
 static int num_ignored_asserts = 0;
 
 static void test_runtime_guards_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
@@ -11325,6 +11384,7 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
+        RUN_TEST( test_replay_protection_top_sequence );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
         RUN_TEST( test_client_create_error );
