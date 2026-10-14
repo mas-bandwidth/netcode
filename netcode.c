@@ -55,6 +55,7 @@
 #define NETCODE_CLIENT_SOCKET_RCVBUF_SIZE ( 4 * 1024 * 1024 )
 #define NETCODE_SERVER_SOCKET_SNDBUF_SIZE ( 4 * 1024 * 1024 )
 #define NETCODE_SERVER_SOCKET_RCVBUF_SIZE ( 4 * 1024 * 1024 )
+#define NETCODE_PRECONNECT_MAPPING_SECONDS 10
 
 #define NETCODE_VERSION_INFO ( (uint8_t*) "NETCODE 1.02" )
 #define NETCODE_PACKET_SEND_RATE 10.0
@@ -11396,6 +11397,112 @@ static void test_connection_response_refuses_another_mappings_challenge()
     netcode_server_destroy( server );
 }
 
+static void test_preconnect_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, uint8_t * user_data, int timeout_seconds )
+{
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, timeout_seconds, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token_data ) );
+
+    check( netcode_read_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, connect_token ) == NETCODE_OK );
+}
+
+void test_preconnect_mapping_expires_with_nonpositive_timeout()
+{
+    // a pre-connect mapping is given its own bounded lifetime, even when the connect token's
+    // timeout is zero or negative, so an unanswered handshake does not hold a slot until restart
+
+    {
+        // negative timeout: the request is never answered. the mapping must still expire
+
+        memset( &test_script, 0, sizeof( test_script ) );
+
+        struct netcode_server_config_t server_config;
+        netcode_default_server_config( &server_config );
+        server_config.protocol_id = TEST_PROTOCOL_ID;
+        server_config.override_send_and_receive = 1;
+        server_config.send_packet_override = test_script_send_packet;
+        server_config.receive_packet_override = test_script_receive_packet;
+        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+        check( server );
+
+        netcode_server_start( server, 4 );
+
+        struct netcode_address_t address;
+        check( netcode_parse_address( "[::1]:50000", &address ) == NETCODE_OK );
+
+        uint8_t user_data[NETCODE_USER_DATA_BYTES];
+        memset( user_data, 0x55, NETCODE_USER_DATA_BYTES );
+
+        struct netcode_connect_token_t connect_token;
+        test_preconnect_generate_connect_token( &connect_token, 0x1111, user_data, -1 );
+
+        double time = 0.0;
+
+        check( server->encryption_manager.num_encryption_mappings == 0 );
+
+        test_script_add_connection_request( &address, &connect_token );
+        netcode_server_update( server, time );
+        check( netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &address, time ) >= 0 );
+
+        time += NETCODE_PRECONNECT_MAPPING_SECONDS + 1.0;
+        netcode_server_update( server, time );
+
+        // before the fix the mapping never expires, so it is still findable here
+        check( netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &address, time ) == -1 );
+
+        netcode_server_destroy( server );
+    }
+
+    {
+        // zero timeout: a response sent one update later must still complete the handshake
+
+        memset( &test_script, 0, sizeof( test_script ) );
+
+        struct netcode_server_config_t server_config;
+        netcode_default_server_config( &server_config );
+        server_config.protocol_id = TEST_PROTOCOL_ID;
+        server_config.override_send_and_receive = 1;
+        server_config.send_packet_override = test_script_send_packet;
+        server_config.receive_packet_override = test_script_receive_packet;
+        memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+        struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+        check( server );
+
+        netcode_server_start( server, 4 );
+
+        struct netcode_address_t address;
+        check( netcode_parse_address( "[::1]:50000", &address ) == NETCODE_OK );
+
+        uint8_t user_data[NETCODE_USER_DATA_BYTES];
+        memset( user_data, 0x66, NETCODE_USER_DATA_BYTES );
+
+        struct netcode_connect_token_t connect_token;
+        test_preconnect_generate_connect_token( &connect_token, 0x2222, user_data, 0 );
+
+        double time = 0.0;
+
+        struct netcode_connection_challenge_packet_t challenge;
+        test_script_add_connection_request( &address, &connect_token );
+        netcode_server_update( server, time );
+        check( test_script_read_challenge( &address, connect_token.server_to_client_key, &challenge ) );
+        time += 0.1;
+
+        test_script_add_connection_response( &address, 1, connect_token.client_to_server_key, &challenge );
+        netcode_server_update( server, time );
+        check( netcode_server_num_connected_clients( server ) == 1 );
+        check( test_script_find_client_by_id( server, 0x2222 ) != -1 );
+
+        netcode_server_destroy( server );
+    }
+}
+
 /*
     The disconnect callback runs while the slot being disconnected still holds its client, so the
     application can read its reason, id and user data. A callback that disconnects that same client
@@ -11653,6 +11760,7 @@ void netcode_test()
         RUN_TEST( test_receive_result_classification );
         RUN_TEST( test_receive_drain_stops_at_cap );
         RUN_TEST( test_connection_response_refuses_another_mappings_challenge );
+        RUN_TEST( test_preconnect_mapping_expires_with_nonpositive_timeout );
         RUN_TEST( test_disconnect_callback_reentry_is_harmless );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
