@@ -1397,10 +1397,17 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
     netcode_assert( buffer - start <= NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
+/*
+    The challenge token is bound to the connect token it is minted for: the MAC of that connect
+    token's private data is the associated data. A challenge decrypts only against the connect token
+    of the encryption mapping it is answered on, so it cannot carry its identity onto another one.
+*/
+
+int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * connect_token_mac, uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
+    netcode_assert( connect_token_mac );
     netcode_assert( key );
 
     (void) buffer_length;
@@ -1412,13 +1419,14 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    return netcode_encrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, NULL, 0, nonce, key );
+    return netcode_encrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, connect_token_mac, NETCODE_MAC_BYTES, nonce, key );
 }
 
-int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
+int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * connect_token_mac, uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
+    netcode_assert( connect_token_mac );
     netcode_assert( key );
 
     (void) buffer_length;
@@ -1430,7 +1438,7 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    return netcode_decrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, NULL, 0, nonce, key );
+    return netcode_decrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, connect_token_mac, NETCODE_MAC_BYTES, nonce, key );
 }
 
 int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
@@ -4748,9 +4756,10 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
     challenge_packet.challenge_token_sequence = server->challenge_sequence;
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
-    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, 
-                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
-                                          server->challenge_sequence, 
+    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data,
+                                          NETCODE_CHALLENGE_TOKEN_BYTES,
+                                          server->challenge_sequence,
+                                          packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES,
                                           server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to encrypt challenge token\n" );
@@ -4853,9 +4862,21 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 {
     netcode_assert( server );
 
-    if ( netcode_decrypt_challenge_token( packet->challenge_token_data, 
-                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
-                                          packet->challenge_token_sequence, 
+    // the challenge must have been minted for the connect token this encryption mapping was made from
+
+    int connect_token_entry_index = netcode_encryption_manager_get_connect_token_entry_index( &server->encryption_manager, encryption_index );
+    if ( connect_token_entry_index < 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. no connect token for this encryption mapping\n" );
+        return;
+    }
+
+    netcode_assert( connect_token_entry_index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
+
+    if ( netcode_decrypt_challenge_token( packet->challenge_token_data,
+                                          NETCODE_CHALLENGE_TOKEN_BYTES,
+                                          packet->challenge_token_sequence,
+                                          server->connect_token_entries[connect_token_entry_index].mac,
                                           server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. failed to decrypt challenge token\n" );
@@ -6450,7 +6471,18 @@ static void test_connect_token()
 
 static void test_challenge_token()
 {
-    // additional data is NULL, 0. CMakeLists.txt keeps sodium's UBSan exemption as alignment only, so this path guards #186.
+    // additional data NULL, 0 reaches the AEAD primitive. CMakeLists.txt keeps sodium's UBSan exemption as alignment only, so this path guards #186.
+
+    {
+        uint8_t message[32 + NETCODE_MAC_BYTES];
+        memset( message, 0x5A, sizeof( message ) );
+        uint8_t nonce[12];
+        memset( nonce, 0, sizeof( nonce ) );
+        uint8_t key[NETCODE_KEY_BYTES];
+        netcode_generate_key( key );
+        check( netcode_encrypt_aead( message, 32, NULL, 0, nonce, key ) == NETCODE_OK );
+        check( netcode_decrypt_aead( message, sizeof( message ), NULL, 0, nonce, key ) == NETCODE_OK );
+    }
 
     struct netcode_challenge_token_t input_token;
 
@@ -6469,11 +6501,24 @@ static void test_challenge_token()
     uint8_t key[NETCODE_KEY_BYTES]; 
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, key ) == NETCODE_OK );
+    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
+    netcode_random_bytes( connect_token_mac, NETCODE_MAC_BYTES );
+
+    check( netcode_encrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, connect_token_mac, key ) == NETCODE_OK );
+
+    // it does not decrypt against another connect token
+
+    uint8_t other_buffer[NETCODE_CHALLENGE_TOKEN_BYTES];
+    memcpy( other_buffer, buffer, NETCODE_CHALLENGE_TOKEN_BYTES );
+    uint8_t other_connect_token_mac[NETCODE_MAC_BYTES];
+    memcpy( other_connect_token_mac, connect_token_mac, NETCODE_MAC_BYTES );
+    other_connect_token_mac[0] ^= 1;
+
+    check( netcode_decrypt_challenge_token( other_buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, other_connect_token_mac, key ) != NETCODE_OK );
 
     // decrypt the buffer
 
-    check( netcode_decrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, key ) == NETCODE_OK );
+    check( netcode_decrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, connect_token_mac, key ) == NETCODE_OK );
 
     // read the challenge token back in
 
