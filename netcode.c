@@ -1885,6 +1885,7 @@ void * netcode_read_packet( uint8_t * buffer,
                             uint64_t protocol_id, 
                             uint64_t current_timestamp, 
                             uint64_t min_connect_token_expire_timestamp, 
+                            uint64_t max_connect_token_lifetime, 
                             uint8_t * private_key, 
                             uint8_t * allowed_packets, 
                             struct netcode_replay_protection_t * replay_protection, 
@@ -3305,6 +3306,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
                                          client->context.read_packet_key, 
                                          client->connect_token.protocol_id, 
                                          current_timestamp, 
+                                         0, 
                                          0, 
                                          NULL, 
                                          allowed_packets, 
@@ -5157,6 +5159,7 @@ void netcode_server_read_and_process_packet( struct netcode_server_t * server,
                                          server->config.protocol_id, 
                                          current_timestamp, 
                                          server->min_connect_token_expire_timestamp, 
+                                         (uint64_t) server->config.max_connect_token_lifetime, 
                                          server->config.private_key, 
                                          allowed_packets, 
                                          ( client_index != -1 ) ? &server->client_replay_protection[client_index] : NULL, 
@@ -6697,7 +6700,7 @@ static void test_connection_request_packet()
     memset( allowed_packets, 1, sizeof( allowed_packets ) );
 
     struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, connect_token_key, allowed_packets, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, connect_token_key, allowed_packets, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6724,7 +6727,7 @@ static int test_restart_floor_capture_printf( NETCODE_CONST char * format, ... )
     return 0;
 }
 
-static int test_restart_floor_reads( uint64_t expire_timestamp, uint64_t min_expire_timestamp, uint64_t current_timestamp )
+static int test_restart_floor_reads( uint64_t expire_timestamp, uint64_t min_expire_timestamp, uint64_t current_timestamp, uint64_t max_connect_token_lifetime )
 {
     // build a connection request packet by hand: prefix 0, version info, protocol id, the
     // connect token expire timestamp, a fresh 24-byte nonce, then private connect token
@@ -6763,6 +6766,7 @@ static int test_restart_floor_reads( uint64_t expire_timestamp, uint64_t min_exp
                                          TEST_PROTOCOL_ID,
                                          current_timestamp,
                                          min_expire_timestamp,
+                                         max_connect_token_lifetime,
                                          private_key,
                                          allowed_packets,
                                          NULL,
@@ -6790,7 +6794,7 @@ static void test_restart_floor_refuses_equal_expiry()
     // expiry equal to the floor is refused at the floor, not left to fail at decrypt
 
     test_restart_floor_log[0] = '\0';
-    check( test_restart_floor_reads( floor, floor, current_timestamp ) == 0 );
+    check( test_restart_floor_reads( floor, floor, current_timestamp, UINT64_MAX ) == 0 );
     check( strstr( test_restart_floor_log, "predates the server start" ) != NULL );
     check( strstr( test_restart_floor_log, "failed to decrypt" ) == NULL );
 
@@ -6798,19 +6802,80 @@ static void test_restart_floor_refuses_equal_expiry()
     // and fail later at decrypt, so the floor is what refuses the equal case
 
     test_restart_floor_log[0] = '\0';
-    check( test_restart_floor_reads( floor + 1, floor, current_timestamp ) == 0 );
+    check( test_restart_floor_reads( floor + 1, floor, current_timestamp, UINT64_MAX ) == 0 );
     check( strstr( test_restart_floor_log, "predates the server start" ) == NULL );
     check( strstr( test_restart_floor_log, "failed to decrypt" ) != NULL );
 
     // a token one second below the floor is also refused at the floor
 
     test_restart_floor_log[0] = '\0';
-    check( test_restart_floor_reads( floor - 1, floor, floor - 2 ) == 0 );
+    check( test_restart_floor_reads( floor - 1, floor, floor - 2, UINT64_MAX ) == 0 );
     check( strstr( test_restart_floor_log, "predates the server start" ) != NULL );
 
     netcode_set_printf_function( printf );
     netcode_log_level( NETCODE_LOG_LEVEL_NONE );
 }
+
+static void test_restart_floor_and_never_expiring_tokens()
+{
+    // a connect token minted to never expire carries expire timestamp UINT64_MAX, and one
+    // minted with a lifetime longer than the deployment issues carries an expiry further
+    // ahead than any token the backend can issue. both clear the start floor, so after a
+    // restart their keys repeat nonces from sequence zero exactly as a pre-start token
+    // does. they are refused by the deployment lifetime bound, before the decrypt.
+
+    const uint64_t max_lifetime = 30;
+    const uint64_t current_timestamp = 1000000000ULL;
+    const uint64_t min_expire_timestamp = current_timestamp - 100;
+
+    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );
+    netcode_set_printf_function( test_restart_floor_capture_printf );
+
+    // a token minted to never expire is refused by the lifetime bound, not left to decrypt
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( UINT64_MAX, min_expire_timestamp, current_timestamp, max_lifetime ) == 0 );
+    check( strstr( test_restart_floor_log, "exceeds the deployment maximum" ) != NULL );
+    check( strstr( test_restart_floor_log, "failed to decrypt" ) == NULL );
+
+    // a token whose expiry is two maximum lifetimes ahead of now is refused the same way
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( current_timestamp + 2 * max_lifetime, min_expire_timestamp, current_timestamp, max_lifetime ) == 0 );
+    check( strstr( test_restart_floor_log, "exceeds the deployment maximum" ) != NULL );
+    check( strstr( test_restart_floor_log, "failed to decrypt" ) == NULL );
+
+    // control: the same bytes with an expiry exactly one maximum lifetime ahead of now pass
+    // the lifetime bound and fail later at decrypt, so the bound is what refuses the others
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( current_timestamp + max_lifetime, min_expire_timestamp, current_timestamp, max_lifetime ) == 0 );
+    check( strstr( test_restart_floor_log, "exceeds the deployment maximum" ) == NULL );
+    check( strstr( test_restart_floor_log, "failed to decrypt" ) != NULL );
+
+    netcode_set_printf_function( printf );
+    netcode_log_level( NETCODE_LOG_LEVEL_NONE );
+}
+
+// the in-process tests start a server and issue their connect token in the same wall-clock
+// second, while the token's lifetime is the deployment maximum. a token issued in the start
+// second then has an expire timestamp equal to the start floor, which the floor refuses, and
+// one with a longer lifetime is outside the deployment maximum. treat every test server as
+// having started one second earlier, which is the real case the floor is written for: a
+// server starts and a client connects in a later second.
+
+static struct netcode_server_t * test_server_start( struct netcode_server_t * server, int max_clients )
+{
+    netcode_server_start( server, max_clients );
+    if ( server->running )
+    {
+        server->config.max_connect_token_lifetime = TEST_CONNECT_TOKEN_EXPIRY;
+        server->min_connect_token_expire_timestamp = (uint64_t) time( NULL ) - 1 + (uint64_t) server->config.max_connect_token_lifetime;
+    }
+    return server;
+}
+
+#define netcode_server_start( server, max_clients ) test_server_start( server, max_clients )
 
 void test_connection_denied_packet()
 {
@@ -6840,7 +6905,7 @@ void test_connection_denied_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6881,7 +6946,7 @@ void test_connection_challenge_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6924,7 +6989,7 @@ void test_connection_response_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6967,7 +7032,7 @@ void test_connection_keep_alive_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
     struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7011,7 +7076,7 @@ void test_connection_payload_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7053,7 +7118,7 @@ void test_connection_disconnect_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7486,7 +7551,7 @@ void test_replay_protection_top_sequence()
 
     uint64_t sequence = 0;
 
-    void * output_packet = netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packets, &replay_protection, NULL, NULL );
+    void * output_packet = netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packets, &replay_protection, NULL, NULL );
 
     check( output_packet == NULL );
 
@@ -11252,7 +11317,7 @@ static int test_script_read_challenge( struct netcode_address_t * to, uint8_t * 
 
         uint64_t sequence;
         struct netcode_connection_challenge_packet_t * packet = (struct netcode_connection_challenge_packet_t*)
-            netcode_read_packet( packet_data, test_script.sent_bytes[i], &sequence, server_to_client_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packets, NULL, NULL, NULL );
+            netcode_read_packet( packet_data, test_script.sent_bytes[i], &sequence, server_to_client_key, TEST_PROTOCOL_ID, time( NULL ), 0, UINT64_MAX, NULL, allowed_packets, NULL, NULL, NULL );
 
         if ( !packet )
             continue;
@@ -11603,6 +11668,7 @@ void netcode_test()
         RUN_TEST( test_challenge_token );
         RUN_TEST( test_connection_request_packet );
         RUN_TEST( test_restart_floor_refuses_equal_expiry );
+        RUN_TEST( test_restart_floor_and_never_expiring_tokens );
         RUN_TEST( test_connection_denied_packet );
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
