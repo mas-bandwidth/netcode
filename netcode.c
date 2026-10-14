@@ -2884,6 +2884,8 @@ struct netcode_client_t
     int receive_packet_bytes[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     struct netcode_address_t receive_from[NETCODE_CLIENT_MAX_RECEIVE_PACKETS];
     int loopback;
+    uint8_t previous_connect_token_mac[NETCODE_MAC_BYTES];
+    int has_previous_connect_token_mac;
 };
 
 static int client_create_error;
@@ -3040,6 +3042,8 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
     client->server_address_index = 0;
     client->challenge_token_sequence = 0;
     client->loopback = 0;
+    memset( client->previous_connect_token_mac, 0, NETCODE_MAC_BYTES );
+    client->has_previous_connect_token_mac = 0;
     memset( &client->server_address, 0, sizeof( struct netcode_address_t ) );
     sodium_memzero( &client->connect_token, sizeof( struct netcode_connect_token_t ) );
     sodium_memzero( &client->context, sizeof( struct netcode_context_t ) );
@@ -3134,6 +3138,26 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
         netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
         return;
     }
+
+    // a connect token's keys must encrypt exactly one session. an application that connects
+    // with a token, disconnects, then connects again with the same token buffer would encrypt
+    // its connection responses again from sequence zero under the same client to server key,
+    // repeating an AEAD nonce. the token is refused, and the application asks the backend for
+    // a new one. the AEAD tag at the end of the token's private data is kept as the
+    // fingerprint so the whole 2048 byte token is not stored.
+
+    uint8_t * connect_token_mac = client->connect_token.private_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES;
+
+    if ( client->has_previous_connect_token_mac &&
+         memcmp( connect_token_mac, client->previous_connect_token_mac, NETCODE_MAC_BYTES ) == 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: client connect refused. the connect token was already used by this client\n" );
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+        return;
+    }
+
+    memcpy( client->previous_connect_token_mac, connect_token_mac, NETCODE_MAC_BYTES );
+    client->has_previous_connect_token_mac = 1;
 
     client->server_address_index = 0;
     client->server_address = client->connect_token.server_addresses[0];
@@ -4412,8 +4436,15 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // shared key. netcode_server_stop zeroes it, so it must be re-seeded on every start,
     // not just in netcode_server_create -- otherwise a stopped and restarted server would
     // reuse nonces between global and per-client packets.
+    //
+    // one connect token carries one server to client key for every server it lists. two
+    // servers with the same global sequence would encrypt their first global packet under
+    // that shared key at the same nonce, so the sequence is drawn at random in the top half
+    // on every start. two servers then collide only with negligible probability.
 
-    server->global_sequence = 1ULL << 63;
+    uint64_t global_sequence_offset = 0;
+    netcode_random_bytes( (uint8_t*) &global_sequence_offset, sizeof( global_sequence_offset ) );
+    server->global_sequence = ( 1ULL << 63 ) + ( global_sequence_offset & 0x3FFFFFFFFFFFFFFFULL );
 
     int i;
     for ( i = 0; i < server->max_clients; i++ )
@@ -8090,7 +8121,8 @@ void test_server_restart_global_sequence()
     // global packets (challenge, denied) share per-token server to client keys with
     // per-client packets, so the global sequence must stay in the top half of the
     // sequence space or a stopped and restarted server reuses AEAD nonces. regression
-    // test: netcode_server_stop zeroes the global sequence, start must re-seed it.
+    // test: netcode_server_stop zeroes the global sequence, start must re-seed it into
+    // the top half at a random offset.
 
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
@@ -8102,7 +8134,7 @@ void test_server_restart_global_sequence()
 
     netcode_server_start( server, 1 );
 
-    check( server->global_sequence == 1ULL << 63 );
+    check( server->global_sequence >= 1ULL << 63 );
 
     server->global_sequence += 1000;        // as if the server had sent some global packets
 
@@ -8110,9 +8142,62 @@ void test_server_restart_global_sequence()
 
     netcode_server_start( server, 1 );
 
-    check( server->global_sequence == 1ULL << 63 );
+    check( server->global_sequence >= 1ULL << 63 );
 
     netcode_server_destroy( server );
+}
+
+static void test_global_nonce_send_packet( void * context, struct netcode_address_t * to, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
+{
+    (void) context;
+    (void) to;
+    (void) packet_data;
+    (void) packet_bytes;
+}
+
+static int test_global_nonce_receive_packet( void * context, struct netcode_address_t * from, uint8_t * packet_data, int max_packet_bytes )
+{
+    (void) context;
+    (void) from;
+    (void) packet_data;
+    (void) max_packet_bytes;
+    return 0;
+}
+
+static struct netcode_server_t * test_global_nonce_create_server()
+{
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_global_nonce_send_packet;
+    server_config.receive_packet_override = test_global_nonce_receive_packet;
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    return server;
+}
+
+void test_global_sequence_differs_between_servers()
+{
+    // one connect token carries one server to client key for every server it lists. each
+    // server encrypts its first global packet at the sequence start gives it, so two
+    // servers that both started at 2^63 would encrypt their first challenge under the same
+    // key and nonce. each start draws the sequence at random in the top half, so two
+    // freshly started servers almost never share a sequence, and both stay above 2^63.
+
+    struct netcode_server_t * server1 = test_global_nonce_create_server();
+    struct netcode_server_t * server2 = test_global_nonce_create_server();
+
+    check( server1->global_sequence != server2->global_sequence );
+    check( server1->global_sequence >= 1ULL << 63 );
+    check( server2->global_sequence >= 1ULL << 63 );
+
+    netcode_server_destroy( server1 );
+    netcode_server_destroy( server2 );
 }
 
 static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 0x19, 0x10, 0xea,
@@ -10073,16 +10158,59 @@ void test_client_reconnect_with_used_connect_token()
 
     check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
-    // the connect token is spent. presenting it again, from the same address that used it,
-    // connects nothing: the client runs out of connection request retries instead
+    // the connect token is spent. presenting it again from the same client and the same
+    // address connects nothing: the client refuses the reused token before it encrypts a
+    // connection response again from sequence zero under the same key
 
     test_wire_connect_client( connect_token, &time, delta_time );
 
-    check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
+    check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
     check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
     test_wire_destroy();
 }
+
+void test_client_refuses_a_reused_connect_token()
+{
+    // a client that connects with a token, disconnects, then connects again with the same
+    // token bytes would encrypt its connection responses again from sequence zero under the
+    // same client to server key, repeating an AEAD nonce. the client refuses the reused
+    // token and reports invalid connect token, so the application fetches a fresh one.
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_global_nonce_send_packet;
+    client_config.receive_packet_override = test_global_nonce_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+
+    netcode_client_disconnect( client );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+
+    netcode_client_destroy( client );
+}
+
 
 void test_client_error_connect_token_predates_server_start()
 {
@@ -11494,6 +11622,7 @@ void netcode_test()
         RUN_TEST( test_client_create );
         RUN_TEST( test_server_create );
         RUN_TEST( test_server_restart_global_sequence );
+        RUN_TEST( test_global_sequence_differs_between_servers );
         RUN_TEST( test_client_server_connect );
         RUN_TEST( test_client_server_ipv4_socket_connect );
         RUN_TEST( test_client_server_ipv6_socket_connect );
@@ -11515,6 +11644,7 @@ void netcode_test()
         RUN_TEST( test_client_server_connection_request_retransmission );
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
+        RUN_TEST( test_client_refuses_a_reused_connect_token );
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
