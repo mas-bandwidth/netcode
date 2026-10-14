@@ -1397,10 +1397,17 @@ void netcode_write_challenge_token( struct netcode_challenge_token_t * challenge
     netcode_assert( buffer - start <= NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES );
 }
 
-int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
+/*
+    The challenge token is bound to the connect token it is minted for: the MAC of that connect
+    token's private data is the associated data. A challenge decrypts only against the connect token
+    of the encryption mapping it is answered on, so it cannot carry its identity onto another one.
+*/
+
+int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * connect_token_mac, uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
+    netcode_assert( connect_token_mac );
     netcode_assert( key );
 
     (void) buffer_length;
@@ -1412,13 +1419,14 @@ int netcode_encrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    return netcode_encrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, NULL, 0, nonce, key );
+    return netcode_encrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES - NETCODE_MAC_BYTES, connect_token_mac, NETCODE_MAC_BYTES, nonce, key );
 }
 
-int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * key )
+int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64_t sequence, uint8_t * connect_token_mac, uint8_t * key )
 {
     netcode_assert( buffer );
     netcode_assert( buffer_length >= NETCODE_CHALLENGE_TOKEN_BYTES );
+    netcode_assert( connect_token_mac );
     netcode_assert( key );
 
     (void) buffer_length;
@@ -1430,7 +1438,7 @@ int netcode_decrypt_challenge_token( uint8_t * buffer, int buffer_length, uint64
         netcode_write_uint64( &p, sequence );
     }
 
-    return netcode_decrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, NULL, 0, nonce, key );
+    return netcode_decrypt_aead( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, connect_token_mac, NETCODE_MAC_BYTES, nonce, key );
 }
 
 int netcode_read_challenge_token( uint8_t * buffer, int buffer_length, struct netcode_challenge_token_t * challenge_token )
@@ -4748,9 +4756,10 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
     challenge_packet.challenge_token_sequence = server->challenge_sequence;
     netcode_write_challenge_token( &challenge_token, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
-    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data, 
-                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
-                                          server->challenge_sequence, 
+    if ( netcode_encrypt_challenge_token( challenge_packet.challenge_token_data,
+                                          NETCODE_CHALLENGE_TOKEN_BYTES,
+                                          server->challenge_sequence,
+                                          packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES,
                                           server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to encrypt challenge token\n" );
@@ -4853,9 +4862,21 @@ void netcode_server_process_connection_response_packet( struct netcode_server_t 
 {
     netcode_assert( server );
 
-    if ( netcode_decrypt_challenge_token( packet->challenge_token_data, 
-                                          NETCODE_CHALLENGE_TOKEN_BYTES, 
-                                          packet->challenge_token_sequence, 
+    // the challenge must have been minted for the connect token this encryption mapping was made from
+
+    int connect_token_entry_index = netcode_encryption_manager_get_connect_token_entry_index( &server->encryption_manager, encryption_index );
+    if ( connect_token_entry_index < 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. no connect token for this encryption mapping\n" );
+        return;
+    }
+
+    netcode_assert( connect_token_entry_index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
+
+    if ( netcode_decrypt_challenge_token( packet->challenge_token_data,
+                                          NETCODE_CHALLENGE_TOKEN_BYTES,
+                                          packet->challenge_token_sequence,
+                                          server->connect_token_entries[connect_token_entry_index].mac,
                                           server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection response. failed to decrypt challenge token\n" );
@@ -6450,7 +6471,18 @@ static void test_connect_token()
 
 static void test_challenge_token()
 {
-    // additional data is NULL, 0. CMakeLists.txt keeps sodium's UBSan exemption as alignment only, so this path guards #186.
+    // additional data NULL, 0 reaches the AEAD primitive. CMakeLists.txt keeps sodium's UBSan exemption as alignment only, so this path guards #186.
+
+    {
+        uint8_t message[32 + NETCODE_MAC_BYTES];
+        memset( message, 0x5A, sizeof( message ) );
+        uint8_t nonce[12];
+        memset( nonce, 0, sizeof( nonce ) );
+        uint8_t key[NETCODE_KEY_BYTES];
+        netcode_generate_key( key );
+        check( netcode_encrypt_aead( message, 32, NULL, 0, nonce, key ) == NETCODE_OK );
+        check( netcode_decrypt_aead( message, sizeof( message ), NULL, 0, nonce, key ) == NETCODE_OK );
+    }
 
     struct netcode_challenge_token_t input_token;
 
@@ -6469,11 +6501,24 @@ static void test_challenge_token()
     uint8_t key[NETCODE_KEY_BYTES]; 
     netcode_generate_key( key );    
 
-    check( netcode_encrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, key ) == NETCODE_OK );
+    uint8_t connect_token_mac[NETCODE_MAC_BYTES];
+    netcode_random_bytes( connect_token_mac, NETCODE_MAC_BYTES );
+
+    check( netcode_encrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, connect_token_mac, key ) == NETCODE_OK );
+
+    // it does not decrypt against another connect token
+
+    uint8_t other_buffer[NETCODE_CHALLENGE_TOKEN_BYTES];
+    memcpy( other_buffer, buffer, NETCODE_CHALLENGE_TOKEN_BYTES );
+    uint8_t other_connect_token_mac[NETCODE_MAC_BYTES];
+    memcpy( other_connect_token_mac, connect_token_mac, NETCODE_MAC_BYTES );
+    other_connect_token_mac[0] ^= 1;
+
+    check( netcode_decrypt_challenge_token( other_buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, other_connect_token_mac, key ) != NETCODE_OK );
 
     // decrypt the buffer
 
-    check( netcode_decrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, key ) == NETCODE_OK );
+    check( netcode_decrypt_challenge_token( buffer, NETCODE_CHALLENGE_TOKEN_BYTES, sequence, connect_token_mac, key ) == NETCODE_OK );
 
     // read the challenge token back in
 
@@ -10760,6 +10805,263 @@ static void test_receive_drain_skips_empty_datagram()
     }
 }
 
+/*
+    A scripted handshake with one server through the send and receive overrides, with no socket.
+    Each scripted datagram is delivered once, from its own address, and every packet the server
+    sends is captured with the address it was sent to.
+*/
+
+#define TEST_SCRIPT_MAX_PACKETS 32
+
+struct test_script_t
+{
+    int num_packets;
+    int next_packet;
+    struct netcode_address_t from[TEST_SCRIPT_MAX_PACKETS];
+    int packet_bytes[TEST_SCRIPT_MAX_PACKETS];
+    uint8_t packet_data[TEST_SCRIPT_MAX_PACKETS][NETCODE_MAX_PACKET_BYTES];
+    int num_sent;
+    struct netcode_address_t sent_to[TEST_SCRIPT_MAX_PACKETS];
+    int sent_bytes[TEST_SCRIPT_MAX_PACKETS];
+    uint8_t sent_data[TEST_SCRIPT_MAX_PACKETS][NETCODE_MAX_PACKET_BYTES];
+};
+
+static struct test_script_t test_script;
+
+static void test_script_send_packet( void * context, struct netcode_address_t * to, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
+{
+    (void) context;
+
+    if ( test_script.num_sent >= TEST_SCRIPT_MAX_PACKETS )
+        return;
+
+    check( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+
+    int index = test_script.num_sent++;
+    test_script.sent_to[index] = *to;
+    test_script.sent_bytes[index] = packet_bytes;
+    memcpy( test_script.sent_data[index], packet_data, packet_bytes );
+}
+
+static int test_script_receive_packet( void * context, struct netcode_address_t * from, uint8_t * packet_data, int max_packet_bytes )
+{
+    (void) context;
+
+    if ( test_script.next_packet >= test_script.num_packets )
+        return 0;
+
+    int index = test_script.next_packet++;
+
+    check( test_script.packet_bytes[index] <= max_packet_bytes );
+
+    *from = test_script.from[index];
+    memcpy( packet_data, test_script.packet_data[index], test_script.packet_bytes[index] );
+
+    return test_script.packet_bytes[index];
+}
+
+static void test_script_add_packet( struct netcode_address_t * from, void * packet, uint64_t sequence, uint8_t * key )
+{
+    check( test_script.num_packets < TEST_SCRIPT_MAX_PACKETS );
+
+    int index = test_script.num_packets++;
+    test_script.from[index] = *from;
+    test_script.packet_bytes[index] = netcode_write_packet( packet, test_script.packet_data[index], NETCODE_MAX_PACKET_BYTES, sequence, key, TEST_PROTOCOL_ID );
+
+    check( test_script.packet_bytes[index] > 0 );
+}
+
+static void test_script_add_connection_request( struct netcode_address_t * from, struct netcode_connect_token_t * connect_token )
+{
+    struct netcode_connection_request_packet_t packet;
+    packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+    memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    packet.protocol_id = connect_token->protocol_id;
+    packet.connect_token_expire_timestamp = connect_token->expire_timestamp;
+    memcpy( packet.connect_token_nonce, connect_token->nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
+    memcpy( packet.connect_token_data, connect_token->private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    test_script_add_packet( from, &packet, 0, connect_token->client_to_server_key );
+}
+
+static void test_script_add_connection_response( struct netcode_address_t * from,
+                                                 uint64_t sequence,
+                                                 uint8_t * client_to_server_key,
+                                                 struct netcode_connection_challenge_packet_t * challenge )
+{
+    struct netcode_connection_response_packet_t packet;
+    packet.packet_type = NETCODE_CONNECTION_RESPONSE_PACKET;
+    packet.challenge_token_sequence = challenge->challenge_token_sequence;
+    memcpy( packet.challenge_token_data, challenge->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+
+    test_script_add_packet( from, &packet, sequence, client_to_server_key );
+}
+
+// reads the last challenge the server sent to an address, as the client at that address would
+
+static int test_script_read_challenge( struct netcode_address_t * to, uint8_t * server_to_client_key, struct netcode_connection_challenge_packet_t * challenge )
+{
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 0, sizeof( allowed_packets ) );
+    allowed_packets[NETCODE_CONNECTION_CHALLENGE_PACKET] = 1;
+
+    int found = 0;
+
+    int i;
+    for ( i = 0; i < test_script.num_sent; i++ )
+    {
+        if ( !netcode_address_equal( &test_script.sent_to[i], to ) )
+            continue;
+
+        uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+        memcpy( packet_data, test_script.sent_data[i], test_script.sent_bytes[i] );
+
+        uint64_t sequence;
+        struct netcode_connection_challenge_packet_t * packet = (struct netcode_connection_challenge_packet_t*)
+            netcode_read_packet( packet_data, test_script.sent_bytes[i], &sequence, server_to_client_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packets, NULL, NULL, NULL );
+
+        if ( !packet )
+            continue;
+
+        *challenge = *packet;
+        found = 1;
+
+        free( packet );
+    }
+
+    return found;
+}
+
+static void test_script_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, uint8_t * user_data )
+{
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token_data ) );
+
+    check( netcode_read_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, connect_token ) == NETCODE_OK );
+}
+
+static int test_script_find_client_by_id( struct netcode_server_t * server, uint64_t client_id )
+{
+    int i;
+    for ( i = 0; i < netcode_server_max_clients( server ); i++ )
+    {
+        if ( netcode_server_client_connected( server, i ) && netcode_server_client_id( server, i ) == client_id )
+            return i;
+    }
+    return -1;
+}
+
+static void test_connection_response_refuses_another_mappings_challenge()
+{
+    memset( &test_script, 0, sizeof( test_script ) );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_script_send_packet;
+    server_config.receive_packet_override = test_script_receive_packet;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 4 );
+
+    struct netcode_address_t address_x;
+    struct netcode_address_t address_y;
+    check( netcode_parse_address( "[::1]:50000", &address_x ) == NETCODE_OK );
+    check( netcode_parse_address( "[::1]:50001", &address_y ) == NETCODE_OK );
+
+    uint8_t user_data_a[NETCODE_USER_DATA_BYTES];
+    uint8_t user_data_b[NETCODE_USER_DATA_BYTES];
+    uint8_t user_data_c[NETCODE_USER_DATA_BYTES];
+    memset( user_data_a, 0xAA, NETCODE_USER_DATA_BYTES );
+    memset( user_data_b, 0xBB, NETCODE_USER_DATA_BYTES );
+    memset( user_data_c, 0xCC, NETCODE_USER_DATA_BYTES );
+
+    struct netcode_connect_token_t connect_token_a;
+    struct netcode_connect_token_t connect_token_b;
+    struct netcode_connect_token_t connect_token_c;
+    test_script_generate_connect_token( &connect_token_a, 0x1111, user_data_a );
+    test_script_generate_connect_token( &connect_token_b, 0x2222, user_data_b );
+    test_script_generate_connect_token( &connect_token_c, 0x3333, user_data_c );
+
+    double time = 0.0;
+
+    // X presents token A and is sent a challenge minted for A
+
+    struct netcode_connection_challenge_packet_t challenge_a;
+    test_script_add_connection_request( &address_x, &connect_token_a );
+    netcode_server_update( server, time );
+    check( test_script_read_challenge( &address_x, connect_token_a.server_to_client_key, &challenge_a ) );
+    time += 0.1;
+
+    // Y presents token B and is sent a challenge minted for B
+
+    struct netcode_connection_challenge_packet_t challenge_b;
+    test_script_add_connection_request( &address_y, &connect_token_b );
+    netcode_server_update( server, time );
+    check( test_script_read_challenge( &address_y, connect_token_b.server_to_client_key, &challenge_b ) );
+    check( challenge_b.challenge_token_sequence != challenge_a.challenge_token_sequence );
+    time += 0.1;
+
+    // Y answers under B's keys with A's challenge. it is not admitted, as A or as anyone
+
+    test_script_add_connection_response( &address_y, 1, connect_token_b.client_to_server_key, &challenge_a );
+    netcode_server_update( server, time );
+    check( test_script_find_client_by_id( server, 0x1111 ) == -1 );
+    check( netcode_server_num_connected_clients( server ) == 0 );
+    time += 0.1;
+
+    // Y's own challenge still admits it, as B with B's user data
+
+    test_script_add_connection_response( &address_y, 2, connect_token_b.client_to_server_key, &challenge_b );
+    netcode_server_update( server, time );
+    check( netcode_server_num_connected_clients( server ) == 1 );
+    int client_index_b = test_script_find_client_by_id( server, 0x2222 );
+    check( client_index_b != -1 );
+    check( memcmp( netcode_server_client_user_data( server, client_index_b ), user_data_b, NETCODE_USER_DATA_BYTES ) == 0 );
+    time += 0.1;
+
+    // X moves on to token C, twice, so two challenges for C are in flight. its mapping now holds C,
+    // and A's challenge answered under C's keys is not admitted
+
+    struct netcode_connection_challenge_packet_t challenge_c_first;
+    test_script_add_connection_request( &address_x, &connect_token_c );
+    netcode_server_update( server, time );
+    check( test_script_read_challenge( &address_x, connect_token_c.server_to_client_key, &challenge_c_first ) );
+    time += 0.1;
+
+    struct netcode_connection_challenge_packet_t challenge_c_second;
+    test_script_add_connection_request( &address_x, &connect_token_c );
+    netcode_server_update( server, time );
+    check( test_script_read_challenge( &address_x, connect_token_c.server_to_client_key, &challenge_c_second ) );
+    check( challenge_c_second.challenge_token_sequence != challenge_c_first.challenge_token_sequence );
+    time += 0.1;
+
+    test_script_add_connection_response( &address_x, 1, connect_token_c.client_to_server_key, &challenge_a );
+    netcode_server_update( server, time );
+    check( test_script_find_client_by_id( server, 0x1111 ) == -1 );
+    check( netcode_server_num_connected_clients( server ) == 1 );
+    time += 0.1;
+
+    // the first of C's challenges still admits X, as C with C's user data
+
+    test_script_add_connection_response( &address_x, 2, connect_token_c.client_to_server_key, &challenge_c_first );
+    netcode_server_update( server, time );
+    check( netcode_server_num_connected_clients( server ) == 2 );
+    int client_index_c = test_script_find_client_by_id( server, 0x3333 );
+    check( client_index_c != -1 );
+    check( memcmp( netcode_server_client_user_data( server, client_index_c ), user_data_c, NETCODE_USER_DATA_BYTES ) == 0 );
+
+    netcode_server_destroy( server );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -10827,6 +11129,7 @@ void netcode_test()
         RUN_TEST( test_receive_drain_skips_empty_datagram );
         RUN_TEST( test_receive_result_classification );
         RUN_TEST( test_receive_drain_stops_at_cap );
+        RUN_TEST( test_connection_response_refuses_another_mappings_challenge );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
