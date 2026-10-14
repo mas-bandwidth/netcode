@@ -4402,7 +4402,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // a connect token issued before this server started carries keys that already encrypted
     // packets at sequence numbers this run starts again from. the earliest expire timestamp a
     // connect token issued after the start can carry is the start time plus the maximum
-    // lifetime the backend issues, so anything earlier than that is refused.
+    // lifetime the backend issues, so anything at or before that is refused.
 
     server->min_connect_token_expire_timestamp = (uint64_t) time( NULL ) + (uint64_t) server->config.max_connect_token_lifetime;
 
