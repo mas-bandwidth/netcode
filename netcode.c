@@ -3142,6 +3142,27 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
 
+static int netcode_client_address_family_is_available( struct netcode_client_t * client, int address_type )
+{
+    netcode_assert( client );
+
+    // the send and receive overrides and the network simulator carry every address family
+    // without a socket, so every family is reachable to them
+
+    if ( client->config.override_send_and_receive || client->config.network_simulator )
+        return 1;
+
+    // a real client can only reach a family it opened a socket for
+
+    if ( address_type == NETCODE_ADDRESS_IPV4 )
+        return client->socket_holder.ipv4.handle != 0;
+
+    if ( address_type == NETCODE_ADDRESS_IPV6 )
+        return client->socket_holder.ipv6.handle != 0;
+
+    return 0;
+}
+
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token )
 {
     netcode_assert( client );
@@ -3175,8 +3196,35 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     memcpy( client->previous_connect_token_mac, connect_token_mac, NETCODE_MAC_BYTES );
     client->has_previous_connect_token_mac = 1;
 
-    client->server_address_index = 0;
-    client->server_address = client->connect_token.server_addresses[0];
+    // skip server addresses whose address family has no open socket. a client bound to
+    // one family, given a token whose address is the other family, would otherwise read
+    // and write a socket it never opened.
+
+    int server_address_index = -1;
+
+    int i;
+    for ( i = 0; i < client->connect_token.num_server_addresses; i++ )
+    {
+        if ( netcode_client_address_family_is_available( client, client->connect_token.server_addresses[i].type ) )
+        {
+            server_address_index = i;
+            break;
+        }
+
+        char skipped_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client skipped server %s: no socket for its address family\n",
+            netcode_address_to_string( &client->connect_token.server_addresses[i], skipped_address_string ) );
+    }
+
+    if ( server_address_index == -1 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: client connect refused. no server address in the connect token can be reached\n" );
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+        return;
+    }
+
+    client->server_address_index = server_address_index;
+    client->server_address = client->connect_token.server_addresses[server_address_index];
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
@@ -3501,19 +3549,40 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
         return 0;
     }
 
-    client->server_address_index++;
-    client->server_address = client->connect_token.server_addresses[client->server_address_index];
+    // step to the next server address whose family has an open socket, if any
 
-    netcode_client_reset_before_next_connect( client );
+    int i;
+    for ( i = client->server_address_index + 1; i < client->connect_token.num_server_addresses; i++ )
+    {
+        if ( !netcode_client_address_family_is_available( client, client->connect_token.server_addresses[i].type ) )
+        {
+            char skipped_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+            netcode_printf( NETCODE_LOG_LEVEL_INFO, "client skipped server %s: no socket for its address family\n",
+                netcode_address_to_string( &client->connect_token.server_addresses[i], skipped_address_string ) );
+            continue;
+        }
 
-    char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+        client->server_address_index = i;
+        client->server_address = client->connect_token.server_addresses[i];
 
-    netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to next server %s [%d/%d]\n", 
-        netcode_address_to_string( &client->server_address, server_address_string ), 
-        client->server_address_index + 1, 
-        client->connect_token.num_server_addresses );
+        netcode_client_reset_before_next_connect( client );
 
-    netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+        char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
+
+        netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connecting to next server %s [%d/%d]\n", 
+            netcode_address_to_string( &client->server_address, server_address_string ), 
+            client->server_address_index + 1, 
+            client->connect_token.num_server_addresses );
+
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+
+        return 1;
+    }
+
+    // there are more addresses in the token, but this client cannot reach any of them
+
+    netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: client connect refused. no server address in the connect token can be reached\n" );
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
 
     return 1;
 }
@@ -10291,6 +10360,53 @@ void test_client_refuses_a_reused_connect_token()
     netcode_client_destroy( client );
 }
 
+void test_client_connect_refuses_unbound_address_family()
+{
+    // a client with an open IPv4 socket and no IPv6 socket, handed a connect token whose
+    // only server address is IPv6, must refuse the token rather than read from a socket it
+    // never opened. the client is built through the create path with the send and receive
+    // overrides so no socket is opened, then the IPv4 handle is stood up by hand and the
+    // overrides taken out of play to model an IPv4-only client. connect never touches a
+    // socket, so the test opens none.
+
+    int asserts_before = num_ignored_asserts;
+    netcode_set_assert_function( test_runtime_guards_assert_handler );
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    memset( user_data, 0, sizeof( user_data ) );
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+    check( num_ignored_asserts == asserts_before );
+
+    client->socket_holder.ipv4.handle = 0;
+
+    netcode_client_destroy( client );
+
+    netcode_set_assert_function( netcode_default_assert_handler );
+}
+
 
 void test_client_error_connect_token_predates_server_start()
 {
@@ -11832,6 +11948,7 @@ void netcode_test()
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
         RUN_TEST( test_client_refuses_a_reused_connect_token );
+        RUN_TEST( test_client_connect_refuses_unbound_address_family );
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
