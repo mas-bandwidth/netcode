@@ -890,8 +890,9 @@ static int netcode_socket_error_would_block( int error )
 
 /*
     Classifies the result of one recvfrom. A positive result is the number of bytes received.
-    Zero means the socket is drained and the receive loop stops. Every other outcome reads as
-    drained too: a zero-length datagram and any recvfrom error.
+    Zero means would block: the socket is drained and the receive loop stops. -1 means skip this
+    datagram and keep draining. A zero-length datagram is legal and is not the end of the queue,
+    so it is skipped, and so is any other recvfrom error: errors are per packet, as UDP is.
 */
 
 static int netcode_classify_receive_result( int result, int error, int would_block )
@@ -899,12 +900,15 @@ static int netcode_classify_receive_result( int result, int error, int would_blo
     if ( result > 0 )
         return result;
 
-    if ( result == 0 || would_block )
+    if ( result == 0 )
+        return -1;
+
+    if ( would_block )
         return 0;
 
     netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
 
-    return 0;
+    return -1;
 }
 
 int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netcode_address_t * from, void * packet_data, int max_packet_size )
@@ -3284,10 +3288,15 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
 
     if ( !client->config.network_simulator )
     {
-        // process packets received from socket
+        // process packets received from socket. at most NETCODE_CLIENT_MAX_RECEIVE_PACKETS are read
+        // per update, so a flood of datagrams cannot hold one update in the receive loop
 
-        while ( 1 )
+        int num_packets_received = 0;
+
+        while ( num_packets_received < NETCODE_CLIENT_MAX_RECEIVE_PACKETS )
         {
+            num_packets_received++;
+
             struct netcode_address_t from;
             uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
             int packet_bytes = 0;
@@ -3305,8 +3314,13 @@ void netcode_client_receive_packets( struct netcode_client_t * client )
                 packet_bytes = netcode_socket_receive_packet( &client->socket_holder.ipv6, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             }
 
+            // zero is drained. a negative result is a datagram to skip, and the drain goes on
+
             if ( packet_bytes == 0 )
                 break;
+
+            if ( packet_bytes < 0 )
+                continue;
 
             netcode_client_process_packet( client, &from, packet_data, packet_bytes );
         }
@@ -5079,10 +5093,15 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
 
     if ( !server->config.network_simulator )
     {
-        // process packets received from socket
+        // process packets received from socket. at most NETCODE_SERVER_MAX_RECEIVE_PACKETS are read
+        // per update, so a flood of datagrams cannot hold one update in the receive loop
 
-        while ( 1 )
+        int num_packets_received = 0;
+
+        while ( num_packets_received < NETCODE_SERVER_MAX_RECEIVE_PACKETS )
         {
+            num_packets_received++;
+
             struct netcode_address_t from;
             memset( &from, 0, sizeof(from) );
 
@@ -5103,8 +5122,13 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
                     packet_bytes = netcode_socket_receive_packet( &server->socket_holder.ipv6, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             }
 
+            // zero is drained. a negative result is a datagram to skip, and the drain goes on
+
             if ( packet_bytes == 0 )
                 break;
+
+            if ( packet_bytes < 0 )
+                continue;
 
             netcode_server_read_and_process_packet( server, &from, packet_data, packet_bytes, current_timestamp, allowed_packets );
         }
