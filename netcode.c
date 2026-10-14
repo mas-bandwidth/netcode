@@ -1971,7 +1971,7 @@ void * netcode_read_packet( uint8_t * buffer,
         // a connect token that could have been issued before the server started is refused: its keys
         // were already used to encrypt packets under sequence numbers that start again from zero.
 
-        if ( packet_connect_token_expire_timestamp < min_connect_token_expire_timestamp )
+        if ( packet_connect_token_expire_timestamp <= min_connect_token_expire_timestamp )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token predates the server start\n" );
             return NULL;
@@ -4402,7 +4402,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // a connect token issued before this server started carries keys that already encrypted
     // packets at sequence numbers this run starts again from. the earliest expire timestamp a
     // connect token issued after the start can carry is the start time plus the maximum
-    // lifetime the backend issues, so anything earlier than that is refused.
+    // lifetime the backend issues, so anything at or before that is refused.
 
     server->min_connect_token_expire_timestamp = (uint64_t) time( NULL ) + (uint64_t) server->config.max_connect_token_lifetime;
 
@@ -6389,7 +6389,7 @@ static void test_address()
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
-#define TEST_CONNECT_TOKEN_EXPIRY   30
+#define TEST_CONNECT_TOKEN_EXPIRY   60
 #define TEST_TIMEOUT_SECONDS        15
 
 static int test_oor_asserts_fired = 0;
@@ -6680,6 +6680,105 @@ static void test_connection_request_packet()
     check( memcmp( output_packet->connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES ) == 0 );
 
     free( output_packet );
+}
+
+static char test_restart_floor_log[1024];
+
+static int test_restart_floor_capture_printf( NETCODE_CONST char * format, ... )
+{
+    va_list args;
+    va_start( args, format );
+    vsnprintf( test_restart_floor_log, sizeof( test_restart_floor_log ), format, args );
+    va_end( args );
+    return 0;
+}
+
+static int test_restart_floor_reads( uint64_t expire_timestamp, uint64_t min_expire_timestamp, uint64_t current_timestamp )
+{
+    // build a connection request packet by hand: prefix 0, version info, protocol id, the
+    // connect token expire timestamp, a fresh 24-byte nonce, then private connect token
+    // bytes. the private bytes are not a valid ciphertext, so a packet that gets past the
+    // start floor fails later at decrypt. that is deliberate: the only way these bytes are
+    // refused at the start floor is the floor test itself.
+
+    uint8_t buffer[1 + NETCODE_VERSION_INFO_BYTES + 8 + 8 + NETCODE_CONNECT_TOKEN_NONCE_BYTES + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    uint8_t * p = buffer;
+
+    netcode_write_uint8( &p, NETCODE_CONNECTION_REQUEST_PACKET );
+    netcode_write_bytes( &p, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    netcode_write_uint64( &p, TEST_PROTOCOL_ID );
+    netcode_write_uint64( &p, expire_timestamp );
+
+    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
+    netcode_generate_nonce( nonce );
+    netcode_write_bytes( &p, nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
+
+    uint8_t private_bytes[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    memset( private_bytes, 0, sizeof( private_bytes ) );
+    netcode_write_bytes( &p, private_bytes, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    uint8_t private_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( private_key );
+
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packets, 1, sizeof( allowed_packets ) );
+
+    uint64_t sequence = 0;
+
+    void * packet = netcode_read_packet( buffer,
+                                         (int) ( p - buffer ),
+                                         &sequence,
+                                         NULL,
+                                         TEST_PROTOCOL_ID,
+                                         current_timestamp,
+                                         min_expire_timestamp,
+                                         private_key,
+                                         allowed_packets,
+                                         NULL,
+                                         NULL,
+                                         NULL );
+
+    if ( packet )
+        free( packet );
+
+    return packet != NULL;
+}
+
+static void test_restart_floor_refuses_equal_expiry()
+{
+    // a connect token issued with a full lifetime in the same second the server started has
+    // an expire timestamp that equals the start floor. the server cannot tell it apart from
+    // one issued just before the start, so it must be refused.
+
+    const uint64_t floor = 1000000000ULL;
+    const uint64_t current_timestamp = floor - 1;
+
+    netcode_log_level( NETCODE_LOG_LEVEL_DEBUG );
+    netcode_set_printf_function( test_restart_floor_capture_printf );
+
+    // expiry equal to the floor is refused at the floor, not left to fail at decrypt
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( floor, floor, current_timestamp ) == 0 );
+    check( strstr( test_restart_floor_log, "predates the server start" ) != NULL );
+    check( strstr( test_restart_floor_log, "failed to decrypt" ) == NULL );
+
+    // control: the same bytes with an expiry one second above the floor get past the floor
+    // and fail later at decrypt, so the floor is what refuses the equal case
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( floor + 1, floor, current_timestamp ) == 0 );
+    check( strstr( test_restart_floor_log, "predates the server start" ) == NULL );
+    check( strstr( test_restart_floor_log, "failed to decrypt" ) != NULL );
+
+    // a token one second below the floor is also refused at the floor
+
+    test_restart_floor_log[0] = '\0';
+    check( test_restart_floor_reads( floor - 1, floor, floor - 2 ) == 0 );
+    check( strstr( test_restart_floor_log, "predates the server start" ) != NULL );
+
+    netcode_set_printf_function( printf );
+    netcode_log_level( NETCODE_LOG_LEVEL_NONE );
 }
 
 void test_connection_denied_packet()
@@ -11375,6 +11474,7 @@ void netcode_test()
         RUN_TEST( test_generate_connect_token_out_of_range );
         RUN_TEST( test_challenge_token );
         RUN_TEST( test_connection_request_packet );
+        RUN_TEST( test_restart_floor_refuses_equal_expiry );
         RUN_TEST( test_connection_denied_packet );
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
