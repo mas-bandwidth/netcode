@@ -879,6 +879,34 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
     (void) result;
 }
 
+static int netcode_socket_error_would_block( int error )
+{
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    return error == WSAEWOULDBLOCK;
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    return error == EAGAIN || error == EWOULDBLOCK;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+}
+
+/*
+    Classifies the result of one recvfrom. A positive result is the number of bytes received.
+    Zero means the socket is drained and the receive loop stops. Every other outcome reads as
+    drained too: a zero-length datagram and any recvfrom error.
+*/
+
+static int netcode_classify_receive_result( int result, int error, int would_block )
+{
+    if ( result > 0 )
+        return result;
+
+    if ( result == 0 || would_block )
+        return 0;
+
+    netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
+
+    return 0;
+}
+
 int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netcode_address_t * from, void * packet_data, int max_packet_size )
 {
     netcode_assert( socket );
@@ -899,28 +927,15 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result == SOCKET_ERROR )
-    {
-        int error = WSAGetLastError();
-
-        if ( error == WSAEWOULDBLOCK )
-            return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
-
-        return 0;
-    }
+    int error = ( result == SOCKET_ERROR ) ? WSAGetLastError() : 0;
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result <= 0 )
-    {
-        if ( errno == EAGAIN )
-            return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
-
-        return 0;
-    }
+    int error = ( result < 0 ) ? errno : 0;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+
+    result = netcode_classify_receive_result( result, error, netcode_socket_error_would_block( error ) );
+
+    if ( result <= 0 )
+        return result;
 
     if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
     {
