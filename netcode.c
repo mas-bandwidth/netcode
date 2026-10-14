@@ -3139,6 +3139,26 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
         return;
     }
 
+    // a connect token's keys must encrypt exactly one session. an application that connects
+    // with a token, disconnects, then connects again with the same token buffer would encrypt
+    // its connection responses again from sequence zero under the same client to server key,
+    // repeating an AEAD nonce. the token is refused, and the application asks the backend for
+    // a new one. the AEAD tag at the end of the token's private data is kept as the
+    // fingerprint so the whole 2048 byte token is not stored.
+
+    uint8_t * connect_token_mac = client->connect_token.private_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES;
+
+    if ( client->has_previous_connect_token_mac &&
+         memcmp( connect_token_mac, client->previous_connect_token_mac, NETCODE_MAC_BYTES ) == 0 )
+    {
+        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: client connect refused. the connect token was already used by this client\n" );
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+        return;
+    }
+
+    memcpy( client->previous_connect_token_mac, connect_token_mac, NETCODE_MAC_BYTES );
+    client->has_previous_connect_token_mac = 1;
+
     client->server_address_index = 0;
     client->server_address = client->connect_token.server_addresses[0];
 
@@ -4416,8 +4436,15 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // shared key. netcode_server_stop zeroes it, so it must be re-seeded on every start,
     // not just in netcode_server_create -- otherwise a stopped and restarted server would
     // reuse nonces between global and per-client packets.
+    //
+    // one connect token carries one server to client key for every server it lists. two
+    // servers with the same global sequence would encrypt their first global packet under
+    // that shared key at the same nonce, so the sequence is drawn at random in the top half
+    // on every start. two servers then collide only with negligible probability.
 
-    server->global_sequence = 1ULL << 63;
+    uint64_t global_sequence_offset = 0;
+    netcode_random_bytes( (uint8_t*) &global_sequence_offset, sizeof( global_sequence_offset ) );
+    server->global_sequence = ( 1ULL << 63 ) + ( global_sequence_offset & 0x3FFFFFFFFFFFFFFFULL );
 
     int i;
     for ( i = 0; i < server->max_clients; i++ )
