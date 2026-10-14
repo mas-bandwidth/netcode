@@ -47,6 +47,7 @@
 #define NETCODE_VERSION_INFO_BYTES 13
 #define NETCODE_MAX_PACKET_BYTES 1300
 #define NETCODE_MAX_PAYLOAD_BYTES 1200
+#define NETCODE_PRECONNECT_MAPPING_SECONDS 10
 #define NETCODE_PACKET_QUEUE_SIZE 256
 #define NETCODE_REPLAY_PROTECTION_BUFFER_SIZE 256
 #define NETCODE_CLIENT_MAX_RECEIVE_PACKETS 64
@@ -11160,6 +11161,121 @@ static int test_script_find_client_by_id( struct netcode_server_t * server, uint
     return -1;
 }
 
+// a pre-connect mapping has a bounded lifetime of its own. a token that carries a
+// non-positive timeout must not shorten it (the handshake would never finish) and must
+// not lengthen it (an unanswered request would hold an encryption mapping until restart).
+
+static struct netcode_server_t * test_preconnect_start_server()
+{
+    memset( &test_script, 0, sizeof( test_script ) );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_script_send_packet;
+    server_config.receive_packet_override = test_script_receive_packet;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 4 );
+
+    return server;
+}
+
+static void test_preconnect_generate_connect_token( struct netcode_connect_token_t * connect_token, uint64_t client_id, uint8_t * user_data, int timeout_seconds )
+{
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, timeout_seconds, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token_data ) );
+
+    check( netcode_read_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, connect_token ) == NETCODE_OK );
+}
+
+// counts the encryption mappings that have not expired at time, what the manager would
+// report if it pruned. at the base a negative-timeout request stays in this count forever
+
+static int test_preconnect_live_mapping_count( struct netcode_server_t * server, double time )
+{
+    int count = 0;
+
+    int i;
+    for ( i = 0; i < server->encryption_manager.num_encryption_mappings; i++ )
+    {
+        if ( !netcode_encryption_manager_entry_expired( &server->encryption_manager, i, time ) )
+            count++;
+    }
+
+    return count;
+}
+
+void test_preconnect_mapping_expires_with_nonpositive_timeout()
+{
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    memset( user_data, 0x77, NETCODE_USER_DATA_BYTES );
+
+    struct netcode_address_t address;
+    check( netcode_parse_address( "[::1]:50000", &address ) == NETCODE_OK );
+
+    // a negative timeout: the request is never answered. the mapping must still expire on
+    // its own bounded lifetime rather than linger until the server restarts
+
+    {
+        struct netcode_server_t * server = test_preconnect_start_server();
+
+        double time = 0.0;
+
+        check( test_preconnect_live_mapping_count( server, time ) == 0 );
+
+        struct netcode_connect_token_t connect_token;
+        test_preconnect_generate_connect_token( &connect_token, 0x1111, user_data, -1 );
+
+        test_script_add_connection_request( &address, &connect_token );
+        netcode_server_update( server, time );
+
+        check( test_preconnect_live_mapping_count( server, time ) == 1 );
+
+        time += NETCODE_PRECONNECT_MAPPING_SECONDS + 1.0;
+
+        netcode_server_update( server, time );
+
+        check( test_preconnect_live_mapping_count( server, time ) == 0 );
+
+        netcode_server_destroy( server );
+    }
+
+    // a zero timeout: the response arrives one update later. the mapping must live long
+    // enough for the response to be admitted and connect the client
+
+    {
+        struct netcode_server_t * server = test_preconnect_start_server();
+
+        double time = 0.0;
+
+        struct netcode_connect_token_t connect_token;
+        test_preconnect_generate_connect_token( &connect_token, 0x2222, user_data, 0 );
+
+        struct netcode_connection_challenge_packet_t challenge;
+        test_script_add_connection_request( &address, &connect_token );
+        netcode_server_update( server, time );
+        check( test_script_read_challenge( &address, connect_token.server_to_client_key, &challenge ) );
+        time += 0.1;
+
+        test_script_add_connection_response( &address, 1, connect_token.client_to_server_key, &challenge );
+        netcode_server_update( server, time );
+
+        check( netcode_server_num_connected_clients( server ) == 1 );
+        check( test_script_find_client_by_id( server, 0x2222 ) != -1 );
+
+        netcode_server_destroy( server );
+    }
+}
+
 static void test_connection_response_refuses_another_mappings_challenge()
 {
     memset( &test_script, 0, sizeof( test_script ) );
@@ -11475,6 +11591,7 @@ void netcode_test()
         RUN_TEST( test_challenge_token );
         RUN_TEST( test_connection_request_packet );
         RUN_TEST( test_restart_floor_refuses_equal_expiry );
+        RUN_TEST( test_preconnect_mapping_expires_with_nonpositive_timeout );
         RUN_TEST( test_connection_denied_packet );
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
