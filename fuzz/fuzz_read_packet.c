@@ -47,6 +47,7 @@ static void * fuzz_call_read_packet( uint8_t * buffer, int buffer_length, uint64
                                 FUZZ_PROTOCOL_ID,
                                 0,                      // current timestamp: zero so fuzz-chosen expire timestamps pass
                                 0,                      // minimum expire timestamp: zero so no connect token is refused for predating the server start
+                                UINT64_MAX,             // maximum connect token lifetime: max so no connect token is refused for exceeding deployment lifetime
                                 private_key,
                                 allowed_packets,
                                 replay_protection,
