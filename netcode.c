@@ -4151,6 +4151,7 @@ struct netcode_server_t
     int client_loopback[NETCODE_MAX_CLIENTS];
     int client_confirmed[NETCODE_MAX_CLIENTS];
     int client_disconnect_reason[NETCODE_MAX_CLIENTS];
+    int client_disconnecting[NETCODE_MAX_CLIENTS];
     int client_encryption_index[NETCODE_MAX_CLIENTS];
     uint64_t client_id[NETCODE_MAX_CLIENTS];
     uint64_t client_sequence[NETCODE_MAX_CLIENTS];
@@ -4491,6 +4492,7 @@ static void netcode_server_reset_client_slot( struct netcode_server_t * server, 
     netcode_packet_queue_clear( &server->client_packet_queue[client_index] );
 
     server->client_connected[client_index] = 0;
+    server->client_disconnecting[client_index] = 0;
     server->client_loopback[client_index] = 0;
     server->client_confirmed[client_index] = 0;
     server->client_id[client_index] = 0;
@@ -4513,6 +4515,7 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     netcode_assert( client_index >= 0 );
     netcode_assert( client_index < server->max_clients );
     netcode_assert( server->client_connected[client_index] );
+    netcode_assert( !server->client_disconnecting[client_index] );
     netcode_assert( !server->client_loopback[client_index] );
     netcode_assert( server->encryption_manager.client_index[server->client_encryption_index[client_index]] == client_index );
 
@@ -4522,10 +4525,21 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     server->client_disconnect_reason[client_index] = disconnect_reason;
 
+    // the callback runs while the slot still holds its client, so it can read the reason, id and
+    // user data. the slot is marked as disconnecting first: a disconnect of this slot from inside
+    // the callback is a no-op, and a stop from inside the callback clears the slot itself, after
+    // which there is nothing left here to do. destroying the server from inside the callback is
+    // not supported.
+
+    server->client_disconnecting[client_index] = 1;
+
     if ( server->config.connect_disconnect_callback )
     {
         server->config.connect_disconnect_callback( server->config.callback_context, client_index, 0 );
     }
+
+    if ( !server->running || !server->client_connected[client_index] )
+        return;
 
     if ( send_disconnect_packets )
     {
@@ -4545,7 +4559,10 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     netcode_replay_protection_reset( &server->client_replay_protection[client_index] );
 
-    server->encryption_manager.client_index[server->client_encryption_index[client_index]] = -1;
+    if ( server->client_encryption_index[client_index] >= 0 )
+    {
+        server->encryption_manager.client_index[server->client_encryption_index[client_index]] = -1;
+    }
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
 
@@ -4573,6 +4590,11 @@ void netcode_server_disconnect_client( struct netcode_server_t * server, int cli
     if ( server->client_loopback[client_index] )
         return;
 
+    // a slot whose disconnect callback is running is already being disconnected
+
+    if ( server->client_disconnecting[client_index] )
+        return;
+
     netcode_server_disconnect_client_internal( server, client_index, 1, NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT );
 }
 
@@ -4586,7 +4608,7 @@ void netcode_server_disconnect_all_clients( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; i++ )
     {
-        if ( server->client_connected[i] && !server->client_loopback[i] )
+        if ( server->client_connected[i] && !server->client_loopback[i] && !server->client_disconnecting[i] )
         {
             netcode_server_disconnect_client_internal( server, i, 1, NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT );
         }
@@ -4607,9 +4629,22 @@ void netcode_server_stop( struct netcode_server_t * server )
     int i;
     for ( i = 0; i < server->max_clients; i++ )
     {
-        if ( server->client_connected[i] && server->client_loopback[i] )
+        if ( server->client_connected[i] && server->client_loopback[i] && !server->client_disconnecting[i] )
         {
             netcode_server_disconnect_loopback_client( server, i );
+        }
+    }
+
+    // a slot still connected here is one whose disconnect callback called stop. its callback has
+    // run, so the slot is cleared without another, and the disconnect it returns to does nothing more
+
+    for ( i = 0; i < server->max_clients; i++ )
+    {
+        if ( server->client_connected[i] )
+        {
+            netcode_assert( server->client_disconnecting[i] );
+            netcode_replay_protection_reset( &server->client_replay_protection[i] );
+            netcode_server_reset_client_slot( server, i );
         }
     }
 
@@ -5525,14 +5560,27 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     if ( !server->client_connected[client_index] || !server->client_loopback[client_index] )
         return;
 
+    // a slot whose disconnect callback is running is already being disconnected
+
+    if ( server->client_disconnecting[client_index] )
+        return;
+
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected loopback client %d\n", client_index );
 
     server->client_disconnect_reason[client_index] = NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT;
+
+    // as for a remote client: the slot is marked as disconnecting while the callback runs, and a
+    // stop from inside the callback has already cleared it when the callback returns
+
+    server->client_disconnecting[client_index] = 1;
 
     if ( server->config.connect_disconnect_callback )
     {
         server->config.connect_disconnect_callback( server->config.callback_context, client_index, 0 );
     }
+
+    if ( !server->running || !server->client_connected[client_index] )
+        return;
 
     netcode_server_reset_client_slot( server, client_index );
 }
@@ -11062,6 +11110,191 @@ static void test_connection_response_refuses_another_mappings_challenge()
     netcode_server_destroy( server );
 }
 
+/*
+    The disconnect callback runs while the slot being disconnected still holds its client, so the
+    application can read its reason, id and user data. A callback that disconnects that same client
+    again, or stops the server, re-enters the disconnect of a slot that is part way through clearing.
+*/
+
+#define TEST_REENTRY_DISCONNECT_SAME_CLIENT     0
+#define TEST_REENTRY_STOP_SERVER                1
+
+struct test_reentry_t
+{
+    struct netcode_server_t * server;
+    int action;
+    int reentered;
+    int num_disconnect_callbacks[NETCODE_MAX_CLIENTS];
+    int reason_seen;
+    uint64_t client_id_seen;
+    uint8_t user_data_seen[NETCODE_USER_DATA_BYTES];
+};
+
+static struct test_reentry_t test_reentry;
+
+static void test_reentry_connect_disconnect_callback( void * context, int client_index, int connected )
+{
+    (void) context;
+
+    if ( connected )
+        return;
+
+    check( client_index >= 0 && client_index < NETCODE_MAX_CLIENTS );
+
+    test_reentry.num_disconnect_callbacks[client_index]++;
+
+    if ( test_reentry.reentered )
+        return;
+
+    test_reentry.reentered = 1;
+
+    test_reentry.reason_seen = netcode_server_client_disconnect_reason( test_reentry.server, client_index );
+    test_reentry.client_id_seen = netcode_server_client_id( test_reentry.server, client_index );
+    memcpy( test_reentry.user_data_seen, netcode_server_client_user_data( test_reentry.server, client_index ), NETCODE_USER_DATA_BYTES );
+
+    if ( test_reentry.action == TEST_REENTRY_DISCONNECT_SAME_CLIENT )
+    {
+        netcode_server_disconnect_client( test_reentry.server, client_index );
+    }
+    else
+    {
+        netcode_server_stop( test_reentry.server );
+    }
+}
+
+// starts a server through the script hooks and admits one client, returning its slot
+
+static int test_reentry_start( int action, uint8_t * user_data, double * time )
+{
+    memset( &test_script, 0, sizeof( test_script ) );
+    memset( &test_reentry, 0, sizeof( test_reentry ) );
+
+    test_reentry.action = action;
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_script_send_packet;
+    server_config.receive_packet_override = test_script_receive_packet;
+    server_config.connect_disconnect_callback = test_reentry_connect_disconnect_callback;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    test_reentry.server = netcode_server_create( "[::1]:40000", &server_config, *time );
+
+    check( test_reentry.server );
+
+    netcode_server_start( test_reentry.server, 4 );
+
+    struct netcode_address_t address;
+    check( netcode_parse_address( "[::1]:50000", &address ) == NETCODE_OK );
+
+    struct netcode_connect_token_t connect_token;
+    test_script_generate_connect_token( &connect_token, 0x1111, user_data );
+
+    struct netcode_connection_challenge_packet_t challenge;
+    test_script_add_connection_request( &address, &connect_token );
+    netcode_server_update( test_reentry.server, *time );
+    check( test_script_read_challenge( &address, connect_token.server_to_client_key, &challenge ) );
+    *time += 0.1;
+
+    test_script_add_connection_response( &address, 1, connect_token.client_to_server_key, &challenge );
+    netcode_server_update( test_reentry.server, *time );
+    check( netcode_server_num_connected_clients( test_reentry.server ) == 1 );
+    *time += 0.1;
+
+    int client_index = test_script_find_client_by_id( test_reentry.server, 0x1111 );
+    check( client_index != -1 );
+    check( test_reentry.server->encryption_manager.num_encryption_mappings == 1 );
+    check( test_reentry.server->encryption_manager.client_index[test_reentry.server->client_encryption_index[client_index]] == client_index );
+
+    return client_index;
+}
+
+// what every case leaves behind: the slot is clear, counted once, and nothing in the encryption manager points at it
+
+static void test_reentry_check_slot_cleared( int client_index, int expected_reason, uint8_t * user_data )
+{
+    struct netcode_server_t * server = test_reentry.server;
+
+    check( num_ignored_asserts == 0 );
+    check( test_reentry.num_disconnect_callbacks[client_index] == 1 );
+    check( test_reentry.reason_seen == expected_reason );
+    check( test_reentry.client_id_seen == 0x1111 );
+    check( memcmp( test_reentry.user_data_seen, user_data, NETCODE_USER_DATA_BYTES ) == 0 );
+    check( server->num_connected_clients == 0 );
+    check( server->client_connected[client_index] == 0 );
+    check( server->client_encryption_index[client_index] == -1 );
+    check( server->encryption_manager.num_encryption_mappings == 0 );
+
+    int i;
+    for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; i++ )
+    {
+        check( server->encryption_manager.client_index[i] != client_index );
+    }
+}
+
+void test_disconnect_callback_reentry_is_harmless()
+{
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    memset( user_data, 0x5A, NETCODE_USER_DATA_BYTES );
+
+    num_ignored_asserts = 0;
+    netcode_set_assert_function( test_runtime_guards_assert_handler );
+
+    // the callback disconnects the same client again. the second disconnect is a no-op
+
+    {
+        double time = 0.0;
+        int client_index = test_reentry_start( TEST_REENTRY_DISCONNECT_SAME_CLIENT, user_data, &time );
+
+        netcode_server_disconnect_client( test_reentry.server, client_index );
+
+        test_reentry_check_slot_cleared( client_index, NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT, user_data );
+        check( netcode_server_running( test_reentry.server ) );
+        check( netcode_server_num_connected_clients( test_reentry.server ) == 0 );
+
+        netcode_server_destroy( test_reentry.server );
+    }
+
+    // the callback stops the server. the stop clears the slot and the disconnect returns without touching it again
+
+    {
+        double time = 0.0;
+        int client_index = test_reentry_start( TEST_REENTRY_STOP_SERVER, user_data, &time );
+
+        netcode_server_disconnect_client( test_reentry.server, client_index );
+
+        test_reentry_check_slot_cleared( client_index, NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT, user_data );
+        check( !netcode_server_running( test_reentry.server ) );
+
+        // a restart finds every slot empty
+
+        netcode_server_start( test_reentry.server, 4 );
+        check( netcode_server_num_connected_clients( test_reentry.server ) == 0 );
+        check( test_script_find_client_by_id( test_reentry.server, 0x1111 ) == -1 );
+
+        netcode_server_destroy( test_reentry.server );
+    }
+
+    // a client times out inside update and the callback stops the server
+
+    {
+        double time = 0.0;
+        int client_index = test_reentry_start( TEST_REENTRY_STOP_SERVER, user_data, &time );
+
+        time += TEST_TIMEOUT_SECONDS + 1.0;
+        netcode_server_update( test_reentry.server, time );
+
+        test_reentry_check_slot_cleared( client_index, NETCODE_SERVER_CLIENT_DISCONNECT_REASON_TIMED_OUT, user_data );
+        check( !netcode_server_running( test_reentry.server ) );
+
+        netcode_server_destroy( test_reentry.server );
+    }
+
+    netcode_set_assert_function( netcode_default_assert_handler );
+}
+
 #define RUN_TEST( test_function )                                           \
     do                                                                      \
     {                                                                       \
@@ -11130,6 +11363,7 @@ void netcode_test()
         RUN_TEST( test_receive_result_classification );
         RUN_TEST( test_receive_drain_stops_at_cap );
         RUN_TEST( test_connection_response_refuses_another_mappings_challenge );
+        RUN_TEST( test_disconnect_callback_reentry_is_harmless );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
