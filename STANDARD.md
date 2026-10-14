@@ -454,7 +454,7 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the connect token expire timestamp is <= the current timestamp, ignore the packet.
 
-* If the connect token expire timestamp minus the maximum connect token lifetime issued by the deployment is earlier than the server start time, ignore the packet, as required by _Nonce Reuse and Server Restarts_. This check belongs here, immediately after the expiry check and before the decrypt, because it uses only the unencrypted expire timestamp and so costs nothing on a request that is going to be rejected anyway.
+* If the connect token expire timestamp minus the maximum connect token lifetime issued by the deployment is at or before the server start time, ignore the packet, as required by _Nonce Reuse and Server Restarts_. This check belongs here, immediately after the expiry check and before the decrypt, because it uses only the unencrypted expire timestamp and so costs nothing on a request that is going to be rejected anyway.
 
 * If the encrypted private connect token data doesn't decrypt with the private key, using the associated data constructed from: version info, protocol id and expire timestamp, ignore the packet.
 
