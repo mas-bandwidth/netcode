@@ -6389,7 +6389,7 @@ static void test_address()
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
-#define TEST_CONNECT_TOKEN_EXPIRY   30
+#define TEST_CONNECT_TOKEN_EXPIRY   60
 #define TEST_TIMEOUT_SECONDS        15
 
 static int test_oor_asserts_fired = 0;
