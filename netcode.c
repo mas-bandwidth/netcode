@@ -1978,6 +1978,20 @@ void * netcode_read_packet( uint8_t * buffer,
             return NULL;
         }
 
+        // a connect token minted to never expire, or with a lifetime longer than the
+        // deployment issues, carries an expiry further ahead of now than any token the
+        // backend can issue. such a token could have been issued before the server started
+        // and so cannot be told apart from one that was: its keys repeat nonces from
+        // sequence zero after a restart exactly as a pre-start token does. it is refused by
+        // the deployment lifetime bound, before the decrypt, using only the expire
+        // timestamp already read.
+
+        if ( packet_connect_token_expire_timestamp - current_timestamp > max_connect_token_lifetime )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token lifetime exceeds the deployment maximum\n" );
+            return NULL;
+        }
+
         uint8_t packet_connect_token_nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
         netcode_read_bytes(&buffer, packet_connect_token_nonce, sizeof(packet_connect_token_nonce));
 
