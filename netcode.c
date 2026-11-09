@@ -3101,6 +3101,22 @@ void netcode_client_reset_connection_data( struct netcode_client_t * client, int
 
 void netcode_client_disconnect_internal( struct netcode_client_t * client, int destination_state, int send_disconnect_packets );
 
+static int netcode_client_address_family_usable( struct netcode_client_t * client, int address_type )
+{
+    // a network simulator or send/receive override reaches every family without a socket
+
+    if ( client->config.network_simulator || client->config.override_send_and_receive )
+        return 1;
+
+    if ( address_type == NETCODE_ADDRESS_IPV4 )
+        return client->socket_holder.ipv4.handle != 0;
+
+    if ( address_type == NETCODE_ADDRESS_IPV6 )
+        return client->socket_holder.ipv6.handle != 0;
+
+    return 0;
+}
+
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token )
 {
     netcode_assert( client );
@@ -3114,8 +3130,22 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
         return;
     }
 
-    client->server_address_index = 0;
-    client->server_address = client->connect_token.server_addresses[0];
+    int server_address_index = 0;
+
+    while ( server_address_index < client->connect_token.num_server_addresses &&
+            !netcode_client_address_family_usable( client, client->connect_token.server_addresses[server_address_index].type ) )
+    {
+        server_address_index++;
+    }
+
+    if ( server_address_index >= client->connect_token.num_server_addresses )
+    {
+        netcode_client_set_state( client, NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+        return;
+    }
+
+    client->server_address_index = server_address_index;
+    client->server_address = client->connect_token.server_addresses[server_address_index];
 
     char server_address_string[NETCODE_MAX_ADDRESS_STRING_LENGTH];
 
@@ -3423,14 +3453,22 @@ int netcode_client_connect_to_next_server( struct netcode_client_t * client )
 {
     netcode_assert( client );
 
-    if ( client->server_address_index + 1 >= client->connect_token.num_server_addresses )
+    int server_address_index = client->server_address_index + 1;
+
+    while ( server_address_index < client->connect_token.num_server_addresses &&
+            !netcode_client_address_family_usable( client, client->connect_token.server_addresses[server_address_index].type ) )
+    {
+        server_address_index++;
+    }
+
+    if ( server_address_index >= client->connect_token.num_server_addresses )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client has no more servers to connect to\n" );
         return 0;
     }
 
-    client->server_address_index++;
-    client->server_address = client->connect_token.server_addresses[client->server_address_index];
+    client->server_address_index = server_address_index;
+    client->server_address = client->connect_token.server_addresses[server_address_index];
 
     netcode_client_reset_before_next_connect( client );
 
@@ -8653,6 +8691,131 @@ void test_client_error_connect_token_expired()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+void test_client_connect_matching_address_family()
+{
+    // model a client with one address family and no socket of the other.
+    // create runs with send and receive overrides, so it opens no socket;
+    // the family that exists is then a handle, and the overrides are cleared
+    // before connect. connect does not read or write a socket.
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    memset( user_data, 0, sizeof( user_data ) );
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+    check( client->socket_holder.ipv4.handle == 0 );
+    check( client->socket_holder.ipv6.handle == 0 );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * other_family = "[::1]:40000";
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    check( netcode_generate_connect_token( 1, &other_family, &other_family, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv4.handle = 0;
+    netcode_client_destroy( client );
+
+    client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * server_addresses[] = { "[::1]:40000", "127.0.0.1:40000" };
+
+    check( netcode_generate_connect_token( 2, server_addresses, server_addresses, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+    check( client->server_address_index == 1 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV4 );
+    check( client->server_address.port == 40000 );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv4.handle = 0;
+    netcode_client_destroy( client );
+
+    client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * stopped_addresses[] = { "127.0.0.1:40000", "[::1]:40001" };
+
+    check( netcode_generate_connect_token( 2, stopped_addresses, stopped_addresses, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( client->server_address_index == 0 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV4 );
+    check( client->server_address.port == 40000 );
+
+    check( netcode_client_connect_to_next_server( client ) == 0 );
+    check( client->server_address_index == 0 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV4 );
+    check( client->server_address.port == 40000 );
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv4.handle = 0;
+    netcode_client_destroy( client );
+
+    client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = 1;
+    client->socket_holder.ipv6.handle = 0;
+
+    NETCODE_CONST char * later_addresses[] = { "127.0.0.1:40000", "[::1]:40001", "127.0.0.1:40002" };
+
+    check( netcode_generate_connect_token( 3, later_addresses, later_addresses, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( client->server_address_index == 0 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV4 );
+
+    check( netcode_client_connect_to_next_server( client ) == 1 );
+    check( client->server_address_index == 2 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV4 );
+    check( client->server_address.port == 40002 );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv4.handle = 0;
+    netcode_client_destroy( client );
+}
+
 void test_client_error_invalid_connect_token()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -10635,6 +10798,7 @@ void netcode_test()
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
         RUN_TEST( test_client_error_connect_token_expired );
+        RUN_TEST( test_client_connect_matching_address_family );
         RUN_TEST( test_client_error_invalid_connect_token );
         RUN_TEST( test_client_error_connection_timed_out );
         RUN_TEST( test_client_error_connection_response_timeout );
