@@ -902,48 +902,55 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     typedef int socklen_t;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     
-    struct sockaddr_storage sockaddr_from;
-    memset( &sockaddr_from, 0, sizeof(sockaddr_from) );
+    while ( 1 )
+    {
+        struct sockaddr_storage sockaddr_from;
+        memset( &sockaddr_from, 0, sizeof(sockaddr_from) );
 
-    socklen_t from_length = sizeof( sockaddr_from );
+        socklen_t from_length = sizeof( sockaddr_from );
 
-    int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
+        int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result == SOCKET_ERROR )
-    {
-        int error = WSAGetLastError();
+        if ( result == SOCKET_ERROR )
+        {
+            int error = WSAGetLastError();
 
-        if ( error == WSAEWOULDBLOCK )
+            if ( error == WSAEWOULDBLOCK )
+                return 0;
+
+            if ( error == WSAEMSGSIZE )
+                continue;
+
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
+
             return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
-
-        return 0;
-    }
+        }
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result <= 0 )
-    {
-        if ( errno == EAGAIN )
+        if ( result < 0 )
+        {
+            if ( errno == EAGAIN || errno == EWOULDBLOCK )
+                return 0;
+
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
+
             return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
-
-        return 0;
-    }
+        }
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
-    {
-        netcode_assert( 0 );
-        return 0;
+        if ( result == 0 )
+            continue;
+
+        if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
+        {
+            netcode_assert( 0 );
+            return 0;
+        }
+
+        netcode_assert( result > 0 );
+
+        return result;
     }
-  
-    netcode_assert( result >= 0 );
-
-    int bytes_read = result;
-
-    return bytes_read;
 }
 
 // ----------------------------------------------------------------
@@ -8440,6 +8447,119 @@ void test_client_server_dual_socket_connect()
     client_server_socket_connect_to("0.0.0.0:50000", "[::]:50000", "[::1]:40000", "127.0.0.1:40000", "127.0.0.1:40000");
 }
 
+void test_server_update_drains_empty_datagrams()
+{
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, time );
+
+    check( client );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        netcode_sleep( 0.01 );
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+
+    netcode_sleep( 0.01 );
+
+    netcode_server_update( server, time );
+
+    while ( 1 )
+    {
+        int packet_bytes;
+        uint64_t packet_sequence;
+        void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+        if ( !packet )
+            break;
+        (void) packet_bytes;
+        (void) packet_sequence;
+        netcode_server_free_packet( server, packet );
+    }
+
+    struct netcode_address_t server_address_value;
+    check( netcode_parse_address( server_address, &server_address_value ) == NETCODE_OK );
+
+    struct sockaddr_storage sockaddr_to;
+    socklen_t sockaddr_to_length = netcode_address_to_sockaddr( &server_address_value, &sockaddr_to );
+
+    int i;
+    for ( i = 0; i < 50; i++ )
+    {
+        (void) sendto( client->socket_holder.ipv4.handle, "", 0, 0, (struct sockaddr*) &sockaddr_to, sockaddr_to_length );
+    }
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; i++ )
+        packet_data[i] = (uint8_t) i;
+
+    netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+    netcode_server_update( server, time );
+
+    int received = 0;
+
+    while ( 1 )
+    {
+        int packet_bytes;
+        uint64_t packet_sequence;
+        void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+        if ( !packet )
+            break;
+        if ( packet_bytes == NETCODE_MAX_PACKET_SIZE && memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 )
+            received = 1;
+        netcode_server_free_packet( server, packet );
+    }
+
+    check( received );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+}
+
 void test_client_server_keep_alive()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -10899,6 +11019,54 @@ void test_loopback_callback_required()
     }                                                                       \
     while (0)
 
+static int netcode_test_udp_socket_available()
+{
+    // tests that bind real UDP sockets cannot run in a sandbox that refuses
+    // them. probe once per test with an ephemeral loopback port so those
+    // tests skip rather than fail where the platform offers no UDP at all.
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    SOCKET socket_handle = socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+    if ( socket_handle == INVALID_SOCKET )
+        return 0;
+#else
+    int socket_handle = socket( AF_INET, SOCK_DGRAM, 0 );
+    if ( socket_handle < 0 )
+        return 0;
+#endif
+
+    struct sockaddr_in address;
+    memset( &address, 0, sizeof( address ) );
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+    address.sin_port = 0;
+
+    int result = bind( socket_handle, (struct sockaddr*) &address, sizeof( address ) );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    closesocket( socket_handle );
+#else
+    close( socket_handle );
+#endif
+
+    return result == 0;
+}
+
+#define RUN_TEST_UDP( test_function )                                       \
+    do                                                                      \
+    {                                                                       \
+        if ( netcode_test_udp_socket_available() )                          \
+        {                                                                   \
+            printf( #test_function "\n" );                                  \
+            test_function();                                                \
+        }                                                                   \
+        else                                                                \
+        {                                                                   \
+            printf( "skip " #test_function " (UDP sockets unavailable)\n" );\
+        }                                                                   \
+    }                                                                       \
+    while (0)
+
 void netcode_test()
 {
     //while ( 1 )
@@ -10923,19 +11091,20 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
-        RUN_TEST( test_runtime_guards );
-        RUN_TEST( test_init_and_defaults );
-        RUN_TEST( test_client_create_error );
-        RUN_TEST( test_server_create_error );
+        RUN_TEST_UDP( test_runtime_guards );
+        RUN_TEST_UDP( test_init_and_defaults );
+        RUN_TEST_UDP( test_client_create_error );
+        RUN_TEST_UDP( test_server_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_network_simulator_allocation_failure );
-        RUN_TEST( test_client_create );
-        RUN_TEST( test_server_create );
-        RUN_TEST( test_server_restart_global_sequence );
+        RUN_TEST_UDP( test_client_create );
+        RUN_TEST_UDP( test_server_create );
+        RUN_TEST_UDP( test_server_restart_global_sequence );
         RUN_TEST( test_client_server_connect );
-        RUN_TEST( test_client_server_ipv4_socket_connect );
-        RUN_TEST( test_client_server_ipv6_socket_connect );
-        RUN_TEST( test_client_server_dual_socket_connect );
+        RUN_TEST_UDP( test_client_server_ipv4_socket_connect );
+        RUN_TEST_UDP( test_client_server_ipv6_socket_connect );
+        RUN_TEST_UDP( test_client_server_dual_socket_connect );
+        RUN_TEST_UDP( test_server_update_drains_empty_datagrams );
         RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
@@ -10956,9 +11125,9 @@ void netcode_test()
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
-        RUN_TEST( test_loopback_callback_required );
+        RUN_TEST_UDP( test_loopback_callback_required );
 #if NETCODE_PACKET_TAGGING
-        RUN_TEST( test_packet_tagging );
+        RUN_TEST_UDP( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
 #if NETCODE_ENABLE_NONCE_AUDIT
         RUN_TEST( test_nonce_audit );
