@@ -68,6 +68,26 @@
 #define NETCODE_ENABLE_LOGGING 1
 #endif // #ifndef NETCODE_ENABLE_LOGGING
 
+#if NETCODE_ENABLE_TESTS
+
+static int netcode_test_real_socket_count;
+static int netcode_test_real_sleep_count;
+static int netcode_test_real_time_count;
+static int netcode_test_fake_time_enabled;
+static uint64_t netcode_test_fake_time_value;
+
+#endif // #if NETCODE_ENABLE_TESTS
+
+static uint64_t netcode_current_timestamp()
+{
+#if NETCODE_ENABLE_TESTS
+    if ( netcode_test_fake_time_enabled )
+        return netcode_test_fake_time_value;
+    netcode_test_real_time_count++;
+#endif // #if NETCODE_ENABLE_TESTS
+    return (uint64_t) time( NULL );
+}
+
 // ------------------------------------------------------------------
 
 #if NETCODE_PACKET_TAGGING
@@ -687,6 +707,10 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
     netcode_assert( netcode.initialized );
 
     netcode_assert( address->type != NETCODE_ADDRESS_NONE );
+
+#if NETCODE_ENABLE_TESTS
+    netcode_test_real_socket_count++;
+#endif // #if NETCODE_ENABLE_TESTS
 
     s->address = *address;
 
@@ -3250,7 +3274,7 @@ void netcode_client_process_packet( struct netcode_client_t * client, struct net
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
 
-    uint64_t current_timestamp = (uint64_t) time( NULL );
+    uint64_t current_timestamp = (uint64_t) netcode_current_timestamp();
 
     uint64_t sequence;
 
@@ -4372,7 +4396,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // connect token issued after the start can carry is the start time plus the maximum
     // lifetime the backend issues, so anything earlier than that is refused.
 
-    server->min_connect_token_expire_timestamp = (uint64_t) time( NULL ) + (uint64_t) server->config.max_connect_token_lifetime;
+    server->min_connect_token_expire_timestamp = (uint64_t) netcode_current_timestamp() + (uint64_t) server->config.max_connect_token_lifetime;
 
     // global packets (challenge, denied) encrypt with the same per-token server to client
     // keys as per-client packets, whose sequences start at zero, so the global sequence
@@ -4998,7 +5022,7 @@ void netcode_server_process_packet( struct netcode_server_t * server, struct net
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
 
-    uint64_t current_timestamp = (uint64_t) time( NULL );
+    uint64_t current_timestamp = (uint64_t) netcode_current_timestamp();
 
     netcode_server_read_and_process_packet( server, from, packet_data, packet_bytes, current_timestamp, allowed_packets );
 }
@@ -5071,7 +5095,7 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
     allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
     allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
 
-    uint64_t current_timestamp = (uint64_t) time( NULL );
+    uint64_t current_timestamp = (uint64_t) netcode_current_timestamp();
 
     if ( !server->config.network_simulator )
     {
@@ -5614,7 +5638,7 @@ int netcode_generate_connect_token( int num_server_addresses,
 
     // encrypt the buffer
 
-    uint64_t create_timestamp = time( NULL );
+    uint64_t create_timestamp = netcode_current_timestamp();
     uint64_t expire_timestamp = ( expire_seconds >= 0 ) ? ( create_timestamp + expire_seconds ) : 0xFFFFFFFFFFFFFFFFULL;
     if ( netcode_encrypt_connect_token_private( connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, nonce, private_key ) != NETCODE_OK )
         return NETCODE_ERROR;
@@ -5654,6 +5678,9 @@ int netcode_generate_connect_token( int num_server_addresses,
 
 void netcode_sleep( double time )
 {
+#if NETCODE_ENABLE_TESTS
+    netcode_test_real_sleep_count++;
+#endif // #if NETCODE_ENABLE_TESTS
     struct timespec ts;
     ts.tv_sec = (time_t) time;
     ts.tv_nsec = (long) ((time - (double) ( ts.tv_sec )) * 1000000000.0);
@@ -5691,6 +5718,9 @@ double netcode_time()
 
 void netcode_sleep( double time )
 {
+#if NETCODE_ENABLE_TESTS
+    netcode_test_real_sleep_count++;
+#endif // #if NETCODE_ENABLE_TESTS
     struct timespec ts;
     ts.tv_sec = (time_t) time;
     ts.tv_nsec = (long) ((time - (double) ( ts.tv_sec )) * 1000000000.0);
@@ -5724,6 +5754,9 @@ double netcode_time()
 
 void netcode_sleep( double time )
 {
+#if NETCODE_ENABLE_TESTS
+    netcode_test_real_sleep_count++;
+#endif // #if NETCODE_ENABLE_TESTS
     int milliseconds = (int) ( time * 1000 );
     Sleep( milliseconds );
 }
@@ -6737,7 +6770,7 @@ static void test_connect_token()
 
     // encrypt the buffer
 
-    uint64_t expire_timestamp = time( NULL ) + 30;
+    uint64_t expire_timestamp = netcode_current_timestamp() + 30;
     uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
     netcode_generate_nonce(nonce);
     uint8_t key[NETCODE_KEY_BYTES];
@@ -6853,7 +6886,7 @@ static void test_connection_request_packet()
 
     memcpy( encrypted_connect_token_data, connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
 
-    uint64_t connect_token_expire_timestamp = time( NULL ) + 30;
+    uint64_t connect_token_expire_timestamp = netcode_current_timestamp() + 30;
     uint8_t connect_token_nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
     netcode_generate_nonce(connect_token_nonce);
     uint8_t connect_token_key[NETCODE_KEY_BYTES];
@@ -6898,7 +6931,7 @@ static void test_connection_request_packet()
     memset( allowed_packets, 1, sizeof( allowed_packets ) );
 
     struct netcode_connection_request_packet_t * output_packet = (struct netcode_connection_request_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, connect_token_key, allowed_packets, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, connect_token_key, allowed_packets, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6942,7 +6975,7 @@ void test_connection_denied_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_denied_packet_t * output_packet = (struct netcode_connection_denied_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -6983,7 +7016,7 @@ void test_connection_challenge_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_challenge_packet_t * output_packet = (struct netcode_connection_challenge_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7026,7 +7059,7 @@ void test_connection_response_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_response_packet_t * output_packet = (struct netcode_connection_response_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7069,7 +7102,7 @@ void test_connection_keep_alive_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
     
     struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7113,7 +7146,7 @@ void test_connection_payload_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_payload_packet_t * output_packet = (struct netcode_connection_payload_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7155,7 +7188,7 @@ void test_connection_disconnect_packet()
     memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
 
     struct netcode_connection_disconnect_packet_t * output_packet = (struct netcode_connection_disconnect_packet_t*) 
-        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, netcode_current_timestamp(), 0, NULL, allowed_packet_types, NULL, NULL, NULL );
 
     check( output_packet );
 
@@ -7197,7 +7230,7 @@ void test_connect_token_public()
 
     // encrypt the buffer
 
-    uint64_t create_timestamp = time( NULL );
+    uint64_t create_timestamp = netcode_current_timestamp();
     uint64_t expire_timestamp = create_timestamp + 30;
     uint8_t connect_token_nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
     netcode_generate_nonce( connect_token_nonce );    
@@ -7544,6 +7577,9 @@ void test_replay_protection()
 
 static int num_ignored_asserts = 0;
 
+static void test_override_send_packet( void * context, struct netcode_address_t * to, NETCODE_CONST uint8_t * packet_data, int packet_bytes );
+static int test_override_receive_packet( void * context, struct netcode_address_t * from, uint8_t * packet_data, int max_packet_bytes );
+
 static void test_runtime_guards_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
 {
     (void) condition;
@@ -7566,6 +7602,9 @@ void test_runtime_guards()
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
     server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
 
     struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
 
@@ -7649,11 +7688,11 @@ void test_init_and_defaults()
         struct netcode_client_config_t client_config;
         memset( &client_config, 0, sizeof( client_config ) );
 
-        // port 0 asks the OS for an ephemeral port. This test only checks that a zeroed
-        // config yields working defaults -- it never connects -- so a fixed port buys
-        // nothing and makes the test fail whenever anything else on the machine happens
-        // to hold that port. Observed on a windows CI runner, 2026-07-26.
-        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:0", &client_config, 0.0 );
+        client_config.override_send_and_receive = 1;
+        client_config.send_packet_override = test_override_send_packet;
+        client_config.receive_packet_override = test_override_receive_packet;
+
+        struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
 
         check( client );
 
@@ -7664,8 +7703,11 @@ void test_init_and_defaults()
         struct netcode_server_config_t server_config;
         memset( &server_config, 0, sizeof( server_config ) );
 
-        // ephemeral here too, and for the same reason: nothing connects to this server.
-        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:0", &server_config, 0.0 );
+        server_config.override_send_and_receive = 1;
+        server_config.send_packet_override = test_override_send_packet;
+        server_config.receive_packet_override = test_override_receive_packet;
+
+        struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
 
         check( server );
 
@@ -8173,6 +8215,9 @@ void test_server_restart_global_sequence()
 
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
 
     struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
 
@@ -10852,6 +10897,9 @@ void test_loopback_callback_required()
 
     struct netcode_client_config_t client_config;
     netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
 
     struct netcode_client_t * client = netcode_client_create( "0.0.0.0:50000", &client_config, 0.0 );
 
@@ -10871,6 +10919,9 @@ void test_loopback_callback_required()
 
     struct netcode_server_config_t server_config;
     netcode_default_server_config( &server_config );
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
 
     struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
 
@@ -10899,8 +10950,41 @@ void test_loopback_callback_required()
     }                                                                       \
     while (0)
 
+void test_unit_tier_is_hermetic()
+{
+    check( netcode_test_real_socket_count == 0 );
+    check( netcode_test_real_sleep_count == 0 );
+    check( netcode_test_real_time_count == 0 );
+}
+
+void netcode_test_functional()
+{
+    RUN_TEST( test_client_create_error );
+    RUN_TEST( test_server_create_error );
+    RUN_TEST( test_client_create );
+    RUN_TEST( test_server_create );
+    RUN_TEST( test_client_server_ipv4_socket_connect );
+    RUN_TEST( test_client_server_ipv6_socket_connect );
+    RUN_TEST( test_client_server_dual_socket_connect );
+#if NETCODE_PACKET_TAGGING
+    RUN_TEST( test_packet_tagging );
+#endif // #if NETCODE_PACKET_TAGGING
+}
+
 void netcode_test()
 {
+    if ( getenv( "NETCODE_TEST_FUNCTIONAL" ) )
+    {
+        netcode_test_functional();
+        return;
+    }
+
+    netcode_test_real_socket_count = 0;
+    netcode_test_real_sleep_count = 0;
+    netcode_test_real_time_count = 0;
+    netcode_test_fake_time_value = 1700000000ULL;
+    netcode_test_fake_time_enabled = 1;
+
     //while ( 1 )
     {
         RUN_TEST( test_crypto_aead_vectors );
@@ -10925,17 +11009,10 @@ void netcode_test()
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
-        RUN_TEST( test_client_create_error );
-        RUN_TEST( test_server_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_network_simulator_allocation_failure );
-        RUN_TEST( test_client_create );
-        RUN_TEST( test_server_create );
         RUN_TEST( test_server_restart_global_sequence );
         RUN_TEST( test_client_server_connect );
-        RUN_TEST( test_client_server_ipv4_socket_connect );
-        RUN_TEST( test_client_server_ipv6_socket_connect );
-        RUN_TEST( test_client_server_dual_socket_connect );
         RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
@@ -10957,13 +11034,13 @@ void netcode_test()
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
         RUN_TEST( test_loopback_callback_required );
-#if NETCODE_PACKET_TAGGING
-        RUN_TEST( test_packet_tagging );
-#endif // #if NETCODE_PACKET_TAGGING
 #if NETCODE_ENABLE_NONCE_AUDIT
         RUN_TEST( test_nonce_audit );
 #endif // #if NETCODE_ENABLE_NONCE_AUDIT
+        RUN_TEST( test_unit_tier_is_hermetic );
     }
+
+    netcode_test_fake_time_enabled = 0;
 }
 
 #endif // #if NETCODE_ENABLE_TESTS
