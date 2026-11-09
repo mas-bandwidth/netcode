@@ -3201,6 +3201,12 @@ void netcode_client_process_packet_internal( struct netcode_client_t * client, s
             {
                 struct netcode_connection_keep_alive_packet_t * p = (struct netcode_connection_keep_alive_packet_t*) packet;
 
+                if ( p->max_clients <= 0 || p->max_clients > NETCODE_MAX_CLIENTS || p->client_index < 0 || p->client_index >= p->max_clients )
+                {
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection keep alive packet. client index or max clients is out of range\n" );
+                    break;
+                }
+
                 if ( client->state == NETCODE_CLIENT_STATE_CONNECTED )
                 {
                     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client received connection keep alive packet from server\n" );
@@ -7748,6 +7754,77 @@ static int test_override_receive_packet( void * context, struct netcode_address_
     return 0;
 }
 
+void test_client_keep_alive_packet_slot_validation()
+{
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( packet_key );
+
+    memcpy( client->context.read_packet_key, packet_key, NETCODE_KEY_BYTES );
+    client->connect_token.protocol_id = TEST_PROTOCOL_ID;
+
+    check( netcode_parse_address( "127.0.0.1:40000", &client->server_address ) == NETCODE_OK );
+
+    struct netcode_address_t from = client->server_address;
+
+    const int expected_client_index = 3;
+    const int expected_max_clients = 7;
+
+    client->client_index = expected_client_index;
+    client->max_clients = expected_max_clients;
+
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE );
+
+    struct
+    {
+        int client_index;
+        int max_clients;
+    } cases[] =
+    {
+        { -1, NETCODE_MAX_CLIENTS },
+        { 0, 0 },
+        { 0, NETCODE_MAX_CLIENTS + 1 },
+        { 5, 5 },
+        { 6, 5 }
+    };
+
+    const int num_cases = (int) ( sizeof( cases ) / sizeof( cases[0] ) );
+
+    int i;
+
+    for ( i = 0; i < num_cases; i++ )
+    {
+        struct netcode_connection_keep_alive_packet_t packet;
+
+        packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+        packet.client_index = cases[i].client_index;
+        packet.max_clients = cases[i].max_clients;
+
+        uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+        int bytes_written = netcode_write_packet( &packet, buffer, sizeof( buffer ), (uint64_t) ( i + 1 ), packet_key, TEST_PROTOCOL_ID );
+
+        check( bytes_written > 0 );
+
+        netcode_client_process_packet( client, &from, buffer, bytes_written );
+
+        check( client->client_index == expected_client_index );
+        check( client->max_clients == expected_max_clients );
+        check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE );
+    }
+
+    netcode_client_destroy( client );
+}
+
 void test_client_create_error()
 {
     struct netcode_client_config_t client_config;
@@ -11115,6 +11192,7 @@ void netcode_test()
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
         RUN_TEST( test_connection_keep_alive_packet );
+        RUN_TEST( test_client_keep_alive_packet_slot_validation );
         RUN_TEST( test_connection_payload_packet );
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
