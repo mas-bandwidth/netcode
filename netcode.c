@@ -7476,6 +7476,75 @@ void test_encryption_manager()
     check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == encryption_index );
 }
 
+static int test_key_is_zero( const uint8_t * key )
+{
+    int i;
+    for ( i = 0; i < NETCODE_KEY_BYTES; i++ )
+    {
+        if ( key[i] != 0 )
+            return 0;
+    }
+    return 1;
+}
+
+void test_encryption_manager_zeroes_keys()
+{
+    struct netcode_encryption_manager_t encryption_manager;
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    double time = 1000.0;
+
+    // slot 0 is owned by a connected client, slot 1 is free, slot 2 is removed below
+
+    struct netcode_address_t address[3];
+    uint8_t send_key[NETCODE_KEY_BYTES];
+    uint8_t receive_key[NETCODE_KEY_BYTES];
+    memset( address, 0, sizeof( address ) );
+    memset( send_key, 0xAB, sizeof( send_key ) );
+    memset( receive_key, 0xCD, sizeof( receive_key ) );
+
+    int i;
+    for ( i = 0; i < 3; i++ )
+    {
+        address[i].type = NETCODE_ADDRESS_IPV4;
+        address[i].data.ipv4[0] = 127;
+        address[i].data.ipv4[3] = 1;
+        address[i].port = (uint16_t) ( 30000 + i );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &address[i], send_key, receive_key, time, -1.0, TEST_TIMEOUT_SECONDS, -1 ) );
+    }
+
+    encryption_manager.client_index[0] = 0;
+
+    // after the timeout, removing the last mapping trims the expired free slot behind it
+
+    time += TEST_TIMEOUT_SECONDS + 1.0;
+
+    check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &address[2], time ) == 1 );
+    check( encryption_manager.num_encryption_mappings == 1 );
+
+    for ( i = 1; i < 3; i++ )
+    {
+        check( test_key_is_zero( encryption_manager.send_key + i * NETCODE_KEY_BYTES ) );
+        check( test_key_is_zero( encryption_manager.receive_key + i * NETCODE_KEY_BYTES ) );
+    }
+
+    // the connected client's keys survive the timeout
+
+    check( memcmp( encryption_manager.send_key, send_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( encryption_manager.receive_key, receive_key, NETCODE_KEY_BYTES ) == 0 );
+
+    // reset zeroes every key
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; i++ )
+    {
+        check( test_key_is_zero( encryption_manager.send_key + i * NETCODE_KEY_BYTES ) );
+        check( test_key_is_zero( encryption_manager.receive_key + i * NETCODE_KEY_BYTES ) );
+    }
+}
+
 void test_replay_protection()
 {
     struct netcode_replay_protection_t replay_protection;
@@ -10922,6 +10991,7 @@ void netcode_test()
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
+        RUN_TEST( test_encryption_manager_zeroes_keys );
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
