@@ -7276,6 +7276,31 @@ void test_replay_protection()
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 2 ) == 0 );
 }
 
+void test_read_packet_reserved_sequence()
+{
+    // the maximum sequence value is reserved by the replay window, so a packet that
+    // carries it is refused on read.
+
+    struct netcode_connection_denied_packet_t input_packet;
+    input_packet.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( packet_key );
+
+    int bytes_written = netcode_write_packet( &input_packet, buffer, sizeof( buffer ), UINT64_MAX, packet_key, TEST_PROTOCOL_ID );
+
+    check( bytes_written > 0 );
+
+    uint64_t sequence = 0;
+
+    uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
+
+    check( netcode_read_packet( buffer, bytes_written, &sequence, packet_key, TEST_PROTOCOL_ID, time( NULL ), 0, NULL, allowed_packet_types, NULL, NULL, NULL ) == NULL );
+}
+
 static int num_ignored_asserts = 0;
 
 static void test_runtime_guards_assert_handler( NETCODE_CONST char * condition, NETCODE_CONST char * function, NETCODE_CONST char * file, int line )
@@ -10656,6 +10681,7 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
+        RUN_TEST( test_read_packet_reserved_sequence );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
         RUN_TEST( test_client_create_error );
