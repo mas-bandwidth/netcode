@@ -8679,7 +8679,9 @@ void test_client_error_connect_token_expired_multiple_servers()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
 
-    check( netcode_generate_connect_token( 2, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+    const int connect_token_expiry = TEST_TIMEOUT_SECONDS + TEST_TIMEOUT_SECONDS / 2;
+
+    check( netcode_generate_connect_token( 2, server_address, server_address, connect_token_expiry, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -8694,7 +8696,7 @@ void test_client_error_connect_token_expired_multiple_servers()
 
         time += delta_time;
 
-        if ( time > 4.0 * TEST_CONNECT_TOKEN_EXPIRY )
+        if ( time > 4.0 * connect_token_expiry )
         {
             check( 0 );
             break;
