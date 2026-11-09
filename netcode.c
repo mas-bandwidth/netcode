@@ -477,11 +477,26 @@ typedef SOCKET netcode_socket_handle_t;
 typedef int netcode_socket_handle_t;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
+// -1 on posix (descriptor 0 is a valid socket), INVALID_SOCKET on windows
+
+#define NETCODE_SOCKET_HANDLE_INVALID ( (netcode_socket_handle_t) -1 )
+
 struct netcode_socket_t
 {
     struct netcode_address_t address;
     netcode_socket_handle_t handle;
 };
+
+static void netcode_socket_init( struct netcode_socket_t * socket )
+{
+    memset( socket, 0, sizeof( struct netcode_socket_t ) );
+    socket->handle = NETCODE_SOCKET_HANDLE_INVALID;
+}
+
+static int netcode_socket_handle_valid( netcode_socket_handle_t handle )
+{
+    return handle != NETCODE_SOCKET_HANDLE_INVALID;
+}
 
 struct netcode_socket_holder_t
 {
@@ -552,7 +567,7 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
     netcode_assert( socket );
     netcode_assert( netcode.initialized );
 
-    if ( socket->handle != 0 )
+    if ( netcode_socket_handle_valid( socket->handle ) )
     {
         #if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
         close( socket->handle );
@@ -561,7 +576,7 @@ void netcode_socket_destroy( struct netcode_socket_t * socket )
         #else
         #error unsupported platform
         #endif
-        socket->handle = 0;
+        socket->handle = NETCODE_SOCKET_HANDLE_INVALID;
     }
 }
 
@@ -694,14 +709,10 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 
     s->handle = socket( ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET, SOCK_DGRAM, IPPROTO_UDP );
 
-#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( s->handle == INVALID_SOCKET )
-#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( s->handle == 0 || s->handle == (netcode_socket_handle_t) -1 )
-#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    if ( !netcode_socket_handle_valid( s->handle ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to create socket\n" );
-        s->handle = 0;
+        s->handle = NETCODE_SOCKET_HANDLE_INVALID;
         return NETCODE_SOCKET_ERROR_CREATE_FAILED;
     }
 
@@ -876,7 +887,7 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
 void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcode_address_t * to, void * packet_data, int packet_bytes )
 {
     netcode_assert( socket );
-    netcode_assert( socket->handle != 0 );
+    netcode_assert( netcode_socket_handle_valid( socket->handle ) );
     netcode_assert( to );
     netcode_assert( to->type == NETCODE_ADDRESS_IPV6 || to->type == NETCODE_ADDRESS_IPV4 );
     netcode_assert( packet_data );
@@ -893,7 +904,7 @@ void netcode_socket_send_packet( struct netcode_socket_t * socket, struct netcod
 int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netcode_address_t * from, void * packet_data, int max_packet_size )
 {
     netcode_assert( socket );
-    netcode_assert( socket->handle != 0 );
+    netcode_assert( netcode_socket_handle_valid( socket->handle ) );
     netcode_assert( from );
     netcode_assert( packet_data );
     netcode_assert( max_packet_size > 0 );
@@ -902,48 +913,55 @@ int netcode_socket_receive_packet( struct netcode_socket_t * socket, struct netc
     typedef int socklen_t;
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
     
-    struct sockaddr_storage sockaddr_from;
-    memset( &sockaddr_from, 0, sizeof(sockaddr_from) );
+    while ( 1 )
+    {
+        struct sockaddr_storage sockaddr_from;
+        memset( &sockaddr_from, 0, sizeof(sockaddr_from) );
 
-    socklen_t from_length = sizeof( sockaddr_from );
+        socklen_t from_length = sizeof( sockaddr_from );
 
-    int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
+        int result = recvfrom( socket->handle, (char*) packet_data, max_packet_size, 0, (struct sockaddr*) &sockaddr_from, &from_length );
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result == SOCKET_ERROR )
-    {
-        int error = WSAGetLastError();
+        if ( result == SOCKET_ERROR )
+        {
+            int error = WSAGetLastError();
 
-        if ( error == WSAEWOULDBLOCK )
+            if ( error == WSAEWOULDBLOCK )
+                return 0;
+
+            if ( error == WSAEMSGSIZE )
+                continue;
+
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
+
             return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", error );
-
-        return 0;
-    }
+        }
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-    if ( result <= 0 )
-    {
-        if ( errno == EAGAIN )
+        if ( result < 0 )
+        {
+            if ( errno == EAGAIN || errno == EWOULDBLOCK )
+                return 0;
+
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
+
             return 0;
-
-        netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: recvfrom failed with error %d\n", errno );
-
-        return 0;
-    }
+        }
 #endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
-    if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
-    {
-        netcode_assert( 0 );
-        return 0;
+        if ( result == 0 )
+            continue;
+
+        if ( netcode_sockaddr_to_address( &sockaddr_from, from ) != NETCODE_OK )
+        {
+            netcode_assert( 0 );
+            return 0;
+        }
+
+        netcode_assert( result > 0 );
+
+        return result;
     }
-  
-    netcode_assert( result >= 0 );
-
-    int bytes_read = result;
-
-    return bytes_read;
 }
 
 // ----------------------------------------------------------------
@@ -2961,8 +2979,8 @@ struct netcode_client_t * netcode_client_create_dual( NETCODE_CONST char * addre
     struct netcode_socket_t socket_ipv4;
     struct netcode_socket_t socket_ipv6;
 
-    memset( &socket_ipv4, 0, sizeof( socket_ipv4 ) );
-    memset( &socket_ipv6, 0, sizeof( socket_ipv6 ) );
+    netcode_socket_init( &socket_ipv4 );
+    netcode_socket_init( &socket_ipv6 );
 
     if ( address1.type == NETCODE_ADDRESS_IPV4 || address2.type == NETCODE_ADDRESS_IPV4 )
     {
@@ -3182,6 +3200,12 @@ void netcode_client_process_packet_internal( struct netcode_client_t * client, s
             if ( netcode_address_equal( from, &client->server_address ) )
             {
                 struct netcode_connection_keep_alive_packet_t * p = (struct netcode_connection_keep_alive_packet_t*) packet;
+
+                if ( p->max_clients <= 0 || p->max_clients > NETCODE_MAX_CLIENTS || p->client_index < 0 || p->client_index >= p->max_clients )
+                {
+                    netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection keep alive packet. client index or max clients is out of range\n" );
+                    break;
+                }
 
                 if ( client->state == NETCODE_CLIENT_STATE_CONNECTED )
                 {
@@ -3549,9 +3573,9 @@ void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST
 
     if ( !client->loopback )
     {
-        uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+        union { struct netcode_connection_payload_packet_t packet; uint8_t data[NETCODE_MAX_PAYLOAD_BYTES*2]; } buffer;
 
-        struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+        struct netcode_connection_payload_packet_t * packet = &buffer.packet;
 
         packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
         packet->payload_bytes = packet_bytes;
@@ -4246,8 +4270,8 @@ struct netcode_server_t * netcode_server_create_dual( NETCODE_CONST char * serve
     struct netcode_socket_t socket_ipv4;
     struct netcode_socket_t socket_ipv6;
 
-    memset( &socket_ipv4, 0, sizeof( socket_ipv4 ) );
-    memset( &socket_ipv6, 0, sizeof( socket_ipv6 ) );
+    netcode_socket_init( &socket_ipv4 );
+    netcode_socket_init( &socket_ipv6 );
 
     if ( server_address1.type == NETCODE_ADDRESS_IPV4 || server_address2.type == NETCODE_ADDRESS_IPV4 )
     {
@@ -5092,10 +5116,10 @@ void netcode_server_receive_packets( struct netcode_server_t * server )
             }
             else
             {
-                if (server->socket_holder.ipv4.handle != 0)
+                if ( netcode_socket_handle_valid( server->socket_holder.ipv4.handle ) )
                     packet_bytes = netcode_socket_receive_packet( &server->socket_holder.ipv4, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
 
-                if ( packet_bytes == 0 && server->socket_holder.ipv6.handle != 0)
+                if ( packet_bytes == 0 && netcode_socket_handle_valid( server->socket_holder.ipv6.handle ) )
                     packet_bytes = netcode_socket_receive_packet( &server->socket_holder.ipv6, &from, packet_data, NETCODE_MAX_PACKET_BYTES );
             }
 
@@ -5281,9 +5305,9 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 
     if ( !server->client_loopback[client_index] )
     {
-        uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+        union { struct netcode_connection_payload_packet_t packet; uint8_t data[NETCODE_MAX_PAYLOAD_BYTES*2]; } buffer;
 
-        struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+        struct netcode_connection_payload_packet_t * packet = &buffer.packet;
 
         packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
         packet->payload_bytes = packet_bytes;
@@ -6383,6 +6407,23 @@ static void test_socket_buffer_size_back_off()
         check( netcode_socket_buffer_size_back_off( 32 * 1024, test_socket_buffer_os_try, &os ) == 0 );
         check( os.calls == 0 );
     }
+}
+
+static void test_socket_handle()
+{
+    // a fresh socket holds no handle, and destroying it touches nothing
+
+    struct netcode_socket_t socket;
+    netcode_socket_init( &socket );
+    check( !netcode_socket_handle_valid( socket.handle ) );
+    netcode_socket_destroy( &socket );
+    check( !netcode_socket_handle_valid( socket.handle ) );
+
+    // descriptor 0 is a valid socket handle on posix
+
+#if NETCODE_PLATFORM != NETCODE_PLATFORM_WINDOWS
+    check( netcode_socket_handle_valid( 0 ) );
+#endif // #if NETCODE_PLATFORM != NETCODE_PLATFORM_WINDOWS
 }
 
 static void test_address()
@@ -7723,6 +7764,77 @@ static int test_override_receive_packet( void * context, struct netcode_address_
     return 0;
 }
 
+void test_client_keep_alive_packet_slot_validation()
+{
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( packet_key );
+
+    memcpy( client->context.read_packet_key, packet_key, NETCODE_KEY_BYTES );
+    client->connect_token.protocol_id = TEST_PROTOCOL_ID;
+
+    check( netcode_parse_address( "127.0.0.1:40000", &client->server_address ) == NETCODE_OK );
+
+    struct netcode_address_t from = client->server_address;
+
+    const int expected_client_index = 3;
+    const int expected_max_clients = 7;
+
+    client->client_index = expected_client_index;
+    client->max_clients = expected_max_clients;
+
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE );
+
+    struct
+    {
+        int client_index;
+        int max_clients;
+    } cases[] =
+    {
+        { -1, NETCODE_MAX_CLIENTS },
+        { 0, 0 },
+        { 0, NETCODE_MAX_CLIENTS + 1 },
+        { 5, 5 },
+        { 6, 5 }
+    };
+
+    const int num_cases = (int) ( sizeof( cases ) / sizeof( cases[0] ) );
+
+    int i;
+
+    for ( i = 0; i < num_cases; i++ )
+    {
+        struct netcode_connection_keep_alive_packet_t packet;
+
+        packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+        packet.client_index = cases[i].client_index;
+        packet.max_clients = cases[i].max_clients;
+
+        uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+        int bytes_written = netcode_write_packet( &packet, buffer, sizeof( buffer ), (uint64_t) ( i + 1 ), packet_key, TEST_PROTOCOL_ID );
+
+        check( bytes_written > 0 );
+
+        netcode_client_process_packet( client, &from, buffer, bytes_written );
+
+        check( client->client_index == expected_client_index );
+        check( client->max_clients == expected_max_clients );
+        check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_RESPONSE );
+    }
+
+    netcode_client_destroy( client );
+}
+
 void test_client_create_error()
 {
     struct netcode_client_config_t client_config;
@@ -8044,8 +8156,8 @@ void test_client_create()
         netcode_parse_address( "127.0.0.1:40000", &test_address );
 
         check( client );
-        check( client->socket_holder.ipv4.handle != 0 );
-        check( client->socket_holder.ipv6.handle == 0 );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv4.handle ) );
+        check( !netcode_socket_handle_valid( client->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &client->address, &test_address ) );
 
         netcode_client_destroy( client );
@@ -8061,8 +8173,8 @@ void test_client_create()
         netcode_parse_address( "[::]:50000", &test_address );
 
         check( client );
-        check( client->socket_holder.ipv4.handle == 0 );
-        check( client->socket_holder.ipv6.handle != 0 );
+        check( !netcode_socket_handle_valid( client->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &client->address, &test_address ) );
 
         netcode_client_destroy( client );
@@ -8078,8 +8190,8 @@ void test_client_create()
         netcode_parse_address( "127.0.0.1:40000", &test_address );
 
         check( client );
-        check( client->socket_holder.ipv4.handle != 0 );
-        check( client->socket_holder.ipv6.handle != 0 );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &client->address, &test_address ) );
 
         netcode_client_destroy( client );
@@ -8095,8 +8207,8 @@ void test_client_create()
         netcode_parse_address( "[::]:50000", &test_address );
 
         check( client );
-        check( client->socket_holder.ipv4.handle != 0 );
-        check( client->socket_holder.ipv6.handle != 0 );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( client->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &client->address, &test_address ) );
 
         netcode_client_destroy( client );
@@ -8115,8 +8227,8 @@ void test_server_create()
         netcode_parse_address( "127.0.0.1:40000", &test_address );
 
         check( server );
-        check( server->socket_holder.ipv4.handle != 0 );
-        check( server->socket_holder.ipv6.handle == 0 );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv4.handle ) );
+        check( !netcode_socket_handle_valid( server->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &server->address, &test_address ) );
 
         netcode_server_destroy( server );
@@ -8132,8 +8244,8 @@ void test_server_create()
         netcode_parse_address( "[::1]:50000", &test_address );
 
         check( server );
-        check( server->socket_holder.ipv4.handle == 0 );
-        check( server->socket_holder.ipv6.handle != 0 );
+        check( !netcode_socket_handle_valid( server->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &server->address, &test_address ) );
 
         netcode_server_destroy( server );
@@ -8149,8 +8261,8 @@ void test_server_create()
         netcode_parse_address( "127.0.0.1:40000", &test_address );
 
         check( server );
-        check( server->socket_holder.ipv4.handle != 0 );
-        check( server->socket_holder.ipv6.handle != 0 );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &server->address, &test_address ) );
 
         netcode_server_destroy( server );
@@ -8166,8 +8278,8 @@ void test_server_create()
         netcode_parse_address( "[::1]:50000", &test_address );
 
         check( server );
-        check( server->socket_holder.ipv4.handle != 0 );
-        check( server->socket_holder.ipv6.handle != 0 );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv4.handle ) );
+        check( netcode_socket_handle_valid( server->socket_holder.ipv6.handle ) );
         check( netcode_address_equal( &server->address, &test_address ) );
 
         netcode_server_destroy( server );
@@ -8448,6 +8560,119 @@ void test_client_server_dual_socket_connect()
     client_server_socket_connect_to("0.0.0.0:50000", "[::]:50000", "127.0.0.1:40000", "[::1]:40000", "[::1]:40000");
 
     client_server_socket_connect_to("0.0.0.0:50000", "[::]:50000", "[::1]:40000", "127.0.0.1:40000", "127.0.0.1:40000");
+}
+
+void test_server_update_drains_empty_datagrams()
+{
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, time );
+
+    check( client );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:40000", &server_config, time );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        netcode_sleep( 0.01 );
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+
+    netcode_sleep( 0.01 );
+
+    netcode_server_update( server, time );
+
+    while ( 1 )
+    {
+        int packet_bytes;
+        uint64_t packet_sequence;
+        void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+        if ( !packet )
+            break;
+        (void) packet_bytes;
+        (void) packet_sequence;
+        netcode_server_free_packet( server, packet );
+    }
+
+    struct netcode_address_t server_address_value;
+    check( netcode_parse_address( server_address, &server_address_value ) == NETCODE_OK );
+
+    struct sockaddr_storage sockaddr_to;
+    socklen_t sockaddr_to_length = netcode_address_to_sockaddr( &server_address_value, &sockaddr_to );
+
+    int i;
+    for ( i = 0; i < 50; i++ )
+    {
+        (void) sendto( client->socket_holder.ipv4.handle, "", 0, 0, (struct sockaddr*) &sockaddr_to, sockaddr_to_length );
+    }
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_SIZE];
+    for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; i++ )
+        packet_data[i] = (uint8_t) i;
+
+    netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+
+    netcode_server_update( server, time );
+
+    int received = 0;
+
+    while ( 1 )
+    {
+        int packet_bytes;
+        uint64_t packet_sequence;
+        void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+        if ( !packet )
+            break;
+        if ( packet_bytes == NETCODE_MAX_PACKET_SIZE && memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 )
+            received = 1;
+        netcode_server_free_packet( server, packet );
+    }
+
+    check( received );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
 }
 
 void test_client_server_keep_alive()
@@ -10909,6 +11134,54 @@ void test_loopback_callback_required()
     }                                                                       \
     while (0)
 
+static int netcode_test_udp_socket_available()
+{
+    // tests that bind real UDP sockets cannot run in a sandbox that refuses
+    // them. probe once per test with an ephemeral loopback port so those
+    // tests skip rather than fail where the platform offers no UDP at all.
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    SOCKET socket_handle = socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+    if ( socket_handle == INVALID_SOCKET )
+        return 0;
+#else
+    int socket_handle = socket( AF_INET, SOCK_DGRAM, 0 );
+    if ( socket_handle < 0 )
+        return 0;
+#endif
+
+    struct sockaddr_in address;
+    memset( &address, 0, sizeof( address ) );
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+    address.sin_port = 0;
+
+    int result = bind( socket_handle, (struct sockaddr*) &address, sizeof( address ) );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    closesocket( socket_handle );
+#else
+    close( socket_handle );
+#endif
+
+    return result == 0;
+}
+
+#define RUN_TEST_UDP( test_function )                                       \
+    do                                                                      \
+    {                                                                       \
+        if ( netcode_test_udp_socket_available() )                          \
+        {                                                                   \
+            printf( #test_function "\n" );                                  \
+            test_function();                                                \
+        }                                                                   \
+        else                                                                \
+        {                                                                   \
+            printf( "skip " #test_function " (UDP sockets unavailable)\n" );\
+        }                                                                   \
+    }                                                                       \
+    while (0)
+
 void netcode_test()
 {
     //while ( 1 )
@@ -10921,6 +11194,7 @@ void netcode_test()
         RUN_TEST( test_sequence );
         RUN_TEST( test_socket_handle_signed );
         RUN_TEST( test_socket_buffer_size_back_off );
+        RUN_TEST( test_socket_handle );
         RUN_TEST( test_connect_token );
         RUN_TEST( test_generate_connect_token_out_of_range );
         RUN_TEST( test_challenge_token );
@@ -10929,24 +11203,26 @@ void netcode_test()
         RUN_TEST( test_connection_challenge_packet );
         RUN_TEST( test_connection_response_packet );
         RUN_TEST( test_connection_keep_alive_packet );
+        RUN_TEST( test_client_keep_alive_packet_slot_validation );
         RUN_TEST( test_connection_payload_packet );
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
-        RUN_TEST( test_runtime_guards );
-        RUN_TEST( test_init_and_defaults );
-        RUN_TEST( test_client_create_error );
-        RUN_TEST( test_server_create_error );
+        RUN_TEST_UDP( test_runtime_guards );
+        RUN_TEST_UDP( test_init_and_defaults );
+        RUN_TEST_UDP( test_client_create_error );
+        RUN_TEST_UDP( test_server_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_network_simulator_allocation_failure );
-        RUN_TEST( test_client_create );
-        RUN_TEST( test_server_create );
-        RUN_TEST( test_server_restart_global_sequence );
+        RUN_TEST_UDP( test_client_create );
+        RUN_TEST_UDP( test_server_create );
+        RUN_TEST_UDP( test_server_restart_global_sequence );
         RUN_TEST( test_client_server_connect );
-        RUN_TEST( test_client_server_ipv4_socket_connect );
-        RUN_TEST( test_client_server_ipv6_socket_connect );
-        RUN_TEST( test_client_server_dual_socket_connect );
+        RUN_TEST_UDP( test_client_server_ipv4_socket_connect );
+        RUN_TEST_UDP( test_client_server_ipv6_socket_connect );
+        RUN_TEST_UDP( test_client_server_dual_socket_connect );
+        RUN_TEST_UDP( test_server_update_drains_empty_datagrams );
         RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
@@ -10967,9 +11243,9 @@ void netcode_test()
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
-        RUN_TEST( test_loopback_callback_required );
+        RUN_TEST_UDP( test_loopback_callback_required );
 #if NETCODE_PACKET_TAGGING
-        RUN_TEST( test_packet_tagging );
+        RUN_TEST_UDP( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
 #if NETCODE_ENABLE_NONCE_AUDIT
         RUN_TEST( test_nonce_audit );

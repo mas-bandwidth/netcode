@@ -2,8 +2,10 @@
     fuzz netcode_parse_address.
 
     address strings come from the game's backend via connect tokens and from
-    application code, and the parser does in-place string surgery with a safety
-    margin, so it deserves adversarial input.
+    application code, and the parser copies the string into a fixed
+    NETCODE_MAX_ADDRESS_STRING_LENGTH buffer (truncating longer input) and does
+    in-place string surgery there, scanning back from the end for the port and
+    stripping the brackets, so it deserves adversarial input.
 
     also checks the round trip property: any address that parses must survive
     netcode_address_to_string -> netcode_parse_address unchanged.
