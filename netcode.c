@@ -4737,7 +4737,13 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
-    double expire_time = ( connect_token_private.timeout_seconds >= 0 ) ? server->time + connect_token_private.timeout_seconds : -1.0;
+    uint64_t token_lifetime = ( packet->connect_token_expire_timestamp == UINT64_MAX )
+                            ? (uint64_t) server->config.max_connect_token_lifetime
+                            : packet->connect_token_expire_timestamp - current_timestamp;
+
+    double expire_time = ( connect_token_private.timeout_seconds >= 0 )
+                       ? server->time + connect_token_private.timeout_seconds
+                       : server->time + (double) token_lifetime;
 
     if ( !netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager, 
                                                              from, 
@@ -10220,6 +10226,72 @@ void test_connect_token_entries()
     check( netcode_connect_token_entries_find_or_add( connect_token_entries, &address_a, mac, expire_timestamp, expire_timestamp, 600.0 ) >= 0 );
 }
 
+void test_connection_request_mapping_expires_with_connect_token()
+{
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    double time = 100.0;
+
+    struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, time );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    NETCODE_CONST char * server_address = "[::1]:40000";
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+    check( netcode_generate_connect_token( 1, &server_address, &server_address, TEST_CONNECT_TOKEN_EXPIRY, -1, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token_data ) );
+
+    struct netcode_connect_token_t connect_token;
+    check( netcode_read_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, &connect_token ) == NETCODE_OK );
+
+    struct netcode_address_t from;
+    check( netcode_parse_address( "[::1]:50000", &from ) == NETCODE_OK );
+
+    struct netcode_connection_request_packet_t packet;
+    memset( &packet, 0, sizeof( packet ) );
+    packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+    memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    packet.protocol_id = TEST_PROTOCOL_ID;
+    packet.connect_token_expire_timestamp = connect_token.expire_timestamp;
+    memcpy( packet.connect_token_nonce, connect_token.nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
+    memcpy( packet.connect_token_data, connect_token.private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    check( netcode_decrypt_connect_token_private( packet.connect_token_data,
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES,
+                                                  NETCODE_VERSION_INFO,
+                                                  TEST_PROTOCOL_ID,
+                                                  packet.connect_token_expire_timestamp,
+                                                  packet.connect_token_nonce,
+                                                  private_key ) == NETCODE_OK );
+
+    // the request arrives with two seconds left on its connect token
+
+    uint64_t current_timestamp = connect_token.expire_timestamp - 2;
+
+    netcode_server_process_connection_request_packet( server, &from, &packet, current_timestamp );
+
+    check( netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, time ) != -1 );
+
+    // the handshake is never completed, so the pending mapping must not outlive the connect token
+
+    double after_token_expires = time + 3.0;
+
+    check( netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from, after_token_expires ) == -1 );
+
+    netcode_server_destroy( server );
+}
+
 /*
     A client and a server wired directly to each other through the send and receive overrides.
     Packets are handed straight to the other side, so the handshake is exercised with no sockets,
@@ -11336,6 +11408,7 @@ void netcode_test()
         RUN_TEST( test_server_disconnect_callback_reentry );
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_connect_token_entries );
+        RUN_TEST( test_connection_request_mapping_expires_with_connect_token );
         RUN_TEST( test_client_server_connection_request_retransmission );
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
