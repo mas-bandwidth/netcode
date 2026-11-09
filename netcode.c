@@ -3671,7 +3671,7 @@ void netcode_client_connect_loopback( struct netcode_client_t * client, int clie
     }
 
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "client connected to server via loopback as client %d\n", client_index );
-    client->state = NETCODE_CLIENT_STATE_CONNECTED;
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
     client->client_index = client_index;
     client->max_clients = max_clients;
     client->loopback = 1;
@@ -10842,6 +10842,68 @@ void test_packet_tagging()
 
 #endif // #if NETCODE_PACKET_TAGGING
 
+struct test_loopback_state_change_context_t
+{
+    int num_state_changes;
+    int from_state;
+    int to_state;
+};
+
+void test_loopback_state_change_callback( void * _context, int from_state, int to_state )
+{
+    struct test_loopback_state_change_context_t * context = (struct test_loopback_state_change_context_t*) _context;
+    context->num_state_changes++;
+    context->from_state = from_state;
+    context->to_state = to_state;
+}
+
+void test_loopback_noop_packet_callback( void * _context, int client_index, NETCODE_CONST uint8_t * packet_data, int packet_bytes, uint64_t packet_sequence )
+{
+    (void) _context;
+    (void) client_index;
+    (void) packet_data;
+    (void) packet_bytes;
+    (void) packet_sequence;
+}
+
+void test_loopback_state_change()
+{
+    struct test_loopback_state_change_context_t context;
+    memset( &context, 0, sizeof( context ) );
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.callback_context = &context;
+    client_config.state_change_callback = test_loopback_state_change_callback;
+    client_config.send_loopback_packet_callback = test_loopback_noop_packet_callback;
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "0.0.0.0:50000", &client_config, 0.0 );
+
+    check( client );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
+    check( context.num_state_changes == 0 );
+
+    netcode_client_connect_loopback( client, 0, 1 );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( context.num_state_changes == 1 );
+    check( context.from_state == NETCODE_CLIENT_STATE_DISCONNECTED );
+    check( context.to_state == NETCODE_CLIENT_STATE_CONNECTED );
+
+    netcode_client_disconnect_loopback( client );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
+    check( context.num_state_changes == 2 );
+    check( context.from_state == NETCODE_CLIENT_STATE_CONNECTED );
+    check( context.to_state == NETCODE_CLIENT_STATE_DISCONNECTED );
+
+    netcode_client_destroy( client );
+}
+
 void test_loopback_callback_required()
 {
     // entering loopback with send_loopback_packet_callback unset would call a null pointer
@@ -10956,6 +11018,7 @@ void netcode_test()
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
+        RUN_TEST( test_loopback_state_change );
         RUN_TEST( test_loopback_callback_required );
 #if NETCODE_PACKET_TAGGING
         RUN_TEST( test_packet_tagging );
