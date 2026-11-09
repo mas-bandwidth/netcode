@@ -3842,6 +3842,8 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                         break;
                     }
                     encryption_manager->address[index].type = NETCODE_ADDRESS_NONE;
+                    sodium_memzero( encryption_manager->send_key + index * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
+                    sodium_memzero( encryption_manager->receive_key + index * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
