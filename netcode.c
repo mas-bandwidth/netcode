@@ -4520,11 +4520,6 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     server->client_disconnect_reason[client_index] = disconnect_reason;
 
-    if ( server->config.connect_disconnect_callback )
-    {
-        server->config.connect_disconnect_callback( server->config.callback_context, client_index, 0 );
-    }
-
     if ( send_disconnect_packets )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent disconnect packets to client %d\n", client_index );
@@ -4546,6 +4541,17 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
     server->encryption_manager.client_index[server->client_encryption_index[client_index]] = -1;
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
+
+    // mark the slot disconnected before the callback so a re-entrant disconnect of
+    // this slot returns at the connected guard. the rest of the slot stays readable
+    // from inside the callback until the reset below.
+
+    server->client_connected[client_index] = 0;
+
+    if ( server->config.connect_disconnect_callback )
+    {
+        server->config.connect_disconnect_callback( server->config.callback_context, client_index, 0 );
+    }
 
     netcode_server_reset_client_slot( server, client_index );
 }
@@ -5503,6 +5509,11 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected loopback client %d\n", client_index );
 
     server->client_disconnect_reason[client_index] = NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT;
+
+    // match the remote disconnect path: mark the slot disconnected so a re-entrant
+    // disconnect is a no-op, keeping the rest of the slot readable in the callback.
+
+    server->client_connected[client_index] = 0;
 
     if ( server->config.connect_disconnect_callback )
     {
@@ -9900,6 +9911,104 @@ void test_server_client_disconnect_reason()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+static struct netcode_server_t * disconnect_reentry_server;
+static int disconnect_reentry_calls;
+static int disconnect_reentry_depth;
+static uint64_t disconnect_reentry_client_id;
+
+static void test_server_disconnect_callback_reentry_callback( void * context, int client_index, int connected )
+{
+    (void) context;
+
+    if ( connected != 0 )
+        return;
+
+    disconnect_reentry_calls++;
+    disconnect_reentry_depth++;
+
+    // stop once the callback has run again. a depth past one fails the test,
+    // and returning here keeps a recursive disconnect from running away.
+
+    if ( disconnect_reentry_depth > 1 )
+    {
+        printf( "disconnect callback reentered: depth %d calls %d\n", disconnect_reentry_depth, disconnect_reentry_calls );
+        fflush( stdout );
+        check( disconnect_reentry_depth <= 1 );
+        disconnect_reentry_depth--;
+        return;
+    }
+
+    // the departing client stays readable from inside the callback
+
+    disconnect_reentry_client_id = netcode_server_client_id( disconnect_reentry_server, client_index );
+
+    netcode_server_disconnect_client( disconnect_reentry_server, client_index );
+
+    disconnect_reentry_depth--;
+}
+
+void test_server_disconnect_callback_reentry()
+{
+    // one slot, marked connected, disconnected directly. the callback disconnects
+    // that same slot. the callback must run once and the slot must end disconnected.
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
+    server_config.connect_disconnect_callback = test_server_disconnect_callback_reentry_callback;
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:0", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    int client_index = 0;
+
+    struct netcode_address_t address;
+    check( netcode_parse_address( "127.0.0.1:50000", &address ) == NETCODE_OK );
+
+    uint8_t send_key[NETCODE_KEY_BYTES];
+    uint8_t receive_key[NETCODE_KEY_BYTES];
+    memset( send_key, 1, sizeof( send_key ) );
+    memset( receive_key, 2, sizeof( receive_key ) );
+
+    check( netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager,
+                                                              &address,
+                                                              send_key,
+                                                              receive_key,
+                                                              server->time,
+                                                              -1.0,
+                                                              0,
+                                                              -1 ) == 1 );
+
+    server->encryption_manager.client_index[0] = client_index;
+    server->client_encryption_index[client_index] = 0;
+    server->client_address[client_index] = address;
+    server->client_connected[client_index] = 1;
+    server->client_loopback[client_index] = 0;
+    server->client_id[client_index] = 1;
+    server->num_connected_clients = 1;
+
+    disconnect_reentry_server = server;
+    disconnect_reentry_calls = 0;
+    disconnect_reentry_depth = 0;
+    disconnect_reentry_client_id = 0;
+
+    netcode_server_disconnect_client( server, client_index );
+
+    check( disconnect_reentry_calls == 1 );
+    check( disconnect_reentry_depth == 0 );
+    check( disconnect_reentry_client_id == 1 );
+    check( netcode_server_client_connected( server, client_index ) == 0 );
+    check( netcode_server_num_connected_clients( server ) == 0 );
+
+    netcode_server_destroy( server );
+}
+
 void test_client_reconnect()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -11224,6 +11333,7 @@ void netcode_test()
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
         RUN_TEST( test_server_client_disconnect_reason );
+        RUN_TEST( test_server_disconnect_callback_reentry );
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_connect_token_entries );
         RUN_TEST( test_client_server_connection_request_retransmission );
