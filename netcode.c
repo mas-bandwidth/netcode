@@ -3573,9 +3573,9 @@ void netcode_client_send_packet( struct netcode_client_t * client, NETCODE_CONST
 
     if ( !client->loopback )
     {
-        uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+        union { struct netcode_connection_payload_packet_t packet; uint8_t data[NETCODE_MAX_PAYLOAD_BYTES*2]; } buffer;
 
-        struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+        struct netcode_connection_payload_packet_t * packet = &buffer.packet;
 
         packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
         packet->payload_bytes = packet_bytes;
@@ -5305,9 +5305,9 @@ void netcode_server_send_packet( struct netcode_server_t * server, int client_in
 
     if ( !server->client_loopback[client_index] )
     {
-        uint8_t buffer[NETCODE_MAX_PAYLOAD_BYTES*2];
+        union { struct netcode_connection_payload_packet_t packet; uint8_t data[NETCODE_MAX_PAYLOAD_BYTES*2]; } buffer;
 
-        struct netcode_connection_payload_packet_t * packet = (struct netcode_connection_payload_packet_t*) buffer;
+        struct netcode_connection_payload_packet_t * packet = &buffer.packet;
 
         packet->packet_type = NETCODE_CONNECTION_PAYLOAD_PACKET;
         packet->payload_bytes = packet_bytes;
