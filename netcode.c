@@ -5547,6 +5547,11 @@ uint16_t netcode_server_get_port( struct netcode_server_t * server )
 
 // ----------------------------------------------------------------
 
+static uint64_t netcode_connect_token_expire_timestamp( uint64_t create_timestamp, int expire_seconds )
+{
+    return ( expire_seconds >= 0 ) ? ( create_timestamp + expire_seconds ) : UINT64_MAX;
+}
+
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** public_server_addresses, 
                                     NETCODE_CONST char ** internal_server_addresses, 
@@ -5615,7 +5620,7 @@ int netcode_generate_connect_token( int num_server_addresses,
     // encrypt the buffer
 
     uint64_t create_timestamp = time( NULL );
-    uint64_t expire_timestamp = ( expire_seconds >= 0 ) ? ( create_timestamp + expire_seconds ) : 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t expire_timestamp = netcode_connect_token_expire_timestamp( create_timestamp, expire_seconds );
     if ( netcode_encrypt_connect_token_private( connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, nonce, private_key ) != NETCODE_OK )
         return NETCODE_ERROR;
 
@@ -6657,6 +6662,15 @@ static void test_oor_assert_handler( NETCODE_CONST char * condition, NETCODE_CON
     // deliberately RETURNS. netcode.h documents that a custom handler may do this and
     // execution continues past the failed assert -- which is the only way to reach the
     // release-build code path from a test binary that has asserts compiled in.
+}
+
+static void test_connect_token_expire_timestamp()
+{
+    const uint64_t create_timestamp = 1000;
+    check( netcode_connect_token_expire_timestamp( create_timestamp, -1 ) == UINT64_MAX );
+    check( netcode_connect_token_expire_timestamp( create_timestamp, -30 ) == UINT64_MAX );
+    check( netcode_connect_token_expire_timestamp( create_timestamp, 0 ) == create_timestamp );
+    check( netcode_connect_token_expire_timestamp( create_timestamp, 30 ) == create_timestamp + 30 );
 }
 
 static void test_generate_connect_token_out_of_range()
@@ -10911,6 +10925,7 @@ void netcode_test()
         RUN_TEST( test_sequence );
         RUN_TEST( test_socket_buffer_size_back_off );
         RUN_TEST( test_connect_token );
+        RUN_TEST( test_connect_token_expire_timestamp );
         RUN_TEST( test_generate_connect_token_out_of_range );
         RUN_TEST( test_challenge_token );
         RUN_TEST( test_connection_request_packet );

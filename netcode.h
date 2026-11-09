@@ -260,6 +260,15 @@ uint16_t netcode_client_get_port( struct netcode_client_t * client );
 
 struct netcode_address_t * netcode_client_server_address( struct netcode_client_t * client );
 
+/*
+    expire_seconds < 0 is a convenience for development and testing: it sets the
+    token's expire_timestamp to UINT64_MAX instead of a finite expiry time.
+    Such a token bypasses the server restart expiry floor and can remain valid
+    across restarts that keep the same private_key and protocol_id. Once admitted,
+    it occupies a connect-token history slot for the rest of that server run;
+    disconnecting the client does not reclaim the slot. Prefer a finite expiry
+    for production tokens.
+*/
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** public_server_addresses, 
                                     NETCODE_CONST char ** internal_server_addresses, 
