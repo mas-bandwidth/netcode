@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
-#include <math.h>
 #include <time.h>
 
 #ifdef _MSC_VER
@@ -37,9 +36,6 @@
 #endif // #ifdef _MSC_VER
 
 #include <sodium.h>
-
-#define NETCODE_SOCKET_IPV6         1
-#define NETCODE_SOCKET_IPV4         2
 
 #define NETCODE_CONNECT_TOKEN_NONCE_BYTES 24
 #define NETCODE_CONNECT_TOKEN_PRIVATE_BYTES 1024
@@ -4045,43 +4041,6 @@ void netcode_connect_token_entries_consume( struct netcode_connect_token_entry_t
     netcode_assert( index < NETCODE_MAX_CONNECT_TOKEN_ENTRIES );
 
     connect_token_entries[index].state = NETCODE_CONNECT_TOKEN_ENTRY_CONSUMED;
-}
-
-typedef uint64_t netcode_fnv_t;
-
-void netcode_fnv_init( netcode_fnv_t * fnv )
-{
-    *fnv = 0xCBF29CE484222325;
-}
-
-void netcode_fnv_write( netcode_fnv_t * fnv, NETCODE_CONST uint8_t * data, size_t size )
-{
-    for ( size_t i = 0; i < size; i++ )
-    {
-        (*fnv) ^= data[i];
-        (*fnv) *= 0x00000100000001B3;
-    }
-}
-
-uint64_t netcode_fnv_finalize( netcode_fnv_t * fnv )
-{
-    return *fnv;
-}
-
-uint64_t netcode_hash_string( NETCODE_CONST char * string )
-{
-    netcode_fnv_t fnv;
-    netcode_fnv_init( &fnv );
-    netcode_fnv_write( &fnv, (uint8_t *)( string ), strlen( string ) );
-    return netcode_fnv_finalize( &fnv );
-}
-
-uint64_t netcode_hash_data( NETCODE_CONST uint8_t * data, size_t size )
-{
-    netcode_fnv_t fnv;
-    netcode_fnv_init( &fnv );
-    netcode_fnv_write( &fnv, (uint8_t *)( data ), size );
-    return netcode_fnv_finalize( &fnv );
 }
 
 // ----------------------------------------------------------------
