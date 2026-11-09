@@ -1965,10 +1965,9 @@ void * netcode_read_packet( uint8_t * buffer,
             return NULL;
         }
 
-        // a connect token that could have been issued before the server started is refused: its keys
-        // were already used to encrypt packets under sequence numbers that start again from zero.
+        // refuse connect tokens expiring at or before min_connect_token_expire_timestamp.
 
-        if ( packet_connect_token_expire_timestamp < min_connect_token_expire_timestamp )
+        if ( packet_connect_token_expire_timestamp <= min_connect_token_expire_timestamp )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token predates the server start\n" );
             return NULL;
@@ -4394,7 +4393,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // a connect token issued before this server started carries keys that already encrypted
     // packets at sequence numbers this run starts again from. the earliest expire timestamp a
     // connect token issued after the start can carry is the start time plus the maximum
-    // lifetime the backend issues, so anything earlier than that is refused.
+    // lifetime the backend issues, so anything at or before that is refused.
 
     server->min_connect_token_expire_timestamp = (uint64_t) time( NULL ) + (uint64_t) server->config.max_connect_token_lifetime;
 
@@ -6703,7 +6702,9 @@ static void test_address()
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
-#define TEST_CONNECT_TOKEN_EXPIRY   30
+// one second above the default maximum, so a token generated just after a server start still
+// expires strictly after the server start floor rather than exactly at it
+#define TEST_CONNECT_TOKEN_EXPIRY   ( NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME + 1 )
 #define TEST_TIMEOUT_SECONDS        15
 
 static int test_oor_asserts_fired = 0;
@@ -10588,7 +10589,7 @@ void test_client_error_connect_token_predates_server_start()
     check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
     check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
-    // a connect token with the full lifetime connects
+    // a connect token that expires after the server start floor connects
 
     test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, TEST_CONNECT_TOKEN_EXPIRY );
 
@@ -10596,6 +10597,43 @@ void test_client_error_connect_token_predates_server_start()
 
     check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTED );
     check( netcode_server_num_connected_clients( test_wire.server ) == 1 );
+
+    test_wire_destroy();
+}
+
+void test_client_error_connect_token_at_server_start_floor()
+{
+    test_wire_create( 0 );
+
+    double current_time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    // a connect token whose expire timestamp equals the server start floor is refused
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    int same_second = 0;
+    int attempt;
+    for ( attempt = 0; attempt < 10 && !same_second; attempt++ )
+    {
+        uint64_t start_second = (uint64_t) time( NULL );
+
+        test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME );
+
+        netcode_server_stop( test_wire.server );
+        netcode_server_start( test_wire.server, 1 );
+        netcode_server_stop( test_wire.server );
+        netcode_server_start( test_wire.server, 1 );
+
+        same_second = ( (uint64_t) time( NULL ) == start_second );
+    }
+
+    check( same_second );
+
+    test_wire_connect_client( connect_token, &current_time, delta_time );
+
+    check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
+    check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
     test_wire_destroy();
 }
@@ -11413,6 +11451,7 @@ void netcode_test()
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
         RUN_TEST( test_client_error_connect_token_predates_server_start );
+        RUN_TEST( test_client_error_connect_token_at_server_start_floor );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
         RUN_TEST_UDP( test_loopback_callback_required );

@@ -63,7 +63,7 @@ int main( void )
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
     NETCODE_CONST char * server_addresses[] = { addr };
 
-    if ( netcode_generate_connect_token( 1, server_addresses, server_addresses, 30, 5,
+    if ( netcode_generate_connect_token( 1, server_addresses, server_addresses, NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME + 1, 5,
                                          client_id, server_config.protocol_id,
                                          private_key, user_data, connect_token ) != NETCODE_OK )
     { printf( "RESULT fail token\n" ); return 1; }
