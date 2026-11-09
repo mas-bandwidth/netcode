@@ -4536,15 +4536,18 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
 
-    netcode_server_reset_client_slot( server, client_index );
+    // mark the slot disconnected before the callback so a re-entrant disconnect of
+    // this slot returns at the connected guard. the rest of the slot stays readable
+    // from inside the callback until the reset below.
 
-    // slot is already clear, so a re-entrant disconnect of this slot returns
-    // at the connected guard instead of running the callback again
+    server->client_connected[client_index] = 0;
 
     if ( server->config.connect_disconnect_callback )
     {
         server->config.connect_disconnect_callback( server->config.callback_context, client_index, 0 );
     }
+
+    netcode_server_reset_client_slot( server, client_index );
 }
 
 void netcode_server_disconnect_client( struct netcode_server_t * server, int client_index )
@@ -5500,6 +5503,11 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     netcode_printf( NETCODE_LOG_LEVEL_INFO, "server disconnected loopback client %d\n", client_index );
 
     server->client_disconnect_reason[client_index] = NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT;
+
+    // match the remote disconnect path: mark the slot disconnected so a re-entrant
+    // disconnect is a no-op, keeping the rest of the slot readable in the callback.
+
+    server->client_connected[client_index] = 0;
 
     if ( server->config.connect_disconnect_callback )
     {
@@ -9829,6 +9837,7 @@ void test_server_client_disconnect_reason()
 static struct netcode_server_t * disconnect_reentry_server;
 static int disconnect_reentry_calls;
 static int disconnect_reentry_depth;
+static uint64_t disconnect_reentry_client_id;
 
 static void test_server_disconnect_callback_reentry_callback( void * context, int client_index, int connected )
 {
@@ -9851,6 +9860,10 @@ static void test_server_disconnect_callback_reentry_callback( void * context, in
         disconnect_reentry_depth--;
         return;
     }
+
+    // the departing client stays readable from inside the callback
+
+    disconnect_reentry_client_id = netcode_server_client_id( disconnect_reentry_server, client_index );
 
     netcode_server_disconnect_client( disconnect_reentry_server, client_index );
 
@@ -9906,11 +9919,13 @@ void test_server_disconnect_callback_reentry()
     disconnect_reentry_server = server;
     disconnect_reentry_calls = 0;
     disconnect_reentry_depth = 0;
+    disconnect_reentry_client_id = 0;
 
     netcode_server_disconnect_client( server, client_index );
 
     check( disconnect_reentry_calls == 1 );
     check( disconnect_reentry_depth == 0 );
+    check( disconnect_reentry_client_id == 1 );
     check( netcode_server_client_connected( server, client_index ) == 0 );
     check( netcode_server_num_connected_clients( server ) == 0 );
 
