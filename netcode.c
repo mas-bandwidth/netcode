@@ -11019,6 +11019,54 @@ void test_loopback_callback_required()
     }                                                                       \
     while (0)
 
+static int netcode_test_udp_socket_available()
+{
+    // tests that bind real UDP sockets cannot run in a sandbox that refuses
+    // them. probe once per test with an ephemeral loopback port so those
+    // tests skip rather than fail where the platform offers no UDP at all.
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    SOCKET socket_handle = socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+    if ( socket_handle == INVALID_SOCKET )
+        return 0;
+#else
+    int socket_handle = socket( AF_INET, SOCK_DGRAM, 0 );
+    if ( socket_handle < 0 )
+        return 0;
+#endif
+
+    struct sockaddr_in address;
+    memset( &address, 0, sizeof( address ) );
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+    address.sin_port = 0;
+
+    int result = bind( socket_handle, (struct sockaddr*) &address, sizeof( address ) );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    closesocket( socket_handle );
+#else
+    close( socket_handle );
+#endif
+
+    return result == 0;
+}
+
+#define RUN_TEST_UDP( test_function )                                       \
+    do                                                                      \
+    {                                                                       \
+        if ( netcode_test_udp_socket_available() )                          \
+        {                                                                   \
+            printf( #test_function "\n" );                                  \
+            test_function();                                                \
+        }                                                                   \
+        else                                                                \
+        {                                                                   \
+            printf( "skip " #test_function " (UDP sockets unavailable)\n" );\
+        }                                                                   \
+    }                                                                       \
+    while (0)
+
 void netcode_test()
 {
     //while ( 1 )
@@ -11043,20 +11091,20 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
-        RUN_TEST( test_runtime_guards );
-        RUN_TEST( test_init_and_defaults );
-        RUN_TEST( test_client_create_error );
-        RUN_TEST( test_server_create_error );
+        RUN_TEST_UDP( test_runtime_guards );
+        RUN_TEST_UDP( test_init_and_defaults );
+        RUN_TEST_UDP( test_client_create_error );
+        RUN_TEST_UDP( test_server_create_error );
         RUN_TEST( test_network_simulator_determinism );
         RUN_TEST( test_network_simulator_allocation_failure );
-        RUN_TEST( test_client_create );
-        RUN_TEST( test_server_create );
-        RUN_TEST( test_server_restart_global_sequence );
+        RUN_TEST_UDP( test_client_create );
+        RUN_TEST_UDP( test_server_create );
+        RUN_TEST_UDP( test_server_restart_global_sequence );
         RUN_TEST( test_client_server_connect );
-        RUN_TEST( test_client_server_ipv4_socket_connect );
-        RUN_TEST( test_client_server_ipv6_socket_connect );
-        RUN_TEST( test_client_server_dual_socket_connect );
-        RUN_TEST( test_server_update_drains_empty_datagrams );
+        RUN_TEST_UDP( test_client_server_ipv4_socket_connect );
+        RUN_TEST_UDP( test_client_server_ipv6_socket_connect );
+        RUN_TEST_UDP( test_client_server_dual_socket_connect );
+        RUN_TEST_UDP( test_server_update_drains_empty_datagrams );
         RUN_TEST( test_client_server_keep_alive );
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
@@ -11077,9 +11125,9 @@ void netcode_test()
         RUN_TEST( test_client_error_connect_token_predates_server_start );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
-        RUN_TEST( test_loopback_callback_required );
+        RUN_TEST_UDP( test_loopback_callback_required );
 #if NETCODE_PACKET_TAGGING
-        RUN_TEST( test_packet_tagging );
+        RUN_TEST_UDP( test_packet_tagging );
 #endif // #if NETCODE_PACKET_TAGGING
 #if NETCODE_ENABLE_NONCE_AUDIT
         RUN_TEST( test_nonce_audit );
