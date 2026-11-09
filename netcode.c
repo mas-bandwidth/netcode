@@ -1827,6 +1827,13 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 {
     netcode_assert( replay_protection );
 
+    // UINT64_MAX is the empty-slot sentinel; a stored sequence of UINT64_MAX is
+    // indistinguishable from an empty slot, so it is never a valid packet sequence.
+    // reject it rather than let a packet at the top of the space replay forever.
+
+    if ( sequence == UINT64_MAX )
+        return 1;
+
     // written so it cannot overflow: "sequence + BUFFER_SIZE <= most_recent" wraps for
     // sequence values near UINT64_MAX and falsely rejects them as replays
 
@@ -1848,6 +1855,12 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 void netcode_replay_protection_advance_sequence( struct netcode_replay_protection_t * replay_protection, uint64_t sequence )
 {
     netcode_assert( replay_protection );
+
+    // UINT64_MAX is not a valid sequence and must not move the replay window, or it
+    // would reject every sequence number that follows it.
+
+    if ( sequence == UINT64_MAX )
+        return;
 
     if ( sequence > replay_protection->most_recent_sequence )
         replay_protection->most_recent_sequence = sequence;
@@ -2046,6 +2059,15 @@ void * netcode_read_packet( uint8_t * buffer,
         {
             uint8_t value = netcode_read_uint8( &buffer );
             (*sequence) |= ( uint64_t) ( value ) << ( 8 * i );
+        }
+
+        // UINT64_MAX is reserved as the replay window's empty-slot sentinel and is not
+        // a valid packet sequence.
+
+        if ( *sequence == UINT64_MAX )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. sequence is invalid\n" );
+            return NULL;
         }
 
         // ignore the packet if it has already been received
@@ -7236,6 +7258,22 @@ void test_replay_protection()
     // while packets that fell out of the window are rejected as before
 
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
+
+    // the top of the sequence space is not a valid packet sequence and must not be
+    // accepted, replayed forever, or move the window past otherwise valid packets.
+
+    netcode_replay_protection_reset( &replay_protection );
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX - 1 );
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX );
+
+    check( replay_protection.most_recent_sequence == UINT64_MAX - 1 );
+
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 2 ) == 0 );
 }
 
 static int num_ignored_asserts = 0;
