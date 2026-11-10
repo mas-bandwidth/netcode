@@ -207,14 +207,19 @@ static void fuzz_round_trip_packet( struct fuzz_input_t * in )
 
     if ( !corrupt || corrupt_xor == 0 )
     {
-        // an uncorrupted packet written by netcode_write_packet must read back
-        // with the same type and sequence
+        // Connection requests have no packet sequence. Other encrypted
+        // packets round-trip unless they carry the reserved sequence.
 
-        FUZZ_CHECK( read );
-        FUZZ_CHECK( ( (uint8_t*) read )[0] == packet_type );
-        if ( packet_type != NETCODE_CONNECTION_REQUEST_PACKET )
+        if ( packet_type != NETCODE_CONNECTION_REQUEST_PACKET && sequence == UINT64_MAX )
         {
-            FUZZ_CHECK( read_sequence == sequence );
+            FUZZ_CHECK( !read );
+        }
+        else
+        {
+            FUZZ_CHECK( read );
+            FUZZ_CHECK( ( (uint8_t*) read )[0] == packet_type );
+            if ( packet_type != NETCODE_CONNECTION_REQUEST_PACKET )
+                FUZZ_CHECK( read_sequence == sequence );
         }
     }
 
