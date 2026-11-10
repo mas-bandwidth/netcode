@@ -8697,20 +8697,35 @@ void test_server_update_drains_empty_datagrams()
 
     netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
 
-    netcode_server_update( server, time );
+    // the empty datagrams need not all be queued before this update starts, so pump
+    // the server until the payload shows up, with a bounded wait so a stuck run fails
+    // instead of hanging
 
     int received = 0;
+    int attempts;
 
-    while ( 1 )
+    for ( attempts = 0; attempts < 200 && !received; attempts++ )
     {
-        int packet_bytes;
-        uint64_t packet_sequence;
-        void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
-        if ( !packet )
+        netcode_server_update( server, time );
+
+        while ( 1 )
+        {
+            int packet_bytes;
+            uint64_t packet_sequence;
+            void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
+            if ( !packet )
+                break;
+            if ( packet_bytes == NETCODE_MAX_PACKET_SIZE && memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 )
+                received = 1;
+            netcode_server_free_packet( server, packet );
+        }
+
+        if ( received )
             break;
-        if ( packet_bytes == NETCODE_MAX_PACKET_SIZE && memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 )
-            received = 1;
-        netcode_server_free_packet( server, packet );
+
+        netcode_sleep( 0.01 );
+
+        time += delta_time;
     }
 
     check( received );
@@ -9359,6 +9374,57 @@ void test_client_connect_matching_address_family()
 
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
+    netcode_client_destroy( client );
+
+    // ipv6-only client: a token with only an ipv4 address has no family to use
+
+    client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
+    client->socket_holder.ipv6.handle = 1;
+
+    NETCODE_CONST char * ipv4_only = "127.0.0.1:40000";
+
+    check( netcode_generate_connect_token( 1, &ipv4_only, &ipv4_only, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
+    netcode_client_destroy( client );
+
+    // ipv6-only client: skip an ipv4 address and select the ipv6 one after it
+
+    client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
+
+    check( client );
+
+    client->config.override_send_and_receive = 0;
+    client->config.send_packet_override = NULL;
+    client->config.receive_packet_override = NULL;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
+    client->socket_holder.ipv6.handle = 1;
+
+    NETCODE_CONST char * ipv6_after_ipv4_addresses[] = { "127.0.0.1:40000", "[::1]:40001" };
+
+    check( netcode_generate_connect_token( 2, ipv6_after_ipv4_addresses, ipv6_after_ipv4_addresses, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
+    check( client->server_address_index == 1 );
+    check( client->server_address.type == NETCODE_ADDRESS_IPV6 );
+    check( client->server_address.port == 40001 );
+
+    client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
 }
 
