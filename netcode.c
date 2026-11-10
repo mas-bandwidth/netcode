@@ -1985,10 +1985,9 @@ void * netcode_read_packet( uint8_t * buffer,
             return NULL;
         }
 
-        // a connect token that could have been issued before the server started is refused: its keys
-        // were already used to encrypt packets under sequence numbers that start again from zero.
+        // refuse connect tokens expiring at or before min_connect_token_expire_timestamp.
 
-        if ( packet_connect_token_expire_timestamp < min_connect_token_expire_timestamp )
+        if ( packet_connect_token_expire_timestamp <= min_connect_token_expire_timestamp )
         {
             netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored connection request packet. connect token predates the server start\n" );
             return NULL;
@@ -4377,7 +4376,7 @@ void netcode_server_start( struct netcode_server_t * server, int max_clients )
     // a connect token issued before this server started carries keys that already encrypted
     // packets at sequence numbers this run starts again from. the earliest expire timestamp a
     // connect token issued after the start can carry is the start time plus the maximum
-    // lifetime the backend issues, so anything earlier than that is refused.
+    // lifetime the backend issues, so anything at or before that is refused.
 
     server->min_connect_token_expire_timestamp = (uint64_t) netcode_current_timestamp() + (uint64_t) server->config.max_connect_token_lifetime;
 
@@ -6695,8 +6694,24 @@ static void test_address()
 #define TEST_PROTOCOL_ID            0x1122334455667788ULL
 #define TEST_CLIENT_ID              0x1ULL
 #define TEST_SERVER_PORT            40000
-#define TEST_CONNECT_TOKEN_EXPIRY   30
+// the lifetime the test backend issues, kept within the server's default configured maximum
+#define TEST_CONNECT_TOKEN_EXPIRY   NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME
 #define TEST_TIMEOUT_SECONDS        15
+
+// start a server for a test with the connect token floor one second behind the wall clock
+// second the fixture issues tokens in. a token at the configured maximum lifetime then
+// expires one second above the floor, so it is accepted without waiting for the wall clock
+// to advance. tests that exercise the floor itself set it explicitly after starting.
+
+static void test_server_start( struct netcode_server_t * server, int max_clients )
+{
+    netcode_server_start( server, max_clients );
+
+    if ( server->running )
+    {
+        server->min_connect_token_expire_timestamp -= 1;
+    }
+}
 
 static int test_oor_asserts_fired = 0;
 
@@ -7638,7 +7653,7 @@ void test_runtime_guards()
     netcode_server_start( server, NETCODE_MAX_CLIENTS + 1 );
     check( !netcode_server_running( server ) );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
     check( netcode_server_running( server ) );
     check( netcode_server_max_clients( server ) == 1 );
 
@@ -8312,7 +8327,7 @@ void test_server_restart_global_sequence()
     check( server );
     check( server->global_sequence == 1ULL << 63 );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     check( server->global_sequence == 1ULL << 63 );
 
@@ -8320,7 +8335,7 @@ void test_server_restart_global_sequence()
 
     netcode_server_stop( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     check( server->global_sequence == 1ULL << 63 );
 
@@ -8362,7 +8377,7 @@ void test_client_server_connect()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -8492,7 +8507,7 @@ void client_server_socket_connect_to( NETCODE_CONST char * client_address, NETCO
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     uint64_t client_id = 0;
     netcode_random_bytes( (uint8_t*) &client_id, 8 );
@@ -8594,7 +8609,7 @@ void test_server_update_drains_empty_datagrams()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "127.0.0.1:40000";
 
@@ -8718,7 +8733,7 @@ void test_client_server_keep_alive()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -8818,7 +8833,7 @@ void test_client_server_multiple_clients()
     {
         // start the server with max # of clients for this iteration
 
-        netcode_server_start( server, max_clients[i] );
+        test_server_start( server, max_clients[i] );
 
         // create # of client objects for this iteration and connect to server
 
@@ -9053,7 +9068,7 @@ void test_client_server_multiple_servers()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000", "[::1]:40000" };
 
@@ -9269,7 +9284,7 @@ void test_client_error_connection_timed_out()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9362,7 +9377,7 @@ void test_client_error_connection_response_timeout()
 
     server->flags = NETCODE_SERVER_FLAG_IGNORE_CONNECTION_RESPONSE_PACKETS;
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9436,7 +9451,7 @@ void test_client_error_connection_request_timeout()
 
     server->flags = NETCODE_SERVER_FLAG_IGNORE_CONNECTION_REQUEST_PACKETS;
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9510,7 +9525,7 @@ void test_client_error_connection_denied()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9626,7 +9641,7 @@ void test_client_side_disconnect()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9721,7 +9736,7 @@ void test_server_side_disconnect()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -9817,7 +9832,7 @@ void test_server_client_disconnect_reason()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     // no disconnect has happened yet, so the client slot reason is none
 
@@ -10051,7 +10066,7 @@ void test_client_reconnect()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -10401,7 +10416,7 @@ static void test_wire_create( int drop_server_packets )
 
     check( test_wire.server );
 
-    netcode_server_start( test_wire.server, 1 );
+    test_server_start( test_wire.server, 1 );
 }
 
 static void test_wire_destroy()
@@ -10592,9 +10607,55 @@ void test_client_error_connect_token_predates_server_start()
     check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
     check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
-    // a connect token with the full lifetime connects
+    // a connect token that expires after the server start floor connects
 
     test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, TEST_CONNECT_TOKEN_EXPIRY );
+
+    test_wire_connect_client( connect_token, &time, delta_time );
+
+    check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_server_num_connected_clients( test_wire.server ) == 1 );
+
+    test_wire_destroy();
+}
+
+void test_client_error_connect_token_at_server_start_floor()
+{
+    test_wire_create( 0 );
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    // pin the floor to the token's own expire timestamp instead of reading the wall clock,
+    // so the equality boundary is exercised deterministically
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+    test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, TEST_CONNECT_TOKEN_EXPIRY );
+
+    struct netcode_connect_token_t decoded_token;
+    check( netcode_read_connect_token( connect_token, NETCODE_CONNECT_TOKEN_BYTES, &decoded_token ) == NETCODE_OK );
+
+    // a stop/start clears the connect token history. pin the floor to the token's expire
+    // timestamp after each start to model a server started in the token's second. the token
+    // is refused at that boundary
+
+    netcode_server_stop( test_wire.server );
+    netcode_server_start( test_wire.server, 1 );
+    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp;
+
+    netcode_server_stop( test_wire.server );
+    netcode_server_start( test_wire.server, 1 );
+    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp;
+
+    test_wire_connect_client( connect_token, &time, delta_time );
+
+    check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
+    check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
+
+    // the same token expires one second above the floor once the fixture models issuance in a
+    // later second, which is accepted
+
+    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp - 1;
 
     test_wire_connect_client( connect_token, &time, delta_time );
 
@@ -10692,7 +10753,7 @@ void test_disable_timeout()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     NETCODE_CONST char * server_address = "[::1]:40000";
 
@@ -10832,7 +10893,7 @@ void test_loopback()
 
     int max_clients = 2;
 
-    netcode_server_start( server, max_clients );
+    test_server_start( server, max_clients );
 
     context.server = server;
 
@@ -11292,7 +11353,7 @@ void test_loopback_callback_required()
 
     check( server );
 
-    netcode_server_start( server, 1 );
+    test_server_start( server, 1 );
 
     netcode_server_connect_loopback_client( server, 0, 1, NULL );
 
@@ -11449,6 +11510,7 @@ void netcode_test()
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
         RUN_TEST( test_client_error_connect_token_predates_server_start );
+        RUN_TEST( test_client_error_connect_token_at_server_start_floor );
         RUN_TEST( test_disable_timeout );
         RUN_TEST( test_loopback );
         RUN_TEST( test_loopback_callback_required );
