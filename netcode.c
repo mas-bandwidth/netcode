@@ -10593,7 +10593,7 @@ void test_reclaimed_connect_token_is_not_consumed()
 
     netcode_server_start( server, 2 );
 
-    now = (uint64_t) time( NULL );
+    now = (uint64_t) netcode_current_timestamp() + 1;
     t1_expire = now + (uint64_t) server->config.max_connect_token_lifetime;
     t_after = t1_expire;
 
