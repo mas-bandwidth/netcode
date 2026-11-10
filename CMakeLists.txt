@@ -69,6 +69,7 @@ endif()
 option(NETCODE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NETCODE_FUZZ "Build the fuzz targets" OFF)
 option(NETCODE_BUILD_TESTS "Build netcode tests and examples" ${NETCODE_TOP_LEVEL})
+option(NETCODE_FUNCTIONAL_TESTS "Register the real-socket, real-time functional test with CTest" OFF)
 option(NETCODE_SYSTEM_SODIUM "Link against the system libsodium instead of the vendored copy" OFF)
 option(NETCODE_INSTALL "Generate the install target (netcode.h and the netcode library)" ON)
 option(NETCODE_NONCE_AUDIT "Record the key and nonce of every packet the tests encrypt and fail on a repeat" OFF)
@@ -218,6 +219,13 @@ if(NETCODE_BUILD_TESTS)
     endif()
 
     add_test(NAME netcode_test COMMAND netcode_test)
+
+    # real-socket and real-time tests. opt-in so the default run binds no sockets,
+    # sleeps no real time, and samples no wall clock.
+    if(NETCODE_FUNCTIONAL_TESTS)
+        add_test(NAME netcode_functional_test COMMAND netcode_test)
+        set_tests_properties(netcode_functional_test PROPERTIES ENVIRONMENT "NETCODE_TEST_FUNCTIONAL=1")
+    endif()
 
 endif()
 
