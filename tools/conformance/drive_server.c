@@ -1,7 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include "netcode.h"
+
+static uint64_t wall_clock_seconds( void )
+{
+    return (uint64_t) time( NULL );
+}
 
 int main(void)
 {
@@ -33,6 +39,12 @@ int main(void)
     }
     netcode_server_start(server, 4);
 
+    // model a connect token issued in a second after the server started so it expires
+    // strictly beyond the server start floor
+
+    uint64_t start_second = wall_clock_seconds();
+    while ( wall_clock_seconds() == start_second ) { }
+
     int max_clients = netcode_server_max_clients(server);
     int num_connected = netcode_server_num_connected_clients(server);
     printf("SLOT baseline -1 %d max=%d\n", num_connected, max_clients);
@@ -52,7 +64,7 @@ int main(void)
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
     NETCODE_CONST char * server_addresses[] = { addr };
-    if (netcode_generate_connect_token(1, server_addresses, server_addresses, NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME + 1, 5,
+    if (netcode_generate_connect_token(1, server_addresses, server_addresses, NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME, 5,
                                          client_id, server_config.protocol_id,
                                          private_key, user_data, connect_token) != NETCODE_OK) {
         printf("RESULT fail token\n");
