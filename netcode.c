@@ -8274,6 +8274,10 @@ void test_client_packet_from_other_address_leaves_replay_protection()
     memcpy( client->context.read_packet_key, packet_key, NETCODE_KEY_BYTES );
     client->connect_token.protocol_id = TEST_PROTOCOL_ID;
 
+    // the connected client sends disconnect packets when destroyed, so give it its own write key
+
+    netcode_generate_key( client->context.write_packet_key );
+
     check( netcode_parse_address( "127.0.0.1:40000", &client->server_address ) == NETCODE_OK );
 
     struct netcode_address_t other_address;
@@ -10873,10 +10877,12 @@ void test_server_disconnect_callback_stops_server()
     struct netcode_address_t address;
     check( netcode_parse_address( "127.0.0.1:50000", &address ) == NETCODE_OK );
 
+    // the disconnect sends packets under the send key, so this test uses keys of its own
+
     uint8_t send_key[NETCODE_KEY_BYTES];
     uint8_t receive_key[NETCODE_KEY_BYTES];
-    memset( send_key, 1, sizeof( send_key ) );
-    memset( receive_key, 2, sizeof( receive_key ) );
+    netcode_generate_key( send_key );
+    netcode_generate_key( receive_key );
 
     check( netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager,
                                                               &address,
