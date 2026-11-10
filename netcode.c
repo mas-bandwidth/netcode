@@ -3108,7 +3108,6 @@ void netcode_client_set_state( struct netcode_client_t * client, int client_stat
 
 void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
 {
-    client->connect_start_time = client->time;
     client->last_packet_send_time = client->time - 1.0f;
     client->last_packet_receive_time = client->time;
     client->should_disconnect = 0;
@@ -3176,6 +3175,8 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_client_reset_before_next_connect( client );
+
+    client->connect_start_time = client->time;
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 }
@@ -9119,7 +9120,7 @@ void test_client_server_multiple_servers()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
 
-    check( netcode_generate_connect_token( 3, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+    check( netcode_generate_connect_token( 3, server_address, server_address, 3 * TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -9249,6 +9250,62 @@ void test_client_error_connect_token_expired()
     netcode_client_connect( client, connect_token );
 
     netcode_client_update( client, time );
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
+void test_client_error_connect_token_expired_multiple_servers()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
+
+    check( client );
+
+    NETCODE_CONST char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000" };
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+    const int connect_token_expiry = TEST_TIMEOUT_SECONDS + TEST_TIMEOUT_SECONDS / 2;
+
+    check( netcode_generate_connect_token( 2, server_address, server_address, connect_token_expiry, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += delta_time;
+
+        if ( time > 4.0 * connect_token_expiry )
+        {
+            check( 0 );
+            break;
+        }
+    }
 
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED );
 
@@ -11559,6 +11616,7 @@ void netcode_test()
         RUN_TEST( test_client_server_multiple_clients );
         RUN_TEST( test_client_server_multiple_servers );
         RUN_TEST( test_client_error_connect_token_expired );
+        RUN_TEST( test_client_error_connect_token_expired_multiple_servers );
         RUN_TEST( test_client_error_invalid_connect_token );
         RUN_TEST( test_client_error_connection_timed_out );
         RUN_TEST( test_client_error_connection_response_timeout );
