@@ -9135,17 +9135,18 @@ void test_server_update_drains_empty_datagrams()
     for ( i = 0; i < NETCODE_MAX_PACKET_SIZE; i++ )
         packet_data[i] = (uint8_t) i;
 
-    netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
-
     // the empty datagrams need not all be queued before this update starts, so pump
     // the server until the payload shows up, with a bounded wait so a stuck run fails
-    // instead of hanging
+    // instead of hanging. real UDP may drop a datagram, so the payload is sent again
+    // on each attempt.
 
     int received = 0;
     int attempts;
 
     for ( attempts = 0; attempts < 200 && !received; attempts++ )
     {
+        netcode_client_send_packet( client, packet_data, NETCODE_MAX_PACKET_SIZE );
+
         netcode_server_update( server, time );
 
         while ( 1 )

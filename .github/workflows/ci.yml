@@ -28,6 +28,28 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config ${{ matrix.config }} --output-on-failure --timeout 600
 
+  # the real-socket, real-time tests. off by default so the unit run binds no sockets;
+  # here they run on each platform's own socket layer.
+  functional:
+    name: functional ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04, macos-15, windows-2025 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNETCODE_FUNCTIONAL_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure --timeout 600 -R netcode_functional_test
+
   mingw:
     name: windows-2025 MinGW
     runs-on: windows-2025
