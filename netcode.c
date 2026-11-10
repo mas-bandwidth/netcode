@@ -894,7 +894,12 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         struct sockaddr_storage addr;
         memset( &addr, 0, sizeof(addr) );
         addr.ss_family = ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET;
-        netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, (PSOCKADDR) &addr );
+        if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, (PSOCKADDR) &addr ) != 0 )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging\n" );
+            netcode_socket_destroy( s );
+            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+        }
     }
 
 #endif
@@ -8453,8 +8458,8 @@ void test_client_server_connect()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             client_num_packets_received++;
             netcode_client_free_packet( client, packet );
         }
@@ -8467,8 +8472,8 @@ void test_client_server_connect()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -8970,8 +8975,8 @@ void test_client_server_multiple_clients()
                     if ( !packet )
                         break;
                     (void) packet_sequence;
-                    netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-                    netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+                    check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+                    check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
                     client_num_packets_received[j]++;
                     netcode_client_free_packet( client[j], packet );
                 }
@@ -8987,8 +8992,8 @@ void test_client_server_multiple_clients()
                     if ( !packet )
                         break;
                     (void) packet_sequence;
-                    netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-                    netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+                    check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+                    check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
                     server_num_packets_received[j]++;
                     netcode_server_free_packet( server, packet );
                 }
@@ -9144,8 +9149,8 @@ void test_client_server_multiple_servers()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             client_num_packets_received++;
             netcode_client_free_packet( client, packet );
         }
@@ -9157,8 +9162,8 @@ void test_client_server_multiple_servers()
             void * packet = netcode_server_receive_packet( server, 0, &packet_bytes, &packet_sequence );
             if ( !packet )
                 break;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -10829,8 +10834,8 @@ void test_disable_timeout()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             client_num_packets_received++;
             netcode_client_free_packet( client, packet );
         }
@@ -10843,8 +10848,8 @@ void test_disable_timeout()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -11012,8 +11017,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             loopback_client_num_packets_received++;
             netcode_client_free_packet( loopback_client, packet );
         }
@@ -11026,8 +11031,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             regular_client_num_packets_received++;
             netcode_client_free_packet( regular_client, packet );
         }
@@ -11040,8 +11045,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             loopback_server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -11054,8 +11059,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             regular_server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -11144,8 +11149,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             loopback_client_num_packets_received++;
             netcode_client_free_packet( loopback_client, packet );
         }
@@ -11158,8 +11163,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             regular_client_num_packets_received++;
             netcode_client_free_packet( regular_client, packet );
         }
@@ -11172,8 +11177,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             loopback_server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -11186,8 +11191,8 @@ void test_loopback()
             if ( !packet )
                 break;
             (void) packet_sequence;
-            netcode_assert( packet_bytes == NETCODE_MAX_PACKET_SIZE );
-            netcode_assert( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );            
+            check( packet_bytes == NETCODE_MAX_PACKET_SIZE );
+            check( memcmp( packet, packet_data, NETCODE_MAX_PACKET_SIZE ) == 0 );
             regular_server_num_packets_received++;
             netcode_server_free_packet( server, packet );
         }
@@ -11243,6 +11248,20 @@ void test_loopback()
 
 #if NETCODE_PACKET_TAGGING
 
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+static void test_packet_tagging_socket_option( struct netcode_socket_t * socket )
+{
+    // Functional check: read the applied option from the real socket.
+    int tos = 0;
+    socklen_t option_bytes = sizeof(tos);
+    int level = socket->address.type == NETCODE_ADDRESS_IPV6 ? IPPROTO_IPV6 : IPPROTO_IP;
+    int option = socket->address.type == NETCODE_ADDRESS_IPV6 ? IPV6_TCLASS : IP_TOS;
+    check( getsockopt( socket->handle, level, option, (char*) &tos, &option_bytes ) == 0 );
+    check( option_bytes == sizeof(tos) );
+    check( tos == 46 );
+}
+#endif
+
 void test_packet_tagging()
 {
     // IMPORTANT: Packet tagging is off by default because it doesn't play well with some older home routers
@@ -11268,6 +11287,11 @@ void test_packet_tagging()
         struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
 
         check( client );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+        test_packet_tagging_socket_option( &server->socket_holder.ipv4 );
+        test_packet_tagging_socket_option( &client->socket_holder.ipv4 );
+#endif
 
         uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
@@ -11302,6 +11326,11 @@ void test_packet_tagging()
         struct netcode_client_t * client = netcode_client_create( "[::1]:50000", &client_config, 0.0 );
 
         check( client );
+
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_MAC || NETCODE_PLATFORM == NETCODE_PLATFORM_UNIX
+        test_packet_tagging_socket_option( &server->socket_holder.ipv6 );
+        test_packet_tagging_socket_option( &client->socket_holder.ipv6 );
+#endif
 
         uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
