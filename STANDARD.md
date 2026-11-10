@@ -268,6 +268,8 @@ The following steps are taken when reading an encrypted packet, in this exact or
 
 * If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
 
+* If the sequence number is 2^64-1, ignore the packet. This value is reserved by replay protection, and is refused for every encrypted packet type.
+
 * If the packet type fails the replay protection already received test, ignore the packet. _See the section on replay protection below for details_.
 
 * If the per-packet type data fails to decrypt, ignore the packet.
@@ -419,6 +421,8 @@ The server manages a set of n client slots, where each slot from [0,n-1] represe
 The maximum number of client slots per-server is implementation specific. Typical uses cases are expected in the range of [2,64] but the reference implementation supports up to 256 clients per-server. 
 
 You may support more clients per-server if your implementation is able to handle them efficiently.
+
+The reference implementation's client ignores a _connection keep-alive packet_ whose max clients is outside [1,256], or whose client index is outside [0, max clients - 1], so it connects only to servers with at most 256 client slots.
 
 ### Processing Connection Requests
 
