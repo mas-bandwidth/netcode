@@ -4552,10 +4552,6 @@ static void netcode_server_reset_client_slot( struct netcode_server_t * server, 
     memset( &server->client_address[client_index], 0, sizeof( struct netcode_address_t ) );
     server->client_encryption_index[client_index] = -1;
     memset( server->client_user_data[client_index], 0, NETCODE_USER_DATA_BYTES );
-
-    server->num_connected_clients--;
-
-    netcode_assert( server->num_connected_clients >= 0 );
 }
 
 void netcode_server_disconnect_client_internal( struct netcode_server_t * server, int client_index, int send_disconnect_packets, int disconnect_reason )
@@ -4596,11 +4592,14 @@ void netcode_server_disconnect_client_internal( struct netcode_server_t * server
 
     netcode_encryption_manager_remove_encryption_mapping( &server->encryption_manager, &server->client_address[client_index], server->time );
 
-    // mark the slot disconnected before the callback so a re-entrant disconnect of
-    // this slot returns at the connected guard. the rest of the slot stays readable
-    // from inside the callback until the reset below.
+    // mark the slot disconnected and count it out before the callback so a re-entrant
+    // disconnect of this slot returns at the connected guard, and a callback that stops
+    // the server leaves the count at zero. the rest of the slot stays readable from
+    // inside the callback until the reset below.
 
     server->client_connected[client_index] = 0;
+    server->num_connected_clients--;
+    netcode_assert( server->num_connected_clients >= 0 );
 
     if ( server->config.connect_disconnect_callback )
     {
@@ -5605,6 +5604,8 @@ void netcode_server_disconnect_loopback_client( struct netcode_server_t * server
     // disconnect is a no-op, keeping the rest of the slot readable in the callback.
 
     server->client_connected[client_index] = 0;
+    server->num_connected_clients--;
+    netcode_assert( server->num_connected_clients >= 0 );
 
     if ( server->config.connect_disconnect_callback )
     {
@@ -10831,6 +10832,80 @@ void test_server_disconnect_callback_reentry()
     netcode_server_destroy( server );
 }
 
+static struct netcode_server_t * disconnect_stop_server;
+static int disconnect_stop_calls;
+
+static void test_server_disconnect_callback_stops_server_callback( void * context, int client_index, int connected )
+{
+    (void) context;
+    (void) client_index;
+
+    if ( connected != 0 )
+        return;
+
+    disconnect_stop_calls++;
+
+    netcode_server_stop( disconnect_stop_server );
+}
+
+void test_server_disconnect_callback_stops_server()
+{
+    // one slot, marked connected, disconnected directly. the callback stops the server.
+    // the stopped server must report no connected clients.
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.override_send_and_receive = 1;
+    server_config.send_packet_override = test_override_send_packet;
+    server_config.receive_packet_override = test_override_receive_packet;
+    server_config.connect_disconnect_callback = test_server_disconnect_callback_stops_server_callback;
+
+    struct netcode_server_t * server = netcode_server_create( "127.0.0.1:0", &server_config, 0.0 );
+
+    check( server );
+
+    netcode_server_start( server, 1 );
+
+    int client_index = 0;
+
+    struct netcode_address_t address;
+    check( netcode_parse_address( "127.0.0.1:50000", &address ) == NETCODE_OK );
+
+    uint8_t send_key[NETCODE_KEY_BYTES];
+    uint8_t receive_key[NETCODE_KEY_BYTES];
+    memset( send_key, 1, sizeof( send_key ) );
+    memset( receive_key, 2, sizeof( receive_key ) );
+
+    check( netcode_encryption_manager_add_encryption_mapping( &server->encryption_manager,
+                                                              &address,
+                                                              send_key,
+                                                              receive_key,
+                                                              server->time,
+                                                              -1.0,
+                                                              0,
+                                                              -1 ) == 1 );
+
+    server->encryption_manager.client_index[0] = client_index;
+    server->client_encryption_index[client_index] = 0;
+    server->client_address[client_index] = address;
+    server->client_connected[client_index] = 1;
+    server->client_loopback[client_index] = 0;
+    server->client_id[client_index] = 1;
+    server->num_connected_clients = 1;
+
+    disconnect_stop_server = server;
+    disconnect_stop_calls = 0;
+
+    netcode_server_disconnect_client( server, client_index );
+
+    check( disconnect_stop_calls == 1 );
+    check( netcode_server_running( server ) == 0 );
+    check( netcode_server_num_connected_clients( server ) == 0 );
+
+    netcode_server_destroy( server );
+}
+
 void test_client_reconnect()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -12646,6 +12721,7 @@ void netcode_test()
         RUN_TEST( test_server_side_disconnect_with_more_server_addresses );
         RUN_TEST( test_server_client_disconnect_reason );
         RUN_TEST( test_server_disconnect_callback_reentry );
+        RUN_TEST( test_server_disconnect_callback_stops_server );
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_connect_token_entries );
         RUN_TEST( test_reclaimed_connect_token_is_not_consumed );
