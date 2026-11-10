@@ -6821,21 +6821,26 @@ static void test_address()
 #define TEST_CONNECT_TOKEN_EXPIRY   NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME
 #define TEST_TIMEOUT_SECONDS        15
 
-// start a server for a test with the connect token floor one second behind the wall clock
-// second the fixture issues tokens in. a token at the configured maximum lifetime then
-// expires one second above the floor, so it is accepted without waiting for the wall clock
-// to advance. tests that exercise the floor itself set it explicitly after starting.
-// this seam exists because unit tests take no real time: a real backend in the same process
-// waits for the wall clock to leave the start second (see client_server.c), and a unit test
-// cannot wait.
+// start a server for a test, then move time on to the next second. the server refuses connect
+// tokens issued in the second it started, so a test issues its tokens one second after its
+// server starts. the unit tests move their fake clock on; the functional tests run on the wall
+// clock and wait for it.
 
 static void test_server_start( struct netcode_server_t * server, int max_clients )
 {
     netcode_server_start( server, max_clients );
 
-    if ( server->running )
+    if ( netcode_test_fake_time_enabled )
     {
-        server->min_connect_token_expire_timestamp -= 1;
+        netcode_test_fake_time_value++;
+    }
+    else
+    {
+        uint64_t start_second = netcode_current_timestamp();
+        while ( netcode_current_timestamp() == start_second )
+        {
+            netcode_sleep( 0.01 );
+        }
     }
 }
 
@@ -11762,36 +11767,30 @@ void test_client_error_connect_token_at_server_start_floor()
     double time = 0.0;
     double delta_time = 1.0 / 10.0;
 
-    // pin the floor to the token's own expire timestamp instead of reading the wall clock,
-    // so the equality boundary is exercised deterministically
+    // restart the server, and issue a full-lifetime token in the second it started. the token
+    // expires exactly at the floor, and is refused
+
+    netcode_server_stop( test_wire.server );
+    netcode_server_start( test_wire.server, 1 );
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
     test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, TEST_CONNECT_TOKEN_EXPIRY );
 
     struct netcode_connect_token_t decoded_token;
     check( netcode_read_connect_token( connect_token, NETCODE_CONNECT_TOKEN_BYTES, &decoded_token ) == NETCODE_OK );
-
-    // a stop/start clears the connect token history. pin the floor to the token's expire
-    // timestamp after each start to model a server started in the token's second. the token
-    // is refused at that boundary
-
-    netcode_server_stop( test_wire.server );
-    netcode_server_start( test_wire.server, 1 );
-    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp;
-
-    netcode_server_stop( test_wire.server );
-    netcode_server_start( test_wire.server, 1 );
-    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp;
+    check( decoded_token.expire_timestamp == test_wire.server->min_connect_token_expire_timestamp );
 
     test_wire_connect_client( connect_token, &time, delta_time );
 
     check( netcode_client_state( test_wire.client ) == NETCODE_CLIENT_STATE_CONNECTION_REQUEST_TIMED_OUT );
     check( netcode_server_num_connected_clients( test_wire.server ) == 0 );
 
-    // the same token expires one second above the floor once the fixture models issuance in a
-    // later second, which is accepted
+    // a full-lifetime token issued in the next second expires one second above the floor, and
+    // is accepted
 
-    test_wire.server->min_connect_token_expire_timestamp = decoded_token.expire_timestamp - 1;
+    netcode_test_fake_time_value++;
+
+    test_wire_generate_connect_token( connect_token, TEST_CLIENT_ID, TEST_CONNECT_TOKEN_EXPIRY );
 
     test_wire_connect_client( connect_token, &time, delta_time );
 
