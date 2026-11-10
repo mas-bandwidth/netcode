@@ -186,13 +186,13 @@ struct netcode_address_t
 
 int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcode_address_t * address );
 
-char * netcode_address_to_string( struct netcode_address_t * address, char * buffer );
-
 /*
     Writes the address into buffer in its printable form and returns buffer. The buffer must
     be at least NETCODE_MAX_ADDRESS_STRING_LENGTH bytes. The result is always null terminated,
     and is truncated to fit rather than overflowing the buffer.
 */
+
+char * netcode_address_to_string( struct netcode_address_t * address, char * buffer );
 
 int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b );
 
@@ -227,6 +227,12 @@ int netcode_client_create_error();
 void netcode_client_destroy( struct netcode_client_t * client );
 
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token );
+
+/*
+    Advances the client to time, in seconds. time must be monotonically non-decreasing
+    across calls: passing a time earlier than the previous call makes the elapsed time
+    negative and moves timeout and expiry deadlines backwards.
+*/
 
 void netcode_client_update( struct netcode_client_t * client, double time );
 
@@ -264,11 +270,12 @@ struct netcode_address_t * netcode_client_server_address( struct netcode_client_
     expire_seconds < 0 is a convenience for development and testing: it sets the
     token's expire_timestamp to UINT64_MAX instead of a finite expiry time.
     Such a token bypasses the server restart expiry floor and can remain valid
-    across restarts that keep the same private_key and protocol_id. Once admitted,
-    it occupies a connect-token history slot for the rest of that server run;
-    disconnecting the client does not reclaim the slot. Prefer a finite expiry
-    for production tokens.
+    across restarts that keep the same private_key and protocol_id. Once the server
+    accepts a connection request carrying it, it occupies a connect-token history
+    slot for the rest of that server run; disconnecting the client does not reclaim
+    the slot. Prefer a finite expiry for production tokens.
 */
+
 int netcode_generate_connect_token( int num_server_addresses, 
                                     NETCODE_CONST char ** public_server_addresses, 
                                     NETCODE_CONST char ** internal_server_addresses, 
@@ -333,6 +340,12 @@ void netcode_server_stop( struct netcode_server_t * server );
 int netcode_server_running( struct netcode_server_t * server );
 
 int netcode_server_max_clients( struct netcode_server_t * server );
+
+/*
+    Advances the server to time, in seconds. time must be monotonically non-decreasing
+    across calls: passing a time earlier than the previous call makes the elapsed time
+    negative and moves timeout and expiry deadlines backwards.
+*/
 
 void netcode_server_update( struct netcode_server_t * server, double time );
 
