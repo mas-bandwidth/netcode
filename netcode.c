@@ -3934,6 +3934,8 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
                         break;
                     }
                     encryption_manager->address[index].type = NETCODE_ADDRESS_NONE;
+                    sodium_memzero( encryption_manager->send_key + index * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
+                    sodium_memzero( encryption_manager->receive_key + index * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
                     index--;
                 }
                 encryption_manager->num_encryption_mappings = index + 1;
@@ -4703,6 +4705,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     if ( netcode_read_connect_token_private( packet->connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, &connect_token_private ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to read connect token\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4722,18 +4725,21 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     if ( !found_server_address )
     {   
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. server address not in connect token whitelist\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
     if ( netcode_server_find_client_index_by_address( server, from ) != -1 )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. a client with this address is already connected\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
     if ( netcode_server_find_client_index_by_id( server, connect_token_private.client_id ) != -1 )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. a client with this id is already connected\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4749,12 +4755,14 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     if ( connect_token_entry_index == NETCODE_CONNECT_TOKEN_HISTORY_FULL )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. connect token history is full\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
     if ( connect_token_entry_index == NETCODE_CONNECT_TOKEN_ENTRY_REFUSED )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. connect token has already been used\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4767,6 +4775,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         
         netcode_server_send_global_packet( server, &p, from, connect_token_private.server_to_client_key );
 
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4788,6 +4797,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
                                                              connect_token_entry_index ) )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4813,6 +4823,7 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
                                           server->challenge_key ) != NETCODE_OK )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to encrypt challenge token\n" );
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
         return;
     }
 
@@ -4821,6 +4832,8 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server sent connection challenge packet\n" );
 
     netcode_server_send_global_packet( server, &challenge_packet, from, connect_token_private.server_to_client_key );
+
+    sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
 }
 
 int netcode_server_find_free_client_index( struct netcode_server_t * server )
@@ -5057,6 +5070,12 @@ void netcode_server_process_packet_internal( struct netcode_server_t * server,
 
         default:
             break;
+    }
+
+    if ( packet_type == NETCODE_CONNECTION_REQUEST_PACKET )
+    {
+        struct netcode_connection_request_packet_t * request_packet = (struct netcode_connection_request_packet_t*) packet;
+        sodium_memzero( request_packet->connect_token_data, sizeof( request_packet->connect_token_data ) );
     }
 
     server->config.free_function( server->config.allocator_context, packet );
@@ -5703,7 +5722,11 @@ int netcode_generate_connect_token( int num_server_addresses,
     uint64_t create_timestamp = netcode_current_timestamp();
     uint64_t expire_timestamp = ( expire_seconds >= 0 ) ? ( create_timestamp + expire_seconds ) : 0xFFFFFFFFFFFFFFFFULL;
     if ( netcode_encrypt_connect_token_private( connect_token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES, NETCODE_VERSION_INFO, protocol_id, expire_timestamp, nonce, private_key ) != NETCODE_OK )
+    {
+        sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
+        sodium_memzero( connect_token_data, sizeof( connect_token_data ) );
         return NETCODE_ERROR;
+    }
 
     // wrap a connect token around the private connect token data
 
@@ -5724,6 +5747,10 @@ int netcode_generate_connect_token( int num_server_addresses,
     // write the connect token to the output buffer
 
     netcode_write_connect_token( &connect_token, output_buffer, NETCODE_CONNECT_TOKEN_BYTES );
+
+    sodium_memzero( &connect_token_private, sizeof( connect_token_private ) );
+    sodium_memzero( &connect_token, sizeof( connect_token ) );
+    sodium_memzero( connect_token_data, sizeof( connect_token_data ) );
 
     return NETCODE_OK;
 }
@@ -7636,6 +7663,139 @@ void test_encryption_manager()
     netcode_encryption_manager_set_expire_time( &encryption_manager, encryption_index, -1.0 );
 
     check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &encryption_mapping[0].address, time ) == encryption_index );
+}
+
+static int test_key_is_zero( const uint8_t * key )
+{
+    int i;
+    for ( i = 0; i < NETCODE_KEY_BYTES; i++ )
+    {
+        if ( key[i] != 0 )
+            return 0;
+    }
+    return 1;
+}
+
+void test_encryption_manager_zeroes_keys()
+{
+    struct netcode_encryption_manager_t encryption_manager;
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    double time = 1000.0;
+
+    // slot 0 is owned by a connected client, slot 1 is free, slot 2 is removed below
+
+    struct netcode_address_t address[3];
+    uint8_t send_key[NETCODE_KEY_BYTES];
+    uint8_t receive_key[NETCODE_KEY_BYTES];
+    memset( address, 0, sizeof( address ) );
+    memset( send_key, 0xAB, sizeof( send_key ) );
+    memset( receive_key, 0xCD, sizeof( receive_key ) );
+
+    int i;
+    for ( i = 0; i < 3; i++ )
+    {
+        address[i].type = NETCODE_ADDRESS_IPV4;
+        address[i].data.ipv4[0] = 127;
+        address[i].data.ipv4[3] = 1;
+        address[i].port = (uint16_t) ( 30000 + i );
+        check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager, &address[i], send_key, receive_key, time, -1.0, TEST_TIMEOUT_SECONDS, -1 ) );
+    }
+
+    encryption_manager.client_index[0] = 0;
+
+    // after the timeout, removing the last mapping trims the expired free slot behind it
+
+    time += TEST_TIMEOUT_SECONDS + 1.0;
+
+    check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &address[2], time ) == 1 );
+    check( encryption_manager.num_encryption_mappings == 1 );
+
+    for ( i = 1; i < 3; i++ )
+    {
+        check( test_key_is_zero( encryption_manager.send_key + i * NETCODE_KEY_BYTES ) );
+        check( test_key_is_zero( encryption_manager.receive_key + i * NETCODE_KEY_BYTES ) );
+    }
+
+    // the connected client's keys survive the timeout
+
+    check( memcmp( encryption_manager.send_key, send_key, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( encryption_manager.receive_key, receive_key, NETCODE_KEY_BYTES ) == 0 );
+
+    // reset zeroes every key
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    for ( i = 0; i < NETCODE_MAX_ENCRYPTION_MAPPINGS; i++ )
+    {
+        check( test_key_is_zero( encryption_manager.send_key + i * NETCODE_KEY_BYTES ) );
+        check( test_key_is_zero( encryption_manager.receive_key + i * NETCODE_KEY_BYTES ) );
+    }
+}
+
+static void test_expired_encryption_mapping_keys_are_zero( double time )
+{
+    struct netcode_encryption_manager_t encryption_manager;
+    struct netcode_address_t expired_address;
+    struct netcode_address_t tail_address;
+    uint8_t expired_send[NETCODE_KEY_BYTES];
+    uint8_t expired_receive[NETCODE_KEY_BYTES];
+    uint8_t tail_send[NETCODE_KEY_BYTES];
+    uint8_t tail_receive[NETCODE_KEY_BYTES];
+    int i;
+
+    netcode_encryption_manager_reset( &encryption_manager );
+
+    memset( &expired_address, 0, sizeof( expired_address ) );
+    memset( &tail_address, 0, sizeof( tail_address ) );
+    expired_address.type = NETCODE_ADDRESS_IPV6;
+    expired_address.data.ipv6[7] = 1;
+    expired_address.port = 21000;
+    tail_address.type = NETCODE_ADDRESS_IPV6;
+    tail_address.data.ipv6[7] = 1;
+    tail_address.port = 21001;
+
+    for ( i = 0; i < NETCODE_KEY_BYTES; i++ )
+    {
+        expired_send[i] = (uint8_t) ( 0xA0 + ( i & 0x0F ) );
+        expired_receive[i] = (uint8_t) ( 0x50 + ( i & 0x0F ) );
+        tail_send[i] = (uint8_t) ( 0x10 + ( i & 0x0F ) );
+        tail_receive[i] = (uint8_t) ( 0xC0 + ( i & 0x0F ) );
+    }
+
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager,
+                                                              &expired_address,
+                                                              expired_send,
+                                                              expired_receive,
+                                                              time,
+                                                              time + 1.0,
+                                                              0,
+                                                              -1 ) );
+    check( netcode_encryption_manager_add_encryption_mapping( &encryption_manager,
+                                                              &tail_address,
+                                                              tail_send,
+                                                              tail_receive,
+                                                              time,
+                                                              -1.0,
+                                                              0,
+                                                              -1 ) );
+
+    check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &expired_address, time ) == 0 );
+    check( memcmp( encryption_manager.send_key, expired_send, NETCODE_KEY_BYTES ) == 0 );
+    check( memcmp( encryption_manager.receive_key, expired_receive, NETCODE_KEY_BYTES ) == 0 );
+
+    // past expire_time the mapping is no longer found; retiring the tail drops it
+    check( netcode_encryption_manager_find_encryption_mapping( &encryption_manager, &expired_address, time + 2.0 ) == -1 );
+    check( netcode_encryption_manager_remove_encryption_mapping( &encryption_manager, &tail_address, time + 2.0 ) == 1 );
+
+    for ( i = 0; i < NETCODE_KEY_BYTES; i++ )
+    {
+        check( encryption_manager.send_key[i] == 0 );
+        check( encryption_manager.receive_key[i] == 0 );
+        check( encryption_manager.send_key[NETCODE_KEY_BYTES + i] == 0 );
+        check( encryption_manager.receive_key[NETCODE_KEY_BYTES + i] == 0 );
+    }
 }
 
 void test_replay_protection()
@@ -12239,6 +12399,9 @@ void netcode_test()
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
+        RUN_TEST( test_encryption_manager_zeroes_keys );
+        printf( "test_expired_encryption_mapping_keys_are_zero\n" );
+        test_expired_encryption_mapping_keys_are_zero( 1000.0 );
         RUN_TEST( test_replay_protection );
         RUN_TEST( test_read_packet_replay_protection );
         RUN_TEST( test_runtime_guards );
