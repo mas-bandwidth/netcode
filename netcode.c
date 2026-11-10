@@ -12692,6 +12692,7 @@ void test_loopback_callback_required()
     do                                                                      \
     {                                                                       \
         printf( #test_function "\n" );                                      \
+        fflush( stdout );                                                   \
         test_function();                                                    \
     }                                                                       \
     while (0)
@@ -12735,11 +12736,13 @@ static int netcode_test_udp_socket_available()
         if ( netcode_test_udp_socket_available() )                          \
         {                                                                   \
             printf( #test_function "\n" );                                  \
+            fflush( stdout );                                               \
             test_function();                                                \
         }                                                                   \
         else                                                                \
         {                                                                   \
             printf( "skip " #test_function " (UDP sockets unavailable)\n" );\
+            fflush( stdout );                                               \
         }                                                                   \
     }                                                                       \
     while (0)
