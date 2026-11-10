@@ -3744,6 +3744,7 @@ struct netcode_encryption_manager_t
     struct netcode_address_t address[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     int client_index[NETCODE_MAX_ENCRYPTION_MAPPINGS];
     int connect_token_entry_index[NETCODE_MAX_ENCRYPTION_MAPPINGS];
+    uint8_t connect_token_mac[NETCODE_MAC_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
     uint8_t send_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
     uint8_t receive_key[NETCODE_KEY_BYTES*NETCODE_MAX_ENCRYPTION_MAPPINGS];
 };
@@ -3767,6 +3768,7 @@ void netcode_encryption_manager_reset( struct netcode_encryption_manager_t * enc
     }
 
     memset( encryption_manager->timeout, 0, sizeof( encryption_manager->timeout ) );    
+    memset( encryption_manager->connect_token_mac, 0, sizeof( encryption_manager->connect_token_mac ) );
     sodium_memzero( encryption_manager->send_key, sizeof( encryption_manager->send_key ) );
     sodium_memzero( encryption_manager->receive_key, sizeof( encryption_manager->receive_key ) );
 }
@@ -3795,6 +3797,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
             encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
             encryption_manager->connect_token_entry_index[i] = connect_token_entry_index;
+            memset( encryption_manager->connect_token_mac + i * NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
             memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
             memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
             return 1;
@@ -3811,6 +3814,7 @@ int netcode_encryption_manager_add_encryption_mapping( struct netcode_encryption
             encryption_manager->expire_time[i] = expire_time;
             encryption_manager->last_access_time[i] = time;
             encryption_manager->connect_token_entry_index[i] = connect_token_entry_index;
+            memset( encryption_manager->connect_token_mac + i * NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
             memcpy( encryption_manager->send_key + i * NETCODE_KEY_BYTES, send_key, NETCODE_KEY_BYTES );
             memcpy( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, receive_key, NETCODE_KEY_BYTES );
             if ( i + 1 > encryption_manager->num_encryption_mappings )
@@ -3835,6 +3839,7 @@ int netcode_encryption_manager_remove_encryption_mapping( struct netcode_encrypt
             encryption_manager->expire_time[i] = -1.0;
             encryption_manager->last_access_time[i] = -1000.0;
             encryption_manager->connect_token_entry_index[i] = -1;
+            memset( encryption_manager->connect_token_mac + i * NETCODE_MAC_BYTES, 0, NETCODE_MAC_BYTES );
             memset( &encryption_manager->address[i], 0, sizeof( struct netcode_address_t ) );
             sodium_memzero( encryption_manager->send_key + i * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
             sodium_memzero( encryption_manager->receive_key + i * NETCODE_KEY_BYTES, NETCODE_KEY_BYTES );
@@ -4683,9 +4688,11 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
         return;
     }
 
+    uint8_t * connect_token_mac = packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES;
+
     int connect_token_entry_index = netcode_connect_token_entries_find_or_add( server->connect_token_entries, 
                                                                                from, 
-                                                                               packet->connect_token_data + NETCODE_CONNECT_TOKEN_PRIVATE_BYTES - NETCODE_MAC_BYTES, 
+                                                                               connect_token_mac, 
                                                                                packet->connect_token_expire_timestamp, 
                                                                                current_timestamp, 
                                                                                server->time );
@@ -4727,6 +4734,14 @@ void netcode_server_process_connection_request_packet( struct netcode_server_t *
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "server ignored connection request. failed to add encryption mapping\n" );
         return;
+    }
+
+    {
+        int encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, from, server->time );
+        if ( encryption_index >= 0 )
+        {
+            memcpy( server->encryption_manager.connect_token_mac + encryption_index * NETCODE_MAC_BYTES, connect_token_mac, NETCODE_MAC_BYTES );
+        }
     }
 
     struct netcode_challenge_token_t challenge_token;
@@ -4809,10 +4824,14 @@ void netcode_server_connect_client( struct netcode_server_t * server,
     server->client_last_packet_receive_time[client_index] = server->time;
     memcpy( server->client_user_data[client_index], user_data, NETCODE_USER_DATA_BYTES );
 
-    // the connect token that got this client here is spent: its history entry admits nothing from now on
+    // the connect token that got this client here is spent. the history slot may have been
+    // reclaimed after that token expired, so consume it only when the mac still matches.
 
     int connect_token_entry_index = netcode_encryption_manager_get_connect_token_entry_index( &server->encryption_manager, encryption_index );
-    if ( connect_token_entry_index >= 0 )
+    if ( connect_token_entry_index >= 0 &&
+         memcmp( server->connect_token_entries[connect_token_entry_index].mac,
+                 server->encryption_manager.connect_token_mac + encryption_index * NETCODE_MAC_BYTES,
+                 NETCODE_MAC_BYTES ) == 0 )
     {
         netcode_connect_token_entries_consume( server->connect_token_entries, connect_token_entry_index );
     }
@@ -10006,6 +10025,256 @@ void test_connect_token_entries()
     check( netcode_connect_token_entries_find_or_add( connect_token_entries, &address_a, mac, expire_timestamp, expire_timestamp, 600.0 ) >= 0 );
 }
 
+struct test_reclaim_capture_t
+{
+    int packet_bytes;
+    struct netcode_address_t to;
+    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+};
+
+static void test_reclaim_send_packet( void * context, struct netcode_address_t * to, NETCODE_CONST uint8_t * packet_data, int packet_bytes )
+{
+    struct test_reclaim_capture_t * capture = (struct test_reclaim_capture_t*) context;
+
+    check( packet_bytes > 0 );
+    check( packet_bytes <= NETCODE_MAX_PACKET_BYTES );
+
+    capture->packet_bytes = packet_bytes;
+    capture->to = *to;
+    memcpy( capture->packet_data, packet_data, packet_bytes );
+}
+
+static int test_reclaim_receive_packet( void * context, struct netcode_address_t * from, uint8_t * packet_data, int max_packet_bytes )
+{
+    (void) context;
+    (void) from;
+    (void) packet_data;
+    (void) max_packet_bytes;
+    return 0;
+}
+
+static int test_reclaim_write_request( uint8_t * buffer,
+                                       int buffer_size,
+                                       struct netcode_address_t * server_address,
+                                       uint64_t client_id,
+                                       int timeout_seconds,
+                                       uint64_t expire_timestamp,
+                                       uint8_t * client_to_server_key,
+                                       uint8_t * server_to_client_key )
+{
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    uint8_t private_data[NETCODE_CONNECT_TOKEN_PRIVATE_BYTES];
+    uint8_t nonce[NETCODE_CONNECT_TOKEN_NONCE_BYTES];
+    struct netcode_connect_token_private_t token;
+    struct netcode_connection_request_packet_t packet;
+
+    memset( user_data, 0, sizeof( user_data ) );
+
+    netcode_generate_connect_token_private( &token, client_id, timeout_seconds, 1, server_address, user_data );
+
+    if ( client_to_server_key )
+        memcpy( client_to_server_key, token.client_to_server_key, NETCODE_KEY_BYTES );
+    if ( server_to_client_key )
+        memcpy( server_to_client_key, token.server_to_client_key, NETCODE_KEY_BYTES );
+
+    netcode_write_connect_token_private( &token, private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    netcode_generate_nonce( nonce );
+
+    check( netcode_encrypt_connect_token_private( private_data,
+                                                  NETCODE_CONNECT_TOKEN_PRIVATE_BYTES,
+                                                  NETCODE_VERSION_INFO,
+                                                  TEST_PROTOCOL_ID,
+                                                  expire_timestamp,
+                                                  nonce,
+                                                  private_key ) == NETCODE_OK );
+
+    packet.packet_type = NETCODE_CONNECTION_REQUEST_PACKET;
+    memcpy( packet.version_info, NETCODE_VERSION_INFO, NETCODE_VERSION_INFO_BYTES );
+    packet.protocol_id = TEST_PROTOCOL_ID;
+    packet.connect_token_expire_timestamp = expire_timestamp;
+    memcpy( packet.connect_token_nonce, nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
+    memcpy( packet.connect_token_data, private_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+
+    return netcode_write_packet( &packet, buffer, buffer_size, 0, private_key, TEST_PROTOCOL_ID );
+}
+
+static void test_reclaim_allowed_packets( uint8_t * allowed_packets )
+{
+    memset( allowed_packets, 0, NETCODE_CONNECTION_NUM_PACKETS );
+    allowed_packets[NETCODE_CONNECTION_REQUEST_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_RESPONSE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_KEEP_ALIVE_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_PAYLOAD_PACKET] = 1;
+    allowed_packets[NETCODE_CONNECTION_DISCONNECT_PACKET] = 1;
+}
+
+static int test_reclaim_history_slot( struct netcode_server_t * server )
+{
+    int slot = -1;
+    int i;
+
+    for ( i = 0; i < NETCODE_MAX_CONNECT_TOKEN_ENTRIES; i++ )
+    {
+        if ( server->connect_token_entries[i].state == NETCODE_CONNECT_TOKEN_ENTRY_FREE )
+            continue;
+
+        check( slot == -1 );
+        slot = i;
+    }
+
+    return slot;
+}
+
+void test_reclaimed_connect_token_is_not_consumed()
+{
+    // T1's connect token expires on the timestamp passed into the server, while its encryption
+    // mapping is still live on server time. T2 reclaims that history slot. Completing T1 must
+    // not mark T2 consumed, and T2's retried connection request must still be accepted.
+
+    struct test_reclaim_capture_t capture;
+    struct netcode_server_config_t server_config;
+    struct netcode_server_t * server;
+    struct netcode_address_t server_address;
+    struct netcode_address_t from_t1;
+    struct netcode_address_t from_t2;
+    uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
+    uint8_t request[NETCODE_MAX_PACKET_BYTES];
+    uint8_t t2_request[NETCODE_MAX_PACKET_BYTES];
+    uint8_t packet_scratch[NETCODE_MAX_PACKET_BYTES];
+    uint8_t t1_challenge[NETCODE_MAX_PACKET_BYTES];
+    uint8_t t1_client_to_server_key[NETCODE_KEY_BYTES];
+    uint8_t t1_server_to_client_key[NETCODE_KEY_BYTES];
+    uint8_t t1_mac[NETCODE_MAC_BYTES];
+    uint8_t t2_mac[NETCODE_MAC_BYTES];
+    uint8_t zero_mac[NETCODE_MAC_BYTES];
+    uint8_t response_packet[NETCODE_MAX_PACKET_BYTES];
+    uint8_t challenge_allowed[NETCODE_CONNECTION_NUM_PACKETS];
+    uint64_t now;
+    uint64_t t1_expire;
+    uint64_t t_after;
+    uint64_t sequence;
+    int request_bytes;
+    int t2_request_bytes;
+    int t1_challenge_bytes;
+    int response_bytes;
+    int slot;
+    int encryption_index;
+    struct netcode_connection_challenge_packet_t * challenge;
+    struct netcode_connection_response_packet_t response;
+
+    memset( &capture, 0, sizeof( capture ) );
+    memset( zero_mac, 0, sizeof( zero_mac ) );
+
+    check( netcode_parse_address( "127.0.0.1:40000", &server_address ) == NETCODE_OK );
+    check( netcode_parse_address( "127.0.0.1:21001", &from_t1 ) == NETCODE_OK );
+    check( netcode_parse_address( "127.0.0.1:21002", &from_t2 ) == NETCODE_OK );
+
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.max_connect_token_lifetime = 5;
+    server_config.override_send_and_receive = 1;
+    server_config.callback_context = &capture;
+    server_config.send_packet_override = test_reclaim_send_packet;
+    server_config.receive_packet_override = test_reclaim_receive_packet;
+    memcpy( server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    server = netcode_server_create( "127.0.0.1:40000", &server_config, 0.0 );
+    check( server );
+
+    netcode_server_start( server, 2 );
+
+    now = (uint64_t) time( NULL );
+    t1_expire = now + (uint64_t) server->config.max_connect_token_lifetime;
+    t_after = t1_expire;
+
+    test_reclaim_allowed_packets( allowed_packets );
+
+    request_bytes = test_reclaim_write_request( request, (int) sizeof( request ), &server_address, TEST_CLIENT_ID, TEST_TIMEOUT_SECONDS, t1_expire, t1_client_to_server_key, t1_server_to_client_key );
+    check( request_bytes > 0 );
+
+    netcode_server_read_and_process_packet( server, &from_t1, request, request_bytes, now, allowed_packets );
+
+    check( capture.packet_bytes > 0 );
+    check( netcode_address_equal( &capture.to, &from_t1 ) );
+    check( ( capture.packet_data[0] & 0xF ) == NETCODE_CONNECTION_CHALLENGE_PACKET );
+
+    t1_challenge_bytes = capture.packet_bytes;
+    memcpy( t1_challenge, capture.packet_data, t1_challenge_bytes );
+
+    slot = test_reclaim_history_slot( server );
+    check( slot >= 0 );
+    check( server->connect_token_entries[slot].state == NETCODE_CONNECT_TOKEN_ENTRY_PENDING );
+    memcpy( t1_mac, server->connect_token_entries[slot].mac, NETCODE_MAC_BYTES );
+    check( memcmp( t1_mac, zero_mac, NETCODE_MAC_BYTES ) != 0 );
+
+    encryption_index = netcode_encryption_manager_find_encryption_mapping( &server->encryption_manager, &from_t1, server->time );
+    check( encryption_index >= 0 );
+    check( netcode_encryption_manager_get_connect_token_entry_index( &server->encryption_manager, encryption_index ) == slot );
+
+    t2_request_bytes = test_reclaim_write_request( t2_request, (int) sizeof( t2_request ), &server_address, TEST_CLIENT_ID + 1, TEST_TIMEOUT_SECONDS, t_after + 30, NULL, NULL );
+    check( t2_request_bytes > 0 );
+
+    memset( &capture, 0, sizeof( capture ) );
+
+    memcpy( packet_scratch, t2_request, t2_request_bytes );
+    netcode_server_read_and_process_packet( server, &from_t2, packet_scratch, t2_request_bytes, t_after, allowed_packets );
+
+    check( capture.packet_bytes > 0 );
+    check( netcode_address_equal( &capture.to, &from_t2 ) );
+    check( ( capture.packet_data[0] & 0xF ) == NETCODE_CONNECTION_CHALLENGE_PACKET );
+    check( test_reclaim_history_slot( server ) == slot );
+    check( server->connect_token_entries[slot].state == NETCODE_CONNECT_TOKEN_ENTRY_PENDING );
+    memcpy( t2_mac, server->connect_token_entries[slot].mac, NETCODE_MAC_BYTES );
+    check( memcmp( t2_mac, zero_mac, NETCODE_MAC_BYTES ) != 0 );
+    check( memcmp( t1_mac, t2_mac, NETCODE_MAC_BYTES ) != 0 );
+
+    memset( challenge_allowed, 0, sizeof( challenge_allowed ) );
+    challenge_allowed[NETCODE_CONNECTION_CHALLENGE_PACKET] = 1;
+    sequence = 0;
+
+    challenge = (struct netcode_connection_challenge_packet_t*) netcode_read_packet( t1_challenge,
+                                                                                     t1_challenge_bytes,
+                                                                                     &sequence,
+                                                                                     t1_server_to_client_key,
+                                                                                     TEST_PROTOCOL_ID,
+                                                                                     t_after,
+                                                                                     0,
+                                                                                     NULL,
+                                                                                     challenge_allowed,
+                                                                                     NULL,
+                                                                                     NULL,
+                                                                                     NULL );
+    check( challenge );
+
+    response.packet_type = NETCODE_CONNECTION_RESPONSE_PACKET;
+    response.challenge_token_sequence = challenge->challenge_token_sequence;
+    memcpy( response.challenge_token_data, challenge->challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
+    free( challenge );
+
+    response_bytes = netcode_write_packet( &response, response_packet, (int) sizeof( response_packet ), 0, t1_client_to_server_key, TEST_PROTOCOL_ID );
+    check( response_bytes > 0 );
+
+    netcode_server_read_and_process_packet( server, &from_t1, response_packet, response_bytes, t_after, allowed_packets );
+
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+    check( netcode_server_num_connected_clients( server ) == 1 );
+    check( server->client_id[0] == TEST_CLIENT_ID );
+
+    memset( &capture, 0, sizeof( capture ) );
+
+    memcpy( packet_scratch, t2_request, t2_request_bytes );
+    netcode_server_read_and_process_packet( server, &from_t2, packet_scratch, t2_request_bytes, t_after, allowed_packets );
+
+    check( capture.packet_bytes > 0 );
+    check( netcode_address_equal( &capture.to, &from_t2 ) );
+    check( ( capture.packet_data[0] & 0xF ) == NETCODE_CONNECTION_CHALLENGE_PACKET );
+    check( server->connect_token_entries[slot].state == NETCODE_CONNECT_TOKEN_ENTRY_PENDING );
+    check( memcmp( server->connect_token_entries[slot].mac, t2_mac, NETCODE_MAC_BYTES ) == 0 );
+
+    netcode_server_destroy( server );
+}
+
 /*
     A client and a server wired directly to each other through the send and receive overrides.
     Packets are handed straight to the other side, so the handshake is exercised with no sockets,
@@ -11119,6 +11388,7 @@ void netcode_test()
         RUN_TEST( test_server_client_disconnect_reason );
         RUN_TEST( test_client_reconnect );
         RUN_TEST( test_connect_token_entries );
+        RUN_TEST( test_reclaimed_connect_token_is_not_consumed );
         RUN_TEST( test_client_server_connection_request_retransmission );
         RUN_TEST( test_client_server_replay_across_sessions );
         RUN_TEST( test_client_reconnect_with_used_connect_token );
