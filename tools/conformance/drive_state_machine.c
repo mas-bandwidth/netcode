@@ -8,9 +8,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include "netcode.h"
 
 #define CONFORMANCE_PORT 41999
+
+static uint64_t wall_clock_seconds( void )
+{
+    return (uint64_t) time( NULL );
+}
 
 static int last_state = -999;
 
@@ -48,6 +54,12 @@ int main( void )
     if ( !server ) { printf( "RESULT fail server_create\n" ); return 1; }
     netcode_server_start( server, 4 );
 
+    /* model a connect token issued in a second after the server started so it expires
+       strictly beyond the server start floor */
+
+    uint64_t start_second = wall_clock_seconds();
+    while ( wall_clock_seconds() == start_second ) { }
+
     struct netcode_client_config_t client_config;
     netcode_default_client_config( &client_config );
 
@@ -63,7 +75,7 @@ int main( void )
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
     NETCODE_CONST char * server_addresses[] = { addr };
 
-    if ( netcode_generate_connect_token( 1, server_addresses, server_addresses, 30, 5,
+    if ( netcode_generate_connect_token( 1, server_addresses, server_addresses, NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME, 5,
                                          client_id, server_config.protocol_id,
                                          private_key, user_data, connect_token ) != NETCODE_OK )
     { printf( "RESULT fail token\n" ); return 1; }
