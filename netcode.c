@@ -488,10 +488,10 @@ void netcode_term()
 // ----------------------------------------------------------------
 
 #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-typedef uint32_t netcode_socket_handle_t;
+typedef SOCKET netcode_socket_handle_t;
 #else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
-typedef size_t netcode_socket_handle_t;
-#endif // #if NETCODE_PLATFORM == NETCODe_PLATFORM_WINDOWS
+typedef int netcode_socket_handle_t;
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
 
 // -1 on posix (descriptor 0 is a valid socket), INVALID_SOCKET on windows
 
@@ -6369,6 +6369,16 @@ static int test_socket_buffer_os_try( void * context, int size )
     return size <= os->limit;
 }
 
+static void test_socket_handle_signed()
+{
+#if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    check( sizeof( netcode_socket_handle_t ) >= sizeof( void * ) );
+#else // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+    netcode_socket_handle_t handle = (netcode_socket_handle_t) -1;
+    check( handle < 0 );
+#endif // #if NETCODE_PLATFORM == NETCODE_PLATFORM_WINDOWS
+}
+
 static void test_socket_buffer_size_back_off()
 {
     const int requested = 4 * 1024 * 1024;
@@ -11468,6 +11478,7 @@ void netcode_test()
         RUN_TEST( test_endian );
         RUN_TEST( test_address );
         RUN_TEST( test_sequence );
+        RUN_TEST( test_socket_handle_signed );
         RUN_TEST( test_socket_buffer_size_back_off );
         RUN_TEST( test_socket_handle );
         RUN_TEST( test_connect_token );
