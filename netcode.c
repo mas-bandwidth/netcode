@@ -3127,10 +3127,10 @@ static int netcode_client_address_family_usable( struct netcode_client_t * clien
         return 1;
 
     if ( address_type == NETCODE_ADDRESS_IPV4 )
-        return client->socket_holder.ipv4.handle != 0;
+        return netcode_socket_handle_valid( client->socket_holder.ipv4.handle );
 
     if ( address_type == NETCODE_ADDRESS_IPV6 )
-        return client->socket_holder.ipv6.handle != 0;
+        return netcode_socket_handle_valid( client->socket_holder.ipv6.handle );
 
     return 0;
 }
@@ -9256,14 +9256,14 @@ void test_client_connect_matching_address_family()
     struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
 
     check( client );
-    check( client->socket_holder.ipv4.handle == 0 );
-    check( client->socket_holder.ipv6.handle == 0 );
+    check( !netcode_socket_handle_valid( client->socket_holder.ipv4.handle ) );
+    check( !netcode_socket_handle_valid( client->socket_holder.ipv6.handle ) );
 
     client->config.override_send_and_receive = 0;
     client->config.send_packet_override = NULL;
     client->config.receive_packet_override = NULL;
     client->socket_holder.ipv4.handle = 1;
-    client->socket_holder.ipv6.handle = 0;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
 
     NETCODE_CONST char * other_family = "[::1]:40000";
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
@@ -9275,7 +9275,7 @@ void test_client_connect_matching_address_family()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_INVALID_CONNECT_TOKEN );
 
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
-    client->socket_holder.ipv4.handle = 0;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
 
     client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
@@ -9286,7 +9286,7 @@ void test_client_connect_matching_address_family()
     client->config.send_packet_override = NULL;
     client->config.receive_packet_override = NULL;
     client->socket_holder.ipv4.handle = 1;
-    client->socket_holder.ipv6.handle = 0;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
 
     NETCODE_CONST char * server_addresses[] = { "[::1]:40000", "127.0.0.1:40000" };
 
@@ -9300,7 +9300,7 @@ void test_client_connect_matching_address_family()
     check( client->server_address.port == 40000 );
 
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
-    client->socket_holder.ipv4.handle = 0;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
 
     client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
@@ -9311,7 +9311,7 @@ void test_client_connect_matching_address_family()
     client->config.send_packet_override = NULL;
     client->config.receive_packet_override = NULL;
     client->socket_holder.ipv4.handle = 1;
-    client->socket_holder.ipv6.handle = 0;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
 
     NETCODE_CONST char * stopped_addresses[] = { "127.0.0.1:40000", "[::1]:40001" };
 
@@ -9330,7 +9330,7 @@ void test_client_connect_matching_address_family()
     check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
-    client->socket_holder.ipv4.handle = 0;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
 
     client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
@@ -9341,7 +9341,7 @@ void test_client_connect_matching_address_family()
     client->config.send_packet_override = NULL;
     client->config.receive_packet_override = NULL;
     client->socket_holder.ipv4.handle = 1;
-    client->socket_holder.ipv6.handle = 0;
+    client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
 
     NETCODE_CONST char * later_addresses[] = { "127.0.0.1:40000", "[::1]:40001", "127.0.0.1:40002" };
 
@@ -9358,7 +9358,7 @@ void test_client_connect_matching_address_family()
     check( client->server_address.port == 40002 );
 
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
-    client->socket_holder.ipv4.handle = 0;
+    client->socket_holder.ipv4.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
 }
 
