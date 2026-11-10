@@ -186,13 +186,13 @@ struct netcode_address_t
 
 int netcode_parse_address( NETCODE_CONST char * address_string_in, struct netcode_address_t * address );
 
-char * netcode_address_to_string( struct netcode_address_t * address, char * buffer );
-
 /*
     Writes the address into buffer in its printable form and returns buffer. The buffer must
     be at least NETCODE_MAX_ADDRESS_STRING_LENGTH bytes. The result is always null terminated,
     and is truncated to fit rather than overflowing the buffer.
 */
+
+char * netcode_address_to_string( struct netcode_address_t * address, char * buffer );
 
 int netcode_address_equal( struct netcode_address_t * a, struct netcode_address_t * b );
 
@@ -227,6 +227,12 @@ int netcode_client_create_error();
 void netcode_client_destroy( struct netcode_client_t * client );
 
 void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect_token );
+
+/*
+    Advances the client to time, in seconds. time must be monotonically non-decreasing
+    across calls: passing a time earlier than the previous call makes the elapsed time
+    negative and moves timeout and expiry deadlines backwards.
+*/
 
 void netcode_client_update( struct netcode_client_t * client, double time );
 
@@ -324,6 +330,12 @@ void netcode_server_stop( struct netcode_server_t * server );
 int netcode_server_running( struct netcode_server_t * server );
 
 int netcode_server_max_clients( struct netcode_server_t * server );
+
+/*
+    Advances the server to time, in seconds. time must be monotonically non-decreasing
+    across calls: passing a time earlier than the previous call makes the elapsed time
+    negative and moves timeout and expiry deadlines backwards.
+*/
 
 void netcode_server_update( struct netcode_server_t * server, double time );
 
