@@ -894,11 +894,12 @@ int netcode_socket_create( struct netcode_socket_t * s, struct netcode_address_t
         struct sockaddr_storage addr;
         memset( &addr, 0, sizeof(addr) );
         addr.ss_family = ( address->type == NETCODE_ADDRESS_IPV6 ) ? AF_INET6 : AF_INET;
+        // the qWAVE calls fail on some Windows hosts, so tagging here is best effort:
+        // a failure is logged and the socket is kept, untagged, as in earlier releases
+
         if ( netcode_set_socket_codepoint( s->handle, QOSTrafficTypeAudioVideo, 0, (PSOCKADDR) &addr ) != 0 )
         {
-            netcode_printf( NETCODE_LOG_LEVEL_ERROR, "error: failed to enable packet tagging\n" );
-            netcode_socket_destroy( s );
-            return NETCODE_SOCKET_ERROR_ENABLE_PACKET_TAGGING_FAILED;
+            netcode_printf( NETCODE_LOG_LEVEL_INFO, "failed to enable packet tagging. continuing without it\n" );
         }
     }
 
