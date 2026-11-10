@@ -3576,7 +3576,7 @@ void netcode_client_update( struct netcode_client_t * client, double time )
     if ( client->should_disconnect )
     {
         netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "client should disconnect -> %s\n", netcode_client_state_name( client->should_disconnect_state ) );
-        if ( netcode_client_connect_to_next_server( client ) )
+        if ( client->state != NETCODE_CLIENT_STATE_CONNECTED && netcode_client_connect_to_next_server( client ) )
             return;
         netcode_client_disconnect_internal( client, client->should_disconnect_state, 0 );
         return;
@@ -10444,6 +10444,98 @@ void test_server_side_disconnect()
     netcode_network_simulator_destroy( network_simulator );
 }
 
+void test_server_side_disconnect_with_more_server_addresses()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    // connect a client with a token naming two servers to the first of them
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
+
+    check( client );
+
+    struct netcode_server_config_t server_config;
+    netcode_default_server_config( &server_config );
+    server_config.protocol_id = TEST_PROTOCOL_ID;
+    server_config.network_simulator = network_simulator;
+    memcpy( &server_config.private_key, private_key, NETCODE_KEY_BYTES );
+
+    struct netcode_server_t * server = netcode_server_create( "[::1]:40000", &server_config, time );
+
+    check( server );
+
+    test_server_start( server, 1 );
+
+    NETCODE_CONST char * server_address[] = { "[::1]:40000", "[::1]:40001" };
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+    check( netcode_generate_connect_token( 2, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        if ( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECTED );
+    check( netcode_server_client_connected( server, 0 ) == 1 );
+
+    // a connected client that the server disconnects goes to disconnected. it does not move
+    // on to the next server address in the connect token.
+
+    netcode_server_disconnect_client( server, 0 );
+
+    int i;
+    for ( i = 0; i < 10; i++ )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        netcode_server_update( server, time );
+
+        if ( netcode_client_state( client ) != NETCODE_CLIENT_STATE_CONNECTED )
+            break;
+
+        time += delta_time;
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_DISCONNECTED );
+
+    netcode_server_destroy( server );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
+}
+
 void test_server_client_disconnect_reason()
 {
     struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
@@ -12484,6 +12576,7 @@ void netcode_test()
         RUN_TEST( test_client_error_connection_denied );
         RUN_TEST( test_client_side_disconnect );
         RUN_TEST( test_server_side_disconnect );
+        RUN_TEST( test_server_side_disconnect_with_more_server_addresses );
         RUN_TEST( test_server_client_disconnect_reason );
         RUN_TEST( test_server_disconnect_callback_reentry );
         RUN_TEST( test_client_reconnect );
