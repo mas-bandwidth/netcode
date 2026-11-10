@@ -40,8 +40,8 @@ LEGAL = {
     (CONNECTED, CONN_TIMEOUT),            # no payload or keep-alive within timeout
 }
 # "If the entire client connection process ... takes long enough that the connect
-# token expires" — reachable from any non-terminal state in the attempt.
-for s in (DISCONNECTED, SENDING_REQUEST, SENDING_RESPONSE):
+# token expires" — reachable only once the attempt has begun, never from disconnected.
+for s in (SENDING_REQUEST, SENDING_RESPONSE):
     LEGAL.add((s, TOKEN_EXPIRED))
 # A client may abandon an attempt at any point; the spec's disconnect path ends here.
 for s in (SENDING_REQUEST, SENDING_RESPONSE):

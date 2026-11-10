@@ -38,7 +38,9 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# netcode.h selects debug/release behavior from these rather than NDEBUG
+# set NETCODE_DEBUG / NETCODE_RELEASE explicitly; without them netcode.h derives one from
+# NDEBUG. netcode_assert in netcode.h is still compiled in or out by NDEBUG itself, which
+# CMake's default flags define for Release, RelWithDebInfo and MinSizeRel.
 add_compile_definitions(
     $<$<CONFIG:Debug>:NETCODE_DEBUG>
     $<$<NOT:$<CONFIG:Debug>>:NETCODE_RELEASE>
