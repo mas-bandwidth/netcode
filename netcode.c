@@ -6739,6 +6739,30 @@ static void test_oor_assert_handler( NETCODE_CONST char * condition, NETCODE_CON
     // release-build code path from a test binary that has asserts compiled in.
 }
 
+static void test_connect_token_expire_timestamp()
+{
+    uint8_t private_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( private_key );
+
+    NETCODE_CONST char * server_address = "127.0.0.1:40000";
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes( user_data, NETCODE_USER_DATA_BYTES );
+
+    const int expire_seconds[] = { -1, -30 };
+
+    int i;
+    for ( i = 0; i < (int) ( sizeof( expire_seconds ) / sizeof( expire_seconds[0] ) ); i++ )
+    {
+        uint8_t connect_token_data[NETCODE_CONNECT_TOKEN_BYTES];
+        check( netcode_generate_connect_token( 1, &server_address, &server_address, expire_seconds[i], TEST_TIMEOUT_SECONDS, TEST_CLIENT_ID, TEST_PROTOCOL_ID, private_key, user_data, connect_token_data ) == NETCODE_OK );
+
+        struct netcode_connect_token_t connect_token;
+        check( netcode_read_connect_token( connect_token_data, NETCODE_CONNECT_TOKEN_BYTES, &connect_token ) == NETCODE_OK );
+        check( connect_token.expire_timestamp == UINT64_MAX );
+    }
+}
+
 static void test_generate_connect_token_out_of_range()
 {
     // netcode_generate_connect_token parses into arrays sized NETCODE_MAX_SERVERS_PER_CONNECT.
@@ -11511,6 +11535,7 @@ void netcode_test()
         RUN_TEST( test_socket_buffer_size_back_off );
         RUN_TEST( test_socket_handle );
         RUN_TEST( test_connect_token );
+        RUN_TEST( test_connect_token_expire_timestamp );
         RUN_TEST( test_generate_connect_token_out_of_range );
         RUN_TEST( test_challenge_token );
         RUN_TEST( test_connection_request_packet );
