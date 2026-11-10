@@ -3108,7 +3108,6 @@ void netcode_client_set_state( struct netcode_client_t * client, int client_stat
 
 void netcode_client_reset_before_next_connect( struct netcode_client_t * client )
 {
-    client->connect_start_time = client->time;
     client->last_packet_send_time = client->time - 1.0f;
     client->last_packet_receive_time = client->time;
     client->should_disconnect = 0;
@@ -3206,6 +3205,8 @@ void netcode_client_connect( struct netcode_client_t * client, uint8_t * connect
     memcpy( client->context.write_packet_key, client->connect_token.client_to_server_key, NETCODE_KEY_BYTES );
 
     netcode_client_reset_before_next_connect( client );
+
+    client->connect_start_time = client->time;
 
     netcode_client_set_state( client, NETCODE_CLIENT_STATE_SENDING_CONNECTION_REQUEST );
 }
@@ -7684,6 +7685,80 @@ void test_replay_protection()
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
 }
 
+void test_read_packet_replay_protection()
+{
+    // encrypted packets read through netcode_read_packet with a replay protection window:
+    // an identical datagram is accepted once, and a datagram that fails to decrypt leaves
+    // the window unchanged, so the authentic packet with the same sequence is still accepted.
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    int i;
+    for ( i = 0; i < NETCODE_KEY_BYTES; i++ )
+    {
+        packet_key[i] = (uint8_t) ( i + 1 );
+    }
+
+    uint8_t allowed_packet_types[NETCODE_CONNECTION_NUM_PACKETS];
+    memset( allowed_packet_types, 1, sizeof( allowed_packet_types ) );
+
+    struct netcode_connection_keep_alive_packet_t input_packet;
+    input_packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+    input_packet.client_index = 3;
+    input_packet.max_clients = 16;
+
+    const uint64_t packet_sequence = 1000;
+
+    uint8_t packet_data[NETCODE_MAX_PACKET_BYTES];
+    int packet_bytes = netcode_write_packet( &input_packet, packet_data, sizeof( packet_data ), packet_sequence, packet_key, TEST_PROTOCOL_ID );
+    check( packet_bytes > 1 + NETCODE_MAC_BYTES );
+
+    struct netcode_replay_protection_t replay_protection;
+    uint64_t sequence;
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+    // the same encrypted datagram twice in one session: the second is rejected
+
+    {
+        netcode_replay_protection_reset( &replay_protection );
+
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        struct netcode_connection_keep_alive_packet_t * output_packet = (struct netcode_connection_keep_alive_packet_t*)
+            netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, &replay_protection, NULL, NULL );
+        check( output_packet );
+        check( sequence == packet_sequence );
+        check( output_packet->packet_type == NETCODE_CONNECTION_KEEP_ALIVE_PACKET );
+        check( output_packet->client_index == 3 );
+        check( output_packet->max_clients == 16 );
+        free( output_packet );
+
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        check( netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, &replay_protection, NULL, NULL ) == NULL );
+    }
+
+    // a datagram that fails to decrypt does not move the window: the authentic packet at the same sequence is still accepted
+
+    {
+        netcode_replay_protection_reset( &replay_protection );
+
+        const uint64_t most_recent_sequence = replay_protection.most_recent_sequence;
+        check( packet_sequence > most_recent_sequence );
+
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        buffer[packet_bytes-1] ^= 0x01;
+        check( netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, &replay_protection, NULL, NULL ) == NULL );
+        check( sequence == packet_sequence );
+        check( replay_protection.most_recent_sequence == most_recent_sequence );
+        check( netcode_replay_protection_already_received( &replay_protection, packet_sequence ) == 0 );
+
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        void * output_packet = netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, &replay_protection, NULL, NULL );
+        check( output_packet );
+        check( sequence == packet_sequence );
+        check( replay_protection.most_recent_sequence == packet_sequence );
+        free( output_packet );
+    }
+}
+
 static int num_ignored_asserts = 0;
 
 static void test_override_send_packet( void * context, struct netcode_address_t * to, NETCODE_CONST uint8_t * packet_data, int packet_bytes );
@@ -9172,7 +9247,7 @@ void test_client_server_multiple_servers()
     uint8_t user_data[NETCODE_USER_DATA_BYTES];
     netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
 
-    check( netcode_generate_connect_token( 3, server_address, server_address, TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+    check( netcode_generate_connect_token( 3, server_address, server_address, 3 * TEST_CONNECT_TOKEN_EXPIRY, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
 
     netcode_client_connect( client, connect_token );
 
@@ -9484,6 +9559,62 @@ void test_client_connect_matching_address_family()
     client->state = NETCODE_CLIENT_STATE_DISCONNECTED;
     client->socket_holder.ipv6.handle = NETCODE_SOCKET_HANDLE_INVALID;
     netcode_client_destroy( client );
+}
+
+void test_client_error_connect_token_expired_multiple_servers()
+{
+    struct netcode_network_simulator_t * network_simulator = netcode_network_simulator_create( NULL, NULL, NULL );
+
+    double time = 0.0;
+    double delta_time = 1.0 / 10.0;
+
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.network_simulator = network_simulator;
+
+    struct netcode_client_t * client = netcode_client_create( "[::]:50000", &client_config, time );
+
+    check( client );
+
+    NETCODE_CONST char * server_address[] = { "10.10.10.10:1000", "100.100.100.100:50000" };
+
+    uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
+
+    uint64_t client_id = 0;
+    netcode_random_bytes( (uint8_t*) &client_id, 8 );
+
+    uint8_t user_data[NETCODE_USER_DATA_BYTES];
+    netcode_random_bytes(user_data, NETCODE_USER_DATA_BYTES);
+
+    const int connect_token_expiry = TEST_TIMEOUT_SECONDS + TEST_TIMEOUT_SECONDS / 2;
+
+    check( netcode_generate_connect_token( 2, server_address, server_address, connect_token_expiry, TEST_TIMEOUT_SECONDS, client_id, TEST_PROTOCOL_ID, private_key, user_data, connect_token ) );
+
+    netcode_client_connect( client, connect_token );
+
+    while ( 1 )
+    {
+        netcode_network_simulator_update( network_simulator, time );
+
+        netcode_client_update( client, time );
+
+        if ( netcode_client_state( client ) <= NETCODE_CLIENT_STATE_DISCONNECTED )
+            break;
+
+        time += delta_time;
+
+        if ( time > 4.0 * connect_token_expiry )
+        {
+            check( 0 );
+            break;
+        }
+    }
+
+    check( netcode_client_state( client ) == NETCODE_CLIENT_STATE_CONNECT_TOKEN_EXPIRED );
+
+    netcode_client_destroy( client );
+
+    netcode_network_simulator_destroy( network_simulator );
 }
 
 void test_client_error_invalid_connect_token()
@@ -11778,6 +11909,7 @@ void netcode_test()
         RUN_TEST( test_connect_token_public );
         RUN_TEST( test_encryption_manager );
         RUN_TEST( test_replay_protection );
+        RUN_TEST( test_read_packet_replay_protection );
         RUN_TEST( test_runtime_guards );
         RUN_TEST( test_init_and_defaults );
         RUN_TEST( test_network_simulator_determinism );
@@ -11789,6 +11921,7 @@ void netcode_test()
         RUN_TEST( test_client_server_multiple_servers );
         RUN_TEST( test_client_error_connect_token_expired );
         RUN_TEST( test_client_connect_matching_address_family );
+        RUN_TEST( test_client_error_connect_token_expired_multiple_servers );
         RUN_TEST( test_client_error_invalid_connect_token );
         RUN_TEST( test_client_error_connection_timed_out );
         RUN_TEST( test_client_error_connection_response_timeout );
