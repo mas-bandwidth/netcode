@@ -1870,6 +1870,11 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 {
     netcode_assert( replay_protection );
 
+    // The maximum value is reserved for an empty receive slot.
+
+    if ( sequence == UINT64_MAX )
+        return 1;
+
     // written so it cannot overflow: "sequence + BUFFER_SIZE <= most_recent" wraps for
     // sequence values near UINT64_MAX and falsely rejects them as replays
 
@@ -1891,6 +1896,9 @@ int netcode_replay_protection_already_received( struct netcode_replay_protection
 void netcode_replay_protection_advance_sequence( struct netcode_replay_protection_t * replay_protection, uint64_t sequence )
 {
     netcode_assert( replay_protection );
+
+    if ( sequence == UINT64_MAX )
+        return;
 
     if ( sequence > replay_protection->most_recent_sequence )
         replay_protection->most_recent_sequence = sequence;
@@ -2088,6 +2096,14 @@ void * netcode_read_packet( uint8_t * buffer,
         {
             uint8_t value = netcode_read_uint8( &buffer );
             (*sequence) |= ( uint64_t) ( value ) << ( 8 * i );
+        }
+
+        // The maximum value is reserved by replay protection.
+
+        if ( *sequence == UINT64_MAX )
+        {
+            netcode_printf( NETCODE_LOG_LEVEL_DEBUG, "ignored encrypted packet. sequence is invalid\n" );
+            return NULL;
         }
 
         // ignore the packet if it has already been received
@@ -7862,6 +7878,29 @@ void test_replay_protection()
     // while packets that fell out of the window are rejected as before
 
     check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 - NETCODE_REPLAY_PROTECTION_BUFFER_SIZE ) == 1 );
+
+    // The reserved sequence cannot be accepted or move the replay window.
+
+    netcode_replay_protection_reset( &replay_protection );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 1 ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX - 1 );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX );
+    check( replay_protection.most_recent_sequence == UINT64_MAX - 1 );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX - 2 ) == 0 );
+
+    // Refusing the reserved value leaves an ordinary receive window usable.
+
+    netcode_replay_protection_reset( &replay_protection );
+    check( netcode_replay_protection_already_received( &replay_protection, 10 ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, 10 );
+    check( netcode_replay_protection_already_received( &replay_protection, UINT64_MAX ) == 1 );
+    netcode_replay_protection_advance_sequence( &replay_protection, UINT64_MAX );
+    check( replay_protection.most_recent_sequence == 10 );
+    check( netcode_replay_protection_already_received( &replay_protection, 11 ) == 0 );
+    netcode_replay_protection_advance_sequence( &replay_protection, 11 );
+    check( replay_protection.most_recent_sequence == 11 );
 }
 
 void test_read_packet_replay_protection()
@@ -7934,6 +7973,25 @@ void test_read_packet_replay_protection()
         check( output_packet );
         check( sequence == packet_sequence );
         check( replay_protection.most_recent_sequence == packet_sequence );
+        free( output_packet );
+    }
+
+    // The packet reader refuses the reserved sequence even without a replay window.
+
+    {
+        struct netcode_connection_denied_packet_t denied_packet;
+        denied_packet.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+        packet_bytes = netcode_write_packet( &denied_packet, packet_data, sizeof( packet_data ), UINT64_MAX, packet_key, TEST_PROTOCOL_ID );
+        check( packet_bytes > 1 + NETCODE_MAC_BYTES );
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        check( netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, NULL, NULL, NULL ) == NULL );
+
+        packet_bytes = netcode_write_packet( &denied_packet, packet_data, sizeof( packet_data ), UINT64_MAX - 1, packet_key, TEST_PROTOCOL_ID );
+        check( packet_bytes > 1 + NETCODE_MAC_BYTES );
+        memcpy( buffer, packet_data, (size_t) packet_bytes );
+        void * output_packet = netcode_read_packet( buffer, packet_bytes, &sequence, packet_key, TEST_PROTOCOL_ID, 1000, 0, NULL, allowed_packet_types, NULL, NULL, NULL );
+        check( output_packet );
+        check( sequence == UINT64_MAX - 1 );
         free( output_packet );
     }
 }
