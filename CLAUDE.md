@@ -10,20 +10,20 @@ change here that alters wire behaviour breaks every port and every third-party
 implementation. Spec change first, code second, ports after — never the reverse.
 
 DECISIONS THAT READ AS BUGS (they are not — do not "fix" them)
-- **One ~9,300-line file.** A deliberate style choice trading contribution ergonomics for
+- **One ~11,000-line file.** A deliberate style choice trading contribution ergonomics for
   trivial integration (drop in two files, no build system).
 - **Flat linear scans, not hash maps**, for per-client address lookup and the encryption
   mapping search. A hash WAS considered and rejected: netcode targets ~100 players, and an
   attacker controls the keys (source addresses) and could drive a hash into its worst case.
   Linear is the hardened choice here, not the lazy one.
 - **Connect-token single-use tracking is constant-time worst-case on purpose**
-  (netcode.c:3701, says so in a comment). Timing must not leak whether a token was seen.
+  (netcode.c:3989, says so in a comment). Timing must not leak whether a token was seen.
 - **Per-packet socket errors are ignored deliberately.** UDP is unreliable, so a send error
   is semantically identical to a dropped packet; a persistently dead socket surfaces as a
   connection timeout through the state machine.
 - **The running server has no state machine of its own** — only stopped/started
   (`netcode_server_running`). All other state is per-client. That is not an omission.
-- **Global packet sequence starts at `1ULL << 63`** (netcode.c:3940) and is re-seeded on
+- **Global packet sequence starts at `1ULL << 63`** (netcode.c:4301, 4384) and is re-seeded on
   BOTH start and stop. Nonce-space separation: pre-connection and per-client packets share
   a key, so their nonces must not collide. Seeding on create only was the AEAD nonce-reuse
   bug fixed in 1.4.0. Keep every seeding site.
@@ -35,8 +35,8 @@ DECISIONS THAT READ AS BUGS (they are not — do not "fix" them)
   tokens rather than evicting one. The server also refuses any connect token that could have
   been issued before it started, using `max_connect_token_lifetime` in the server config.
   STANDARD.md's *Connect Token History* and *Nonce Reuse and Server Restarts* are the contract.
-- **Replay protection advances the window only AFTER authentication** (netcode.c:1863,
-  1907). The cheap pre-decrypt reject is an optimisation; moving the window advance before
+- **Replay protection advances the window only AFTER authentication** (netcode.c:2053,
+  2097). The cheap pre-decrypt reject is an optimisation; moving the window advance before
   auth would let spoofed plaintext sequence numbers poison it.
 
 SECURITY: netcode 1.3.5 and earlier carry the nonce-reuse issue above; see SECURITY.md for
@@ -65,9 +65,9 @@ check." Plus Postel: "be conservative in what you send, permissive in what you r
     -DNDEBUG removing it is correct. Do not add runtime checks here.
   READ / off the wire     -> the library checks at runtime, for SAFETY (bounds, sizes).
     Permissive about format variation; strict about never crashing.
-This repo states the policy itself at netcode.c:4101-4103 -- "an out of range value here
+This repo states the policy itself at netcode.c:4348-4349 -- "an out of range value here
 must not get through in release builds where asserts compile out" -- attached to the entry
-points that were hardened (3387, 4104, 4998, 5010, every client_index accessor). I audited
+points that were hardened (3541, 4351, 5264, 5276, every client_index accessor). I audited
 this file, quoted that comment, and STILL filed the write-path asserts as defects. Do not
 repeat that.
 DELIBERATELY LENIENT, do not "fix": netcode_parse_address("[::1") returns OK and yields
@@ -76,9 +76,9 @@ netcode_generate_connect_token WAS genuinely missing its runtime check -- it was
 entry point skipped in the hardening pass above. Fixed; regression test
 test_generate_connect_token_out_of_range.
 GOTCHA: netcode_set_assert_function( NULL ) is a landmine. netcode_assert calls the pointer
-with NO null guard (netcode.h:350-356), so NULL turns the next failing assert into a crash.
-Restore &netcode_default_assert_handler instead -- which is what netcode.c:6984 already does.
-A custom handler MAY return (documented netcode.h:362-366); that is the only way a test with
+with NO null guard (netcode.h:372-380), so NULL turns the next failing assert into a crash.
+Restore &netcode_default_assert_handler instead -- which is what netcode.c:6701 already does.
+A custom handler MAY return (documented netcode.h:385-389); that is the only way a test with
 asserts compiled in can reach a release-build code path.
 <!-- HOT:END -->
 
@@ -92,13 +92,15 @@ encrypted/signed packets via libsodium, client slots, keep-alives, timeouts, and
 disconnect. The protocol is specified in STANDARD.md (netcode 1.02) and has multiple
 independent implementations (C#, Go, Rust, TypeScript).
 
-- `netcode.h` / `netcode.c` — the entire library. `netcode.c` is ~9,300 lines: ~5,400
-  of implementation and ~3,900 of tests gated behind `NETCODE_ENABLE_TESTS`.
+- `netcode.h` / `netcode.c` — the entire library. `netcode.c` is ~11,000 lines: ~5,750
+  of implementation and ~5,200 of tests gated behind `NETCODE_ENABLE_TESTS`.
 - `client.c`, `server.c`, `client_server.c`, `soak.c`, `profile.c` — examples and harnesses.
 - `sodium/` — vendored subset of libsodium, amalgamated into a single `sodium.h` +
   `sodium.c` pair (see `sodium/NOTES.md` for how it is generated and validated).
 - Build: CMake. `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel`,
-  then `ctest --test-dir build --output-on-failure` runs the suite (51 tests). The
+  then `ctest --test-dir build --output-on-failure` runs the suite (one ctest entry, `netcode_test`, running 55 test
+  functions; 54 where packet tagging is off, as on MinGW, and one more with the nonce
+  audit). The
   `netcode_test` target compiles netcode.c into itself with `NETCODE_ENABLE_TESTS`, so it
   links only sodium. `-DNETCODE_SANITIZE=ON` adds ASan+UBSan (sodium keeps UBSan
   except alignment);
@@ -135,7 +137,7 @@ by earlier passes of this assessment — thin error reporting, internal duplicat
 assert-only input validation, per-packet allocation — have each been either fixed or
 documented below as deliberate design. What remains is one genuinely external step —
 OSS-Fuzz enrollment for continuous rather than nightly-bounded fuzzing — and the inherent
-contribution cost of a single ~9,300-line file, a deliberate style choice that trades
+contribution cost of a single ~11,000-line file, a deliberate style choice that trades
 contribution ergonomics for trivial integration.
 
 ### What's genuinely good
@@ -146,16 +148,16 @@ trust the network. The security details are handled with visible care:
 
 - AEAD everywhere, with version info, protocol id, and the packet prefix byte bound as
   associated data — you can't transplant ciphertext across packet types or protocol
-  versions (`netcode_write_packet`, netcode.c:1606).
+  versions (`netcode_write_packet`, netcode.c:1655).
 - Nonce-space separation: server global packets start sequence at `1ULL << 63`
-  (netcode.c:3940) so pre-connection and per-client packet nonces can't collide under a
+  (netcode.c:4301, 4384) so pre-connection and per-client packet nonces can't collide under a
   shared key.
 - Replay protection does a cheap pre-decrypt rejection of stale sequence numbers, but only
-  advances the window *after* authentication succeeds (netcode.c:1863, 1907) — plaintext
+  advances the window *after* authentication succeeds (netcode.c:2053, 2097) — plaintext
   sequence numbers can't be spoofed to poison the window. This is the correct fix for the
   vulnerability class credited in the README.
 - Connect-token single-use tracking is a deliberately constant-time worst-case scan, and
-  says so in a comment (netcode.c:3701).
+  says so in a comment (netcode.c:3989).
 - Per-packet address lookups (`netcode_server_find_client_index_by_address`, the
   encryption mapping search) are deliberately flat linear scans, not hash maps. A hash
   was considered and rejected: netcode targets ~100 players or fewer per server, and an
@@ -166,21 +168,21 @@ trust the network. The security details are handled with visible care:
 - The challenge/response step defeats source-address spoofing, and "server is full" is
   only revealed after the token decrypts — no free oracle for random scanners.
 - Every read path length-checks before it touches or allocates anything; connection
-  requests must be *exactly* the right size (netcode.c:1722).
+  requests must be *exactly* the right size (netcode.c:1903).
 
 **The engineering shows production scars.** `SIO_UDP_CONNRESET` on Windows so a
-hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:554), `IPV6_V6ONLY`,
+hard-disconnecting client doesn't wedge `recvfrom` (netcode.c:717), `IPV6_V6ONLY`,
 4MB socket buffers, DSCP packet tagging with a documented MinGW/Qwave workaround, true
 dual-stack IPv4+IPv6 sockets, loopback clients for integrated host-and-play, allocator
 override hooks, and full send/receive transport overrides. A built-in network simulator
 (latency/jitter/loss/duplication) makes the connection tests deterministic without
-touching real sockets. Few networking libraries ship this complete a test story: 42
+touching real sockets. Few networking libraries ship this complete a test story: 55
 unit + integration tests covering every client error state, reconnect, multi-server
 fallback, dual-stack, loopback — plus a soak test and a profiler. All pass today.
 
 **The API is small and honest.** Opaque structs, create/update/destroy lifecycle,
 explicit `netcode_client_update(client, time)` — time is injected, not sampled, which
-makes the state machines testable and frame-loop friendly. The header is a clean ~300
+makes the state machines testable and frame-loop friendly. The header is a clean ~400
 lines with zero dependencies beyond stdint.
 
 **Error reporting matches the transport's nature.** Asynchronous connection failures
