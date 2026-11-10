@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <time.h>
 
 #define CONNECT_TOKEN_EXPIRY 30
 #define CONNECT_TOKEN_TIMEOUT 5
@@ -45,6 +46,11 @@ static uint8_t private_key[NETCODE_KEY_BYTES] = { 0x60, 0x6a, 0xbe, 0x6e, 0xc9, 
                                                   0x9a, 0x65, 0x62, 0xf6, 0x6f, 0x2b, 0x30, 0xe4, 
                                                   0x43, 0x71, 0xd6, 0x2c, 0xd1, 0x99, 0x27, 0x26,
                                                   0x6b, 0x3c, 0x60, 0xf4, 0xb7, 0x15, 0xab, 0xa1 };
+
+static time_t wall_clock_second()
+{
+    return time( NULL );
+}
 
 int main( int argc, char ** argv )
 {
@@ -91,6 +97,15 @@ int main( int argc, char ** argv )
     }
 
     netcode_server_start( server, 1 );
+
+    // the server refuses connect tokens issued in the second it started, so a backend in
+    // the same process waits for the wall clock to move past that second before issuing one
+
+    time_t start_second = wall_clock_second();
+    while ( wall_clock_second() == start_second )
+    {
+        netcode_sleep( 0.01 );
+    }
 
     uint8_t connect_token[NETCODE_CONNECT_TOKEN_BYTES];
 
