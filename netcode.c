@@ -3337,6 +3337,11 @@ void netcode_client_process_packet_internal( struct netcode_client_t * client, s
 
 void netcode_client_process_packet( struct netcode_client_t * client, struct netcode_address_t * from, uint8_t * packet_data, int packet_bytes )
 {
+    // check the source address first, so a packet from any other address cannot advance replay protection
+
+    if ( !netcode_address_equal( from, &client->server_address ) )
+        return;
+
     uint8_t allowed_packets[NETCODE_CONNECTION_NUM_PACKETS];
     memset( allowed_packets, 0, sizeof( allowed_packets ) );
     allowed_packets[NETCODE_CONNECTION_DENIED_PACKET] = 1;
@@ -8250,6 +8255,67 @@ void test_client_keep_alive_packet_slot_validation()
     netcode_client_destroy( client );
 }
 
+void test_client_packet_from_other_address_leaves_replay_protection()
+{
+    struct netcode_client_config_t client_config;
+    netcode_default_client_config( &client_config );
+    client_config.override_send_and_receive = 1;
+    client_config.send_packet_override = test_override_send_packet;
+    client_config.receive_packet_override = test_override_receive_packet;
+
+    struct netcode_client_t * client = netcode_client_create( "127.0.0.1:50000", &client_config, 0.0 );
+
+    check( client );
+
+    uint8_t packet_key[NETCODE_KEY_BYTES];
+    netcode_generate_key( packet_key );
+
+    memcpy( client->context.read_packet_key, packet_key, NETCODE_KEY_BYTES );
+    client->connect_token.protocol_id = TEST_PROTOCOL_ID;
+
+    check( netcode_parse_address( "127.0.0.1:40000", &client->server_address ) == NETCODE_OK );
+
+    struct netcode_address_t other_address;
+    check( netcode_parse_address( "127.0.0.1:40001", &other_address ) == NETCODE_OK );
+
+    client->client_index = 0;
+    client->max_clients = 1;
+
+    netcode_client_set_state( client, NETCODE_CLIENT_STATE_CONNECTED );
+
+    uint64_t most_recent_sequence = client->replay_protection.most_recent_sequence;
+
+    struct netcode_connection_keep_alive_packet_t packet;
+    packet.packet_type = NETCODE_CONNECTION_KEEP_ALIVE_PACKET;
+    packet.client_index = 0;
+    packet.max_clients = 1;
+
+    uint8_t buffer[NETCODE_MAX_PACKET_BYTES];
+
+    // a packet that authenticates under the client's key, but comes from another address,
+    // must not move the client's replay protection
+
+    int bytes_written = netcode_write_packet( &packet, buffer, sizeof( buffer ), 1000000, packet_key, TEST_PROTOCOL_ID );
+    check( bytes_written > 0 );
+
+    netcode_client_process_packet( client, &other_address, buffer, bytes_written );
+
+    check( client->replay_protection.most_recent_sequence == most_recent_sequence );
+
+    // and the client still accepts the next packet from its server
+
+    client->time = 10.0;
+
+    bytes_written = netcode_write_packet( &packet, buffer, sizeof( buffer ), 1, packet_key, TEST_PROTOCOL_ID );
+    check( bytes_written > 0 );
+
+    netcode_client_process_packet( client, &client->server_address, buffer, bytes_written );
+
+    check( client->last_packet_receive_time == 10.0 );
+
+    netcode_client_destroy( client );
+}
+
 void test_client_create_error()
 {
     struct netcode_client_config_t client_config;
@@ -12548,6 +12614,7 @@ void netcode_test()
         RUN_TEST( test_connection_response_packet );
         RUN_TEST( test_connection_keep_alive_packet );
         RUN_TEST( test_client_keep_alive_packet_slot_validation );
+        RUN_TEST( test_client_packet_from_other_address_leaves_replay_protection );
         RUN_TEST( test_connection_payload_packet );
         RUN_TEST( test_connection_disconnect_packet );
         RUN_TEST( test_connect_token_public );
