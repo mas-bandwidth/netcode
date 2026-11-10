@@ -6818,6 +6818,9 @@ static void test_address()
 // second the fixture issues tokens in. a token at the configured maximum lifetime then
 // expires one second above the floor, so it is accepted without waiting for the wall clock
 // to advance. tests that exercise the floor itself set it explicitly after starting.
+// this seam exists because unit tests take no real time: a real backend in the same process
+// waits for the wall clock to leave the start second (see client_server.c), and a unit test
+// cannot wait.
 
 static void test_server_start( struct netcode_server_t * server, int max_clients )
 {
