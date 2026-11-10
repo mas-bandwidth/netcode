@@ -9176,6 +9176,12 @@ void test_server_update_drains_empty_datagrams()
 
     check( received );
 
+    // a receive loop that stopped at each empty datagram would take one update per empty
+    // datagram, about 50, to reach the payload. draining them takes one update; the bound
+    // leaves room for real UDP to drop or delay a payload a few times.
+
+    check( attempts < 10 );
+
     netcode_server_destroy( server );
 
     netcode_client_destroy( client );
