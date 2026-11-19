@@ -13,20 +13,20 @@ import argparse, os, struct, subprocess, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 EXPECTED_PKTS = {
-    0: bytes.fromhex("14001bb842318de6a6d1ea9c6dedef680ec6a1528c6db35d5ce7"),
-    1: bytes.fromhex("14019c57f35f952aaf18dcc90d0e5de82c514b2ccb9aafb82c84"),
-    255: bytes.fromhex("14ff0c31f0c65041c3374562ad1c9578ce87b8dd7bda8d5a56ba"),
-    256: bytes.fromhex("240001ff81f979d58a2a1f2d9c64a6ababb9903685c1cb7345e2e1"),
-    65535: bytes.fromhex("24ffff1c721c15c67e56e43b5c5008629327134a96727a0ddbc97f"),
-    65536: bytes.fromhex("340000012b05cafa4781e01c08389825228bcabff67a17985993d7b1"),
-    16777215: bytes.fromhex("34ffffff356fb528be78754d09bb19f12a22278afe46cac0823fbd6e"),
-    16777216: bytes.fromhex("4400000001b47142c0681c09658326d1075e0d85ca2a18e9840e30c52c"),
-    1099511627775: bytes.fromhex("54ffffffffff00494fcc9445b57ed46794842daa11cbd7b52f932dd609ab"),
-    18446744073709551615: bytes.fromhex("84ffffffffffffffff538355438205b22c890388b4e03971e4c6a7953a60668dca"),
+    0: bytes.fromhex("14001bb842318de6a6d1945a288eae87beeb91c17b50a9f68f9c"),
+    1: bytes.fromhex("14019c57f35f952aaf1875aeab971af6f073e1f788c6cc0d43be"),
+    255: bytes.fromhex("14ff0c31f0c65041c33765e705486435868330c0b5fde0ce9059"),
+    256: bytes.fromhex("240001ff81f979d58a2a1fc1ae4eaf2fc092bd9f0f8685e3c49fde"),
+    65535: bytes.fromhex("24ffff1c721c15c67e56e4edf95492c573d42531b900911c49d3af"),
+    65536: bytes.fromhex("340000012b05cafa4781e01c4bac3b2d11b29aac501bb64f0144c1b2"),
+    16777215: bytes.fromhex("34ffffff356fb528be78754d4b8712c6885c1b1bfcab90f79a3f4b4c"),
+    16777216: bytes.fromhex("4400000001b47142c0681c09650f1484e3ca81031b16f69d2709a177fc"),
+    1099511627775: bytes.fromhex("54ffffffffff00494fcc9445b57e5a88e99ef6846292d6f62113aec26f70"),
+    18446744073709551615: bytes.fromhex("84ffffffffffffffff538355438205b22c586d4f5323f934aaf3de7489e8058c43"),
 }
 
 EXPECTED_PKT_KAT = bytes.fromhex(
-    "44776655448e8104bdf6ca06d9a3f211879b59e10232e21d853a4249fd"
+    "44776655448e8104bdf6ca06d9a8328e8c6b42bb0a7e84d1ab70f5aa31"
 )
 
 EXPECTED_PRIVTOKEN_ENC = bytes.fromhex(
@@ -61,7 +61,7 @@ EXPECTED_PRIVTOKEN_ENC = bytes.fromhex(
     "bf1f4bde685f841997aab7327f5f771115bf4c91b9a4dd7fb2ac3f677cf44345"
     "0c8413b26dd2ce1d4cd5f3416cc0e519e487c9ec3b12dbf797614ba914e0f107"
     "4a5c97958539995472c4cad855581f472a1fb946cc10d13ea4d9af94de5d66bb"
-    "e3924b12dc2530a45c12487ffbd24dfebeae3fb93a73242dc5a69ad09e39a941"
+    "e3924b12dc2530a45c12487ffbd24dfe4d140722fab8dab851320e5754158928"
 )
 
 EXPECTED_CHALLENGE_ENC = bytes.fromhex(
@@ -75,6 +75,32 @@ EXPECTED_CHALLENGE_ENC = bytes.fromhex(
     "573aecdfc97d1b0601c4b6022f8fa62470414a92630108a668b2bf57478d6a3a"
     "e9c6bcb08708169b2e02ba681fe62f2358a7d83ff26703d2f5d10f6e662c668d"
     "541c0ccfeb9499b50fa50696"
+)
+
+EXPECTED_DERIVED_C2S_KAT = bytes.fromhex(
+    "a5225053ddedabd2fdf737924c4e7cda5c2f334fe78957b499adf7e0ad1471df"
+)
+
+EXPECTED_DERIVED_S2C_KAT = bytes.fromhex(
+    "8be2caf26f26a9bc1710172def250ad1b5bcf543138d7534994ae65ddc25a6fb"
+)
+
+EXPECTED_DENIED_KAT = bytes.fromhex(
+    "8100000000000000801d344b627990a7beeaa7d8857591ae6325d0ed98fd6a36e5"
+)
+
+EXPECTED_CHALLENGE_PKT_KAT = bytes.fromhex(
+    "8201000000000000801d344b627990a7bef917e3d7d39f8c91855be72aa43442"
+    "8d7bc6426be51c900669b85e1f0c60f06d74c80f93011340b57d463ea47f7257"
+    "20b15d742207a5d9fee579117b0c50f3d686f60182ec6171431d65988abce1fb"
+    "8f9244799bf9fee86fd3871dd439a283281698c8e58af7c262dc7531382cefd1"
+    "a7b7540ebd042e53e6e0470768b98d59443c27081eaa51080c52a6df146ea87a"
+    "4de99984a8fe4941014689eebbfea0b6068ec1297334a1e02a6e0feee93bd171"
+    "978d366d2d0c1f383ed6d662842b3f8a2e5eec1ba8acea0c7c14a63a8c8f8190"
+    "f133f18e8fff17400757c8ba69da4793f6fd52719d763056b12cba0442077ee0"
+    "35b2a39e4961ccfd4e26c619aa639240408f3e38d7ead88404e69c49b1e99978"
+    "c6f2daa8d431f35b26cae7c6f5a99c64117cb092ccac74c0f3bba7e2ec2c1c2c"
+    "6f0ba3f67624f9d49dd3124cfaf7aef6fd46df8ca9"
 )
 
 
@@ -109,6 +135,7 @@ def main():
 
     token, packets, challenge = None, [], None
     pkt_kat, privtoken_enc, challenge_enc = None, None, None
+    derived_c2s, derived_s2c, req_kat, denied_kat, challenge_pkt_kat = None, None, None, None, None
     for line in build_and_run(a.cc).splitlines():
         if line.startswith("TOKEN "):
             _, n, h = line.split(); token = bytes.fromhex(h); assert int(n) == len(token)
@@ -120,6 +147,16 @@ def main():
             _, n, h = line.split(); privtoken_enc = bytes.fromhex(h); assert int(n) == len(privtoken_enc)
         elif line.startswith("CHALLENGE_ENC "):
             _, n, h = line.split(); challenge_enc = bytes.fromhex(h); assert int(n) == len(challenge_enc)
+        elif line.startswith("DERIVED_C2S_KAT "):
+            _, n, h = line.split(); derived_c2s = bytes.fromhex(h); assert int(n) == len(derived_c2s)
+        elif line.startswith("DERIVED_S2C_KAT "):
+            _, n, h = line.split(); derived_s2c = bytes.fromhex(h); assert int(n) == len(derived_s2c)
+        elif line.startswith("REQ_KAT "):
+            _, n, h = line.split(); req_kat = bytes.fromhex(h); assert int(n) == len(req_kat)
+        elif line.startswith("DENIED_KAT "):
+            _, n, h = line.split(); denied_kat = bytes.fromhex(h); assert int(n) == len(denied_kat)
+        elif line.startswith("CHALLENGE_PKT_KAT "):
+            _, n, h = line.split(); challenge_pkt_kat = bytes.fromhex(h); assert int(n) == len(challenge_pkt_kat)
         elif line.startswith("PKT "):
             p = line.split(); packets.append((int(p[1]), bytes.fromhex(p[3])))
     if token is None or not packets:
@@ -130,7 +167,7 @@ def main():
     # ---- Connect token. STANDARD.md, "Together the public and private data form a connect token"
     c.eq("connect token size", len(token), 2048)
     o = 0
-    c.eq("version info", token[0:13], b"NETCODE 1.02\x00"); o = 13
+    c.eq("version info", token[0:13], b"NETCODE 1.03\x00"); o = 13
     c.eq("protocol id", struct.unpack_from("<Q", token, o)[0], 0x1234567890ABCDEF); o += 8
     create = struct.unpack_from("<Q", token, o)[0]; o += 8
     expire = struct.unpack_from("<Q", token, o)[0]; o += 8
@@ -188,6 +225,18 @@ def main():
     c.eq("encrypted packet KAT vector", pkt_kat, EXPECTED_PKT_KAT)
     c.eq("encrypted private connect token KAT vector", privtoken_enc, EXPECTED_PRIVTOKEN_ENC)
     c.eq("encrypted challenge token KAT vector", challenge_enc, EXPECTED_CHALLENGE_ENC)
+
+    # ---- NETCODE 1.03 per-connection key derivation & packet 0/1/2 framing KAT vectors
+    c.eq("derived c2s packet key KAT vector", derived_c2s, EXPECTED_DERIVED_C2S_KAT)
+    c.eq("derived s2c packet key KAT vector", derived_s2c, EXPECTED_DERIVED_S2C_KAT)
+    c.eq("connection request packet size", len(req_kat), 1086)
+    c.eq("connection request prefix byte", req_kat[0], 0)
+    c.eq("connection request version info", req_kat[1:14], b"NETCODE 1.03\x00")
+    c.eq("connection request client salt (8 bytes)", req_kat[1078:1086], bytes(((i * 19 + 21) & 0xFF) for i in range(8)))
+    c.eq("connection denied packet KAT vector", denied_kat, EXPECTED_DENIED_KAT)
+    c.eq("connection denied server nonce header", denied_kat[9:17], bytes(((i * 23 + 29) & 0xFF) for i in range(8)))
+    c.eq("connection challenge packet KAT vector", challenge_pkt_kat, EXPECTED_CHALLENGE_PKT_KAT)
+    c.eq("connection challenge server nonce header", challenge_pkt_kat[9:17], bytes(((i * 23 + 29) & 0xFF) for i in range(8)))
 
     print(f"{c.n} checks against STANDARD.md, {len(c.fails)} failures")
     for f in c.fails: print("  FAIL " + f)

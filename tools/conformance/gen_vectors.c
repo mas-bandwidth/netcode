@@ -1,8 +1,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <sodium.h>
 #include "netcode.h"
 struct keep_alive_t { uint8_t packet_type; int client_index; int max_clients; };
+struct denied_t { uint8_t packet_type; uint8_t server_nonce[8]; };
+struct challenge_pkt_t { uint8_t packet_type; uint8_t server_nonce[8]; uint64_t challenge_token_sequence; uint8_t challenge_token_data[300]; };
+struct request_pkt_t {
+    uint8_t packet_type;
+    uint8_t version_info[13];
+    uint64_t protocol_id;
+    uint64_t connect_token_expire_timestamp;
+    uint8_t connect_token_nonce[24];
+    uint8_t connect_token_data[1024];
+    uint8_t client_salt[8];
+};
 int netcode_write_packet( void*, uint8_t*, int, uint64_t, uint8_t*, uint64_t );
 struct netcode_challenge_token_t;
 void netcode_write_challenge_token( struct netcode_challenge_token_t *, uint8_t *, int );
@@ -90,7 +102,7 @@ int main(void){
         fill_pattern( priv.user_data, 256, 7, 13 );
         uint8_t priv_buf[1024];
         netcode_write_connect_token_private( &priv, priv_buf, sizeof(priv_buf) );
-        if ( netcode_encrypt_connect_token_private( priv_buf, sizeof(priv_buf), (uint8_t*) "NETCODE 1.02",
+        if ( netcode_encrypt_connect_token_private( priv_buf, sizeof(priv_buf), (uint8_t*) "NETCODE 1.03",
             protocol_id, expire_timestamp, nonce, private_key ) != NETCODE_OK ) {
             fprintf( stderr, "privtoken_enc failed\n" ); return 1;
         }
@@ -105,6 +117,49 @@ int main(void){
             fprintf( stderr, "challenge_enc failed\n" ); return 1;
         }
         dump( "CHALLENGE_ENC", cbuf, 300 );
+
+        /* NETCODE 1.03 per-connection key derivation + request / denied / challenge packet KATs */
+        uint8_t client_salt[8], server_nonce[8], kdf_input[16], derived_c2s[32], derived_s2c[32];
+        fill_pattern( client_salt, 8, 19, 21 );
+        fill_pattern( server_nonce, 8, 23, 29 );
+        memcpy( kdf_input, client_salt, 8 );
+        memcpy( kdf_input + 8, server_nonce, 8 );
+        crypto_core_hchacha20( derived_c2s, kdf_input, c2s_key, NULL );
+        crypto_core_hchacha20( derived_s2c, kdf_input, s2c_key, NULL );
+        dump( "DERIVED_C2S_KAT", derived_c2s, 32 );
+        dump( "DERIVED_S2C_KAT", derived_s2c, 32 );
+
+        struct request_pkt_t req;
+        memset( &req, 0, sizeof(req) );
+        req.packet_type = 0;
+        memcpy( req.version_info, "NETCODE 1.03", 13 );
+        req.protocol_id = protocol_id;
+        req.connect_token_expire_timestamp = expire_timestamp;
+        memcpy( req.connect_token_nonce, nonce, 24 );
+        memcpy( req.connect_token_data, priv_buf, 1024 );
+        memcpy( req.client_salt, client_salt, 8 );
+        uint8_t rbuf[2048];
+        int rn = netcode_write_packet( &req, rbuf, sizeof(rbuf), 0, derived_c2s, protocol_id );
+        if ( rn <= 0 ) { fprintf( stderr, "req_kat failed\n" ); return 1; }
+        dump( "REQ_KAT", rbuf, rn );
+
+        struct denied_t den;
+        den.packet_type = 1;
+        memcpy( den.server_nonce, server_nonce, 8 );
+        uint8_t dbuf[128];
+        int dn = netcode_write_packet( &den, dbuf, sizeof(dbuf), 1ULL << 63, derived_s2c, protocol_id );
+        if ( dn <= 0 ) { fprintf( stderr, "denied_kat failed\n" ); return 1; }
+        dump( "DENIED_KAT", dbuf, dn );
+
+        struct challenge_pkt_t chpkt;
+        chpkt.packet_type = 2;
+        memcpy( chpkt.server_nonce, server_nonce, 8 );
+        chpkt.challenge_token_sequence = challenge_sequence;
+        memcpy( chpkt.challenge_token_data, cbuf, 300 );
+        uint8_t chbuf[1024];
+        int chn = netcode_write_packet( &chpkt, chbuf, sizeof(chbuf), ( 1ULL << 63 ) + 1ULL, derived_s2c, protocol_id );
+        if ( chn <= 0 ) { fprintf( stderr, "challenge_pkt_kat failed\n" ); return 1; }
+        dump( "CHALLENGE_PKT_KAT", chbuf, chn );
     }
     return 0;
 }

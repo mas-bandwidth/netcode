@@ -130,6 +130,7 @@ static void fuzz_round_trip_packet( struct fuzz_input_t * in )
             request_packet.connect_token_expire_timestamp = expire_timestamp;
             memcpy( request_packet.connect_token_nonce, nonce, NETCODE_CONNECT_TOKEN_NONCE_BYTES );
             memcpy( request_packet.connect_token_data, token_data, NETCODE_CONNECT_TOKEN_PRIVATE_BYTES );
+            fuzz_read_bytes( in, request_packet.client_salt, NETCODE_CONNECT_SALT_BYTES );
 
             packet = &request_packet;
         }
@@ -138,6 +139,7 @@ static void fuzz_round_trip_packet( struct fuzz_input_t * in )
         case NETCODE_CONNECTION_DENIED_PACKET:
         {
             denied_packet.packet_type = NETCODE_CONNECTION_DENIED_PACKET;
+            fuzz_read_bytes( in, denied_packet.server_nonce, NETCODE_SERVER_NONCE_BYTES );
             packet = &denied_packet;
         }
         break;
@@ -145,6 +147,7 @@ static void fuzz_round_trip_packet( struct fuzz_input_t * in )
         case NETCODE_CONNECTION_CHALLENGE_PACKET:
         {
             challenge_packet.packet_type = NETCODE_CONNECTION_CHALLENGE_PACKET;
+            fuzz_read_bytes( in, challenge_packet.server_nonce, NETCODE_SERVER_NONCE_BYTES );
             challenge_packet.challenge_token_sequence = fuzz_read_u64( in );
             fuzz_read_bytes( in, challenge_packet.challenge_token_data, NETCODE_CHALLENGE_TOKEN_BYTES );
             packet = &challenge_packet;
