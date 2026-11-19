@@ -3,8 +3,8 @@
 netcode has independent implementations in C#, Go, Rust, and TypeScript (linked from the
 README). Most were ported from this C reference, so a defect or a documentation error
 here tends to be present there too. This file collects the findings that other
-implementations should check themselves against. None change the wire protocol — an
-implementation that fixes these stays interoperable with every other conforming one.
+implementations should check themselves against. Items 1–4 do not change the wire
+protocol; item 5 upgrades the wire protocol from `NETCODE 1.02` to `NETCODE 1.03`.
 
 ## 1. Integer overflow in replay protection (check your port)
 
@@ -107,6 +107,50 @@ netcode builds and tests on (Linux, macOS, Windows all have a real system RNG), 
 porting trap rather than a live defect. Documented here and in `sodium/NOTES.md`. If your
 implementation targets a platform whose crypto library has a stubbed or weak default RNG,
 check what it actually returns rather than assuming the call filled the buffer.
+
+## 5. Protocol upgrade to `NETCODE 1.03`: per-connection key derivation (1.5.0)
+
+**Where:** connect token version string, packet 0/1/2 framing, per-connection key derivation,
+and server connect token history.
+
+In `NETCODE 1.02`, packets were encrypted directly with the connect token's
+`client_to_server_key` and `server_to_client_key`. That permitted AEAD nonce reuse in two
+cases: (a) a client whose handshake timed out or was aborted after receiving a challenge
+(having already encrypted connection responses from sequence 0) reconnecting with the same
+unexpired connect token while the server's history entry was still _pending_, and (b) a
+connect token naming multiple freshly started servers, each sending a pre-slot packet
+(`connection denied` on server 1, `connection challenge` on server 2) at `global_sequence =
+1 << 63` under the shared `server_to_client_key`.
+
+`NETCODE 1.03` (`netcode` 1.5.0, `STANDARD.md`) eliminates both at the protocol level:
+
+- **Version info** is `"NETCODE 1.03\0"` (13 bytes) in connect tokens, `connection request`
+  packets, and AEAD associated data.
+- **Per-connection key derivation (`HChaCha20`):** connect token keys never encrypt packets
+  directly. Given `client_salt` (8 bytes) and `server_nonce` (8 bytes), let `input =
+  client_salt || server_nonce` (16 bytes) and derive:
+  - `packet_c2s_key = crypto_core_hchacha20(input, token_c2s_key, NULL)`
+  - `packet_s2c_key = crypto_core_hchacha20(input, token_s2c_key, NULL)`
+- **Packet 0 (`connection request`)** appends `client_salt[8]` (`1086` bytes total, up from
+  `1078`). The client draws a fresh random `client_salt` on every connect call and every
+  failover to the next server address in the connect token.
+- **Packets 1 (`connection denied`) and 2 (`connection challenge`)** carry `server_nonce[8]`
+  in cleartext immediately after the variable-length sequence number and before the encrypted
+  payload, and append `server_nonce[8]` to AEAD associated data (`30` bytes total instead of
+  `22`). Packets 3–6 are unchanged (`22`-byte associated data).
+- **Client state machine:** in _sending connection request_, only packet types 1 and 2 are
+  accepted (keyed per candidate `server_nonce`); once a valid `connection challenge` is
+  received, `server_nonce` and both derived packet keys are locked in, further `connection
+  challenge` packets are ignored, `connection denied` in _sending challenge response_ must
+  match the recorded `server_nonce`, and `connection disconnect` packets are sent only once
+  `server_nonce` has been established.
+- **Server connect token history:** _pending_ entries bind `client_salt` (constant-time 8-byte
+  comparison) and admit retransmissions only within `timeout_seconds` of entry creation (when
+  `timeout_seconds > 0`); valid `connection disconnect` packets arriving on a half-open
+  encryption mapping mark its history entry _consumed_ and remove the mapping.
+
+Pinned by `test_derive_packet_keys_kat`, `test_wire_kat_vectors`, and the five `test_wire`
+nonce-audit regression tests in `netcode.c`.
 
 ## Reporting back
 

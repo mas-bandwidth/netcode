@@ -89,7 +89,7 @@ asserts compiled in can reach a release-build code path.
 netcode is a secure connection-oriented protocol over UDP for multiplayer games:
 connect-token authentication against a trusted backend, challenge/response handshake,
 encrypted/signed packets via libsodium, client slots, keep-alives, timeouts, and clean
-disconnect. The protocol is specified in STANDARD.md (netcode 1.02) and has multiple
+disconnect. The protocol is specified in STANDARD.md (netcode 1.03) and has multiple
 independent implementations (C#, Go, Rust, TypeScript).
 
 - `netcode.h` / `netcode.c` — the entire library. `netcode.c` is ~11,000 lines: ~5,750

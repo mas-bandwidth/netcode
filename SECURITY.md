@@ -41,6 +41,44 @@ The protocol itself is specified in `STANDARD.md`. A flaw in the *specification*
 opposed to this implementation of it — is in scope and is more valuable to us, because it
 affects every implementation of netcode rather than one.
 
+## Known issue: AEAD nonce reuse on unfinished handshakes and multi-server connect tokens (fixed in 1.5.0)
+
+**Affected: netcode 1.4.10 and earlier (`NETCODE 1.02`). Fixed in 1.5.0 (`NETCODE 1.03`).**
+
+In `NETCODE 1.02`, packets encrypted directly under the 32-byte `client_to_server_key` and
+`server_to_client_key` carried inside a connect token, which allowed two AEAD nonce-reuse
+paths within a single connect token's lifetime:
+
+1. **Retried unfinished handshakes.** If a client received a connection challenge and sent
+   one or more connection response packets that were lost (or aborted the handshake before a
+   client slot was assigned), the server's connect token history entry remained _pending_. If
+   the caller reconnected with the same unexpired connect token, the client reset its packet
+   sequence to zero and encrypted new connection response packets under the same
+   `client_to_server_key` at already-used nonces.
+2. **Multi-server connect tokens.** When a connect token listed multiple dedicated servers,
+   two freshly started servers shared the connect token's `server_to_client_key` and both
+   began their global packet sequence at `2^63` (e.g. a full first server sending a
+   connection denied packet at `2^63` and the next server sending a connection challenge
+   packet at `2^63`).
+
+Fixed in **1.5.0** by upgrading the wire protocol to **`NETCODE 1.03`**:
+
+- Per-connection packet keys are derived via `HChaCha20(token_key, client_salt || server_nonce)`
+  from a fresh 8-byte client salt per attempt (`connection request`, now 1086 bytes) and a
+  fresh 8-byte server nonce per server mapping or full-server denial (`connection denied` and
+  `connection challenge` headers, bound into 30-byte AEAD associated data). Connect token root
+  keys never encrypt packets directly.
+- Pending connect token history entries bind the 8-byte client salt and expire as admissible
+  after `timeout_seconds` from creation; valid `connection disconnect` packets on a half-open
+  mapping consume the history entry and remove the mapping.
+
+### If you are using an affected version
+
+Upgrade to **netcode 1.5.0** or later (`netcode.rs`, `netcode.go`, and `netcode.cs` **1.2.0**
+or later; **yojimbo 1.16.0** or later). Because `NETCODE 1.03` changes the wire protocol
+version string and handshake packet headers, clients, servers, and token-issuing backends must
+be upgraded together.
+
 ## Known issue: connect token reuse after disconnect (fixed in 1.4.5)
 
 **Advisory: [GHSA-v29p-3vj4-vg4f](https://github.com/mas-bandwidth/netcode/security/advisories/GHSA-v29p-3vj4-vg4f)** (published 2026-09-04).

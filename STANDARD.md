@@ -1,4 +1,4 @@
-# netcode 1.02
+# netcode 1.03
 
 **netcode** is a simple protocol for creating secure client/server connections over UDP.
 
@@ -79,7 +79,7 @@ This data is variable size but for simplicity is written to a fixed size buffer 
 
 Encryption of the private connect token data is performed with the libsodium AEAD primitive *crypto_aead_xchacha20poly1305_ietf_encrypt* using the following binary data as the _associated data_: 
 
-    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
 
@@ -94,7 +94,7 @@ Post encryption, this is referred to as the _encrypted private connect token dat
 
 Together the public and private data form a _connect token_:
 
-    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [create timestamp] (uint64)     // 64 bit unix timestamp when this connect token was created
     [expire timestamp] (uint64)     // 64 bit unix timestamp when this connect token expires
@@ -156,6 +156,26 @@ Encryption is performed on the first 300 - 16 bytes, and the last 16 bytes store
     
 This is referred to as the _encrypted challenge token data_.
 
+## Connection Key Derivation
+
+The 32-byte _client to server key_ and _server to client key_ carried inside a connect token are per-token root keys and never encrypt packets directly. Instead, each connection attempt derives fresh 32-byte per-connection packet encryption keys from an 8-byte _client salt_ and an 8-byte _server nonce_:
+
+* When a client begins a connection attempt to a server address in a connect token (both on initial connect and when advancing to the next server address in the connect token), it generates a fresh random 8-byte _client salt_ and includes it at the end of every _connection request packet_ it sends for that attempt.
+
+* When a server creates a half-open encryption mapping for a connection request, it generates a fresh random 8-byte _server nonce_ for that mapping and includes it in cleartext in the header of _connection challenge_ and _connection denied_ packets sent for that mapping. When a server rejects a connection request because no client slots are available without creating a mapping, it generates a fresh random 8-byte _server nonce_ for that _connection denied_ packet.
+
+Given the 8-byte _client salt_ and 8-byte _server nonce_, construct the 16-byte HChaCha20 input by concatenation:
+
+    [client salt] (8 bytes)
+    [server nonce] (8 bytes)
+
+Derive the two 32-byte per-connection packet keys with the libsodium primitive *crypto_core_hchacha20* using the default Sigma constant (`NULL` constant pointer):
+
+* _connection client to server key_ = `crypto_core_hchacha20( input, token_client_to_server_key, NULL )`
+* _connection server to client key_ = `crypto_core_hchacha20( input, token_server_to_client_key, NULL )`
+
+Because each connection attempt draws a fresh _client salt_ and each server draws an independent _server nonce_, retried handshakes and multi-server connect token failovers never share AEAD packet keys.
+
 ## Packets
 
 **netcode** has the following packets:
@@ -168,14 +188,15 @@ This is referred to as the _encrypted challenge token data_.
 * _connection payload packet_ (5)
 * _connection disconnect packet_ (6)
 
-The first packet type _connection request packet_ (0) is not encrypted and has the following format:
+The first packet type _connection request packet_ (0) is not encrypted at the packet layer and has the following 1086-byte format:
 
     0 (uint8) // prefix byte of zero
-    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
     [connect token nonce] (24 bytes)
     [encrypted private connect token data] (1024 bytes)
+    [client salt] (8 bytes)
     
 All other packet types are encrypted. 
 
@@ -183,6 +204,7 @@ Prior to encryption, packet types >= 1 have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte
     [sequence number] (variable length 1-8 bytes)
+    [server nonce] (8 bytes, packet types 1 and 2 only)
     [per-packet type data] (variable length according to packet type)
 
 The low 4 bits of the prefix byte contain the packet type. 
@@ -230,25 +252,33 @@ _connection disconnect packet_:
     
     <no data>
 
-The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt* with the following binary data as the _associated data_: 
+The per-packet type data is encrypted using the libsodium AEAD primitive *crypto_aead_chacha20poly1305_ietf_encrypt*. For packet types 3, 4, 5, and 6, the _associated data_ is 22 bytes:
 
-    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
     [protocol id] (uint64)          // 64 bit value unique to this particular game/application
     [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
+
+For packet types 1 (_connection denied packet_) and 2 (_connection challenge packet_), the 8-byte _server nonce_ from the packet header is appended, making 30 bytes of _associated data_:
+
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
+    [protocol id] (uint64)          // 64 bit value unique to this particular game/application
+    [prefix byte] (uint8)           // prefix byte in packet. stops an attacker from modifying packet type.
+    [server nonce] (8 bytes)        // server nonce in packet header.
 
 The 96 bit nonce for packet encryption is constructed from the packet sequence number as 12 bytes, with four zero bytes followed by the sequence number written as a 64 bit little-endian value:
 
     [zero] (uint32)              // bytes 0..3, always zero
     [sequence number] (uint64)   // bytes 4..11, little-endian
 
-Packets sent from client to server are encrypted with the client to server key in the connect token.
+Packets sent from client to server are encrypted with the derived per-connection client to server key.
 
-Packets sent from server to client are encrypted using the server to client key in the connect token for that client.
+Packets sent from server to client are encrypted using the derived per-connection server to client key for that client.
 
 Post encryption, packet types >= 1 have the following format:
 
     [prefix byte] (uint8) // non-zero prefix byte: ( (num_sequence_bytes<<4) | packet_type )
     [sequence number] (variable length 1-8 bytes)
+    [server nonce] (8 bytes, packet types 1 and 2 only)
     [encrypted per-packet type data] (variable length according to packet type)
     [hmac of encrypted per-packet type data] (16 bytes)
 
@@ -266,7 +296,7 @@ The following steps are taken when reading an encrypted packet, in this exact or
 
 * If the high 4 bits of the prefix byte (sequence bytes) are outside the range [1,8], ignore the packet.
 
-* If the packet size is less than 1 + sequence bytes + 16, it cannot possibly be valid, ignore the packet.
+* Let _header nonce bytes_ be 8 for _connection denied packet_ (1) and _connection challenge packet_ (2), and 0 for all other encrypted packet types. If the packet size is less than 1 + sequence bytes + header nonce bytes + 16, it cannot possibly be valid, ignore the packet.
 
 * If the sequence number is 2^64-1, ignore the packet. This value is reserved by replay protection, and is refused for every encrypted packet type.
 
@@ -317,23 +347,19 @@ The replay buffer size is implementation specific, but as a guide, a few seconds
 
 ## Nonce Reuse and Server Restarts
 
-Encrypted packet sequence numbers are used directly as nonces for packet encryption (see _Replay Protection_ above). Within a single run of a dedicated server instance, netcode keeps the nonce spaces disjoint:
+Encrypted packet sequence numbers are used directly as nonces for packet encryption (see _Replay Protection_ above), while per-connection packet keys are derived via HChaCha20 from the connect token's root keys together with a fresh 8-byte _client salt_ and 8-byte _server nonce_ (see _Connection Key Derivation_ above). Together these keep every AEAD `(key, nonce)` pair disjoint:
 
-* Per-client packet sequence numbers start at zero for each client slot.
+* Each client connection attempt (including failover to the next server address in a multi-server connect token) draws a fresh 8-byte _client salt_, and each server generates an independent 8-byte _server nonce_, so separate handshake attempts and separate servers never share packet keys.
 
-* The server's _global sequence number_, used for packets sent before a client is assigned to a slot (_connection challenge packet_ and _connection denied packet_), is set to 2^63 when the server starts.
+* Within a single handshake and session on a running server instance, per-client packet sequence numbers start at zero for each client slot, while the server's _global sequence number_, used for packets sent before a client is assigned to a slot (_connection challenge packet_ and _connection denied packet_), is set to 2^63 when the server starts.
 
-The normative requirement is that starting the server sets the global sequence number to 2^63. The value it holds while the server is not running is unspecified, and an implementation may leave it at 2^63 or zero it; what matters is that a start restores the floor. Because per-client sequence numbers start at zero and the global sequence number is at least 2^63 for the whole run, global packets and per-client packets never share a sequence number under the same key during a run.
+The normative requirement is that starting the server sets the global sequence number to 2^63. The value it holds while the server is not running is unspecified, and an implementation may leave it at 2^63 or zero it; what matters is that a start restores the floor. Because per-client sequence numbers start at zero and the global sequence number is at least 2^63 for the whole run, global packets and per-client packets under the same derived server-to-client packet key never share a sequence number during a run.
 
-**This guarantee is scoped to a single run of the server, and does not extend across a restart.** The server to client key is carried inside the private connect token, so it is the same key every time that connect token is presented. The history of connect tokens already used (see _Processing Connection Requests_) is held in memory, and is therefore empty after a restart. Per-client sequence numbers also begin again at zero. A client that presents the same connect token to a server that has restarted will therefore have packets encrypted under that key at sequence numbers that were already used before the restart, repeating a nonce under that key.
-
-The window is bounded by connect token expiry. A server ignores any connection request whose connect token expire timestamp is <= the current timestamp, so only a connect token that is still unexpired after the restart can be affected.
-
-**A server MUST reject any connect token that could have been issued before it started.** The server is configured with the maximum connect token lifetime its deployment issues, and records the time it started. It ignores any connection request whose connect token expire timestamp minus that maximum lifetime is at or before the server start time. A connect token issued before the start always fails this test, because its expire timestamp is at most its issue time plus that lifetime. A connect token issued in the same second the server started also fails it: timestamps are whole seconds, so a connect token issued in the start second cannot be told from one issued earlier in that second, just before a restart. A connect token issued with a full lifetime in any later second always passes it, so the server accepts connections from the second after it starts. This requires no persistent state, and no data beyond the expire timestamp already present in the connection request packet. A connect token deliberately issued with a shorter lifetime than the configured maximum is rejected until the difference has elapsed.
+**In addition, a server MUST reject any connect token that could have been issued before it started**, so a connect token used before an in-memory server restart cannot be replayed after it. The server is configured with the maximum connect token lifetime its deployment issues, and records the time it started. It ignores any connection request whose connect token expire timestamp minus that maximum lifetime is at or before the server start time. A connect token issued before the start always fails this test, because its expire timestamp is at most its issue time plus that lifetime. A connect token issued in the same second the server started also fails it: timestamps are whole seconds, so a connect token issued in the start second cannot be told from one issued earlier in that second, just before a restart. A connect token issued with a full lifetime in any later second always passes it, so the server accepts connections from the second after it starts. This requires no persistent state, and no data beyond the expire timestamp already present in the connection request packet. A connect token deliberately issued with a shorter lifetime than the configured maximum is rejected until the difference has elapsed.
 
 A server MAY also persist the connect token history: it writes the history entries to durable storage, and restores them on start, so that a connect token consumed before the start is refused after it. Persistence is meaningful only together with the consumed state, because a restored entry is only useful if it refuses the address that used the token as well as every other address. It costs durable storage, and is the option to choose when the deployment issues connect tokens with widely varying lifetimes.
 
-Neither rule changes any packet, and neither requires any change to clients: the protocol version remains "NETCODE 1.02", and a rejected connect token produces the existing behavior, where the connection request is ignored and the client requests a new connect token from the web backend.
+A rejected connect token produces the existing behavior, where the connection request is ignored and the client requests a new connect token from the web backend.
 
 ## Client State Machine
 
@@ -370,19 +396,21 @@ Before doing this, the client checks that the connect token is valid. If the num
 
 ### Sending Connection Request
 
-While in _sending connection request_ the client sends _connection request packets_ to the server at some rate, like 10HZ. 
+Each time the client enters _sending connection request_ (both on initial connect and when moving on to the next server address in the connect token), it generates a fresh random 8-byte _client salt_ and clears any previously recorded _server nonce_ and derived packet keys.
 
-When the client receives a _connection challenge packet_ from the server, it stores the challenge token data and transitions to _sending challenge response_. This represents a successful transition to the next stage in the connection process.
+While in _sending connection request_ the client sends _connection request packets_ carrying that _client salt_ to the server at some rate, like 10HZ, and accepts only _connection challenge_ and _connection denied_ packets from the current server address, authenticating each candidate packet under the server-to-client packet key derived from its _client salt_ and the packet's 8-byte _server nonce_.
+
+When the client receives a valid _connection challenge packet_ from the server, it records the packet's _server nonce_, derives and installs both per-connection packet keys, stores the challenge token data, and transitions to _sending challenge response_. This represents a successful transition to the next stage in the connection process.
 
 All other transitions from _sending connection request_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ state with the next server address in the connect token). Alternatively, if there are no additional server addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
+If a valid _connection denied_ packet is received while in _sending connection request_ the client transitions to _connection denied_. If neither a _connection challenge packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _connection request timed out_.
 
 A server rejects a connect token that could have been issued before it started, as described in _Nonce Reuse and Server Restarts_, by ignoring the connection request, which is the same path as any other rejected request. No new client state and no new transition is required, and the client cannot distinguish this case from a server that is unreachable: it retries at its normal rate, moves on to the next server address in the connect token, and finally transitions to _connection request timed out_, or to _connect token expired_ if the whole process outlasts the token. The correct client response is to request a new connect token from the web backend, which is already the response to those states.
 
 ### Sending Challenge Response
 
-While in _sending challenge response_ the client sends _challenge response packets_ to the server at some rate, like 10HZ. 
+While in _sending challenge response_ the client sends _challenge response packets_ encrypted under its derived client-to-server packet key to the server at some rate, like 10HZ, and ignores any further _connection challenge packets_.
 
 When the client receives a _connection keep-alive packet_ from the server, it stores the client index and max clients in the packet, and transitions to _connected_.
 
@@ -390,7 +418,9 @@ Any _connection payload packets_ received prior to _connected_ are discarded.
 
 All other transitions from _sending challenge response_ are failure cases. In these cases the client attempts to connect to the next server address in the connect token (eg. transitioning to _sending connection request_ with the next server address in the connect token). Alternatively, if there are no additional servers addresses to connect to, the client transitions to the appropriate error state as described in the next paragraph.
 
-If a _connection request denied_ packet is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+If a valid _connection denied_ packet whose _server nonce_ matches the recorded _server nonce_ is received while in _sending challenge response_ the client transitions to _connection denied_. If neither a _connection keep-alive packet_ or a _connection denied packet_ are received within the timeout period specified in the connect token, the client transitions to _challenge response timed out_.
+
+If the client disconnects after receiving a challenge (while in _sending challenge response_ or _connected_), it sends a number of redundant _connection disconnect packets_ under its derived client-to-server packet key before transitioning to _disconnected_. If the client disconnects while in _sending connection request_, before any _server nonce_ has been authenticated, no _connection disconnect packets_ are sent.
 
 ### Connect Token Expired
 
@@ -436,23 +466,26 @@ The server follows these strict rules when processing connection requests:
 When a server receives a connection request packet from a client it contains the following data:
 
     0 (uint8) // prefix byte of zero
-    [version info] (13 bytes)       // "NETCODE 1.02" ASCII with null terminator.
+    [version info] (13 bytes)       // "NETCODE 1.03" ASCII with null terminator.
     [protocol id] (8 bytes)
     [connect token expire timestamp] (8 bytes)
     [connect token nonce] (24 bytes)
     [encrypted private connect token data] (1024 bytes)
+    [client salt] (8 bytes)
 
-This packet is not encrypted, however:
+This packet is not encrypted at the packet layer, however:
 
 * Only the dedicated server instance and the web backend can read the encrypted private connect token data, because it is encrypted with a private key shared between them.
 
 * The important aspects of the packet such as the version info, protocol id and connect token expire timestamp, are protected by the AEAD construct, and thus cannot be modified without failing the signature check.
 
+* The 8-byte _client salt_ is bound into the per-connection packet keys derived via HChaCha20, so modifying it causes subsequent handshake packets to fail authentication.
+
 The server takes the following steps, in this exact order, when processing a _connection request packet_:
 
-* If the packet is not the expected size of 1078 bytes, ignore the packet.
+* If the packet is not the expected size of 1086 bytes, ignore the packet.
 
-* If the version info in the packet doesn't match "NETCODE 1.02" (13 bytes, with null terminator), ignore the packet.
+* If the version info in the packet doesn't match "NETCODE 1.03" (13 bytes, with null terminator), ignore the packet.
 
 * If the protocol id in the packet doesn't match the expected protocol id of the dedicated server, ignore the packet.
 
@@ -472,27 +505,29 @@ The server takes the following steps, in this exact order, when processing a _co
 
 * If the history of connect tokens already used does not admit this connection request, as defined in _Connect Token History_ below, ignore the packet.
 
-* Otherwise, the history holds a pending entry for the private connect token hmac and the packet source IP address and port.
+* Otherwise, the history holds a pending entry for the private connect token hmac, the packet source IP address and port, and the _client salt_.
 
-* If no client slots are available, then the server is full. Respond with a _connection denied packet_.
+* If no client slots are available, then the server is full. Generate a fresh random 8-byte _server nonce_, derive the server-to-client packet key via HChaCha20 from the _client salt_ and _server nonce_, and respond with a _connection denied packet_ carrying that _server nonce_.
 
-* Add an encryption mapping for the packet source IP address and port so that packets read from that address and port are decrypted with the client to server key in the private connect token, and packets sent to that address and port are encrypted with the server to client key in the private connect token. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address and port, or if a client fails to establish a connection with the server within _timeout_ seconds.
+* If an unexpired half-open encryption mapping already exists for the packet source IP address and port with the same private connect token hmac and _client salt_, refresh its expiry and keep its existing _server nonce_ and derived packet keys; otherwise generate a fresh random 8-byte _server nonce_, derive the per-connection client-to-server and server-to-client packet keys via HChaCha20 from the _client salt_ and _server nonce_, and add an encryption mapping for the packet source IP address and port holding those derived keys and _server nonce_. This encryption mapping expires in _timeout_ seconds of no packets being sent to or received from that address and port, or if a client fails to establish a connection with the server within _timeout_ seconds.
 
 * If for some reason this encryption mapping cannot be added, ignore the packet.
 
-* Otherwise, respond with a _connection challenge packet_ and increment the _connection challenge sequence number_.
+* Otherwise, respond with a _connection challenge packet_ carrying the encryption mapping's _server nonce_ and increment the _connection challenge sequence number_.
 
 ### Connect Token History
 
-The server keeps a history of the connect tokens it has already seen. Each entry holds the private connect token hmac, the packet source IP address and port that presented it, the connect token expire timestamp, the time the entry was created, and a state, which is either _pending_ or _consumed_.
+The server keeps a history of the connect tokens it has already seen. Each entry holds the private connect token hmac, the packet source IP address and port that presented it, the 8-byte _client salt_, the connect token expire timestamp, the time the entry was created, and a state, which is either _pending_ or _consumed_.
 
 * An entry is created in the _pending_ state when the server accepts a connection request presenting a connect token that is not already in the history.
 
 * An entry becomes _consumed_ when the server accepts the connection response for its connect token and assigns the client to a client slot. The server associates the entry with the connection it is establishing, for example through the encryption mapping it added for that packet source IP address and port, so nothing extra is carried on the wire.
 
-* A _pending_ entry admits a connection request presenting its connect token from the same packet source IP address and port, and no other. This is what lets a client retransmit its connection request while the handshake is in progress.
+* If the server receives a valid _connection disconnect packet_ from an address with a half-open encryption mapping before a client slot is assigned, it marks that mapping's connect token history entry _consumed_ and removes the encryption mapping.
 
-* A _consumed_ entry admits nothing. A connection request presenting its connect token is ignored whatever the packet source IP address and port, and whether or not the client is still in its slot. A connect token is therefore usable for exactly one connection, and the keys it carries encrypt exactly one session.
+* A _pending_ entry admits a connection request presenting its connect token from the same packet source IP address and port, with the same 8-byte _client salt_, within _timeout_ seconds of the time the entry was created (when _timeout_ is positive), and no other. Once _timeout_ seconds have elapsed since the entry was created, or if a different _client salt_ is presented, a _pending_ entry admits nothing and is left unchanged. This is what lets a client retransmit its connection request while the handshake is in progress, without reopening the connect token for a second handshake attempt.
+
+* A _consumed_ entry admits nothing. A connection request presenting its connect token is ignored whatever the packet source IP address and port, and whether or not the client is still in its slot. A connect token is therefore usable for exactly one connection, and the keys derived from it encrypt at most one session.
 
 * An entry lives until its connect token expires. Once the entry's connect token expire timestamp has passed, the server may reuse the entry for another connect token, because a request presenting the expired token is already ignored by the expiry check.
 
@@ -521,7 +556,7 @@ The server takes these steps, in this exact order, when processing a _connection
 
 * If a client with the client id contained in the encrypted challenge token data is already connected, ignore the packet.
 
-* If no client slots are available, then the server is full. Respond with a _connection denied packet_.
+* If no client slots are available, then the server is full. Respond with a _connection denied packet_ carrying the encryption mapping's _server nonce_.
 
 * Assign the packet IP address + port and client id to a free client slot and mark that client as connected.
 

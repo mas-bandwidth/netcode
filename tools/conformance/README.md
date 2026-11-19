@@ -15,11 +15,18 @@ wrong — decide which, and fix that one.
 
 ## What is covered
 
-* the 2048-byte connect token: every public field, both address forms, and the
-  zero padding
+* the 2048-byte connect token (`NETCODE 1.03`): every public field, both address
+  forms, and the zero padding
+* the 1086-byte connection request packet, including the trailing 8-byte
+  `client_salt`
+* per-connection `HChaCha20` packet key derivation (`client_salt || server_nonce`)
+  against pinned golden vectors (`DERIVED_C2S_KAT`, `DERIVED_S2C_KAT`)
 * the packet prefix byte: type in the low 4 bits, sequence byte count in the high 4
 * the variable-length sequence encoding, including that the byte count is
   **minimal** (high zero bytes omitted) and the little-endian order
+* the 8-byte cleartext `server_nonce` header and 30-byte AAD on connection denied
+  and connection challenge packets (`DENIED_KAT`, `CHALLENGE_PKT_KAT`), plus the
+  22-byte AAD on session packets (`PKT_KAT`)
 * the challenge token's plaintext layout: client id, 256 bytes of user data,
   the zero pad to 300, and that the pad leaves room for the 16-byte HMAC
 
